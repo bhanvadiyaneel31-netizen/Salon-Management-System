@@ -309,12 +309,13 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
   useEffect(() => {
     const currentUser = api.auth.getCurrentUser();
     if (currentUser) {
-      setProfileForm({
+      setProfileForm(prev => ({
+        ...prev,
         name: currentUser.name,
         email: currentUser.email,
         phone: currentUser.phone || '',
         address: ''
-      });
+      }));
     }
   }, []); // Run only once on mount
 
@@ -497,12 +498,13 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
 
   // Initialize profile form when dialog opens
   const openProfileDialog = () => {
-    setProfileForm({
+    setProfileForm(prev => ({
+      ...prev,
       name: profile.name,
       email: profile.email,
       phone: profile.phone,
       address: profile.address
-    });
+    }));
     setIsProfileDialogOpen(true);
   };
 
@@ -832,218 +834,6 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
           <div className="hidden lg:block lg:col-span-1">
             <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl sticky top-24">
               <SidebarContent />
-              <CardHeader className="text-center pb-4">
-                <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mx-auto flex items-center justify-center mb-4">
-                  <User className="w-10 h-10 text-white" />
-                </div>
-                <CardTitle className="text-xl font-bold text-gray-900">{profile.name}</CardTitle>
-                <p className="text-gray-600">Customer Dashboard</p>
-                <Badge className="bg-purple-100 text-purple-700 mt-2">
-                  {profile.loyaltyPoints} points
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl ${
-                    activeSection === 'dashboard' 
-                      ? 'text-purple-600 bg-purple-50' 
-                      : 'text-gray-600 hover:bg-purple-50'
-                  }`}
-                  onClick={() => setActiveSection('dashboard')}
-                >
-                  <TrendingUp className="w-4 h-4 mr-3" />
-                  Dashboard
-                </Button>
-                <Button
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl ${
-                    activeSection === 'services' 
-                      ? 'text-purple-600 bg-purple-50' 
-                      : 'text-gray-600 hover:bg-purple-50'
-                  }`}
-                  onClick={() => setActiveSection('services')}
-                >
-                  <Scissors className="w-4 h-4 mr-3" />
-                  Browse Services
-                </Button>
-                <Button
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl ${
-                    activeSection === 'appointments' 
-                      ? 'text-purple-600 bg-purple-50' 
-                      : 'text-gray-600 hover:bg-purple-50'
-                  }`}
-                  onClick={() => setActiveSection('appointments')}
-                >
-                  <Calendar className="w-4 h-4 mr-3" />
-                  My Appointments
-                </Button>
-                <Button
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl relative ${
-                    activeSection === 'notifications' 
-                      ? 'text-purple-600 bg-purple-50' 
-                      : 'text-gray-600 hover:bg-purple-50'
-                  }`}
-                  onClick={() => setActiveSection('notifications')}
-                >
-                  <Bell className="w-4 h-4 mr-3" />
-                  Notifications
-                  {unreadNotifications > 0 && (
-                    <Badge className="ml-auto bg-red-500 text-white text-xs px-2 py-1">
-                      {unreadNotifications}
-                    </Badge>
-                  )}
-                </Button>
-                <Dialog open={isProfileDialogOpen} onOpenChange={setIsProfileDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-start text-gray-600 hover:bg-purple-50 rounded-xl"
-                      onClick={openProfileDialog}
-                    >
-                      <Settings className="w-4 h-4 mr-3" />
-                      Profile Settings
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Profile Settings</DialogTitle>
-                      <DialogDescription>
-                        Update your personal information
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div className="text-center">
-                        <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mx-auto flex items-center justify-center mb-4">
-                          <User className="w-10 h-10 text-white" />
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-3">
-                        <div>
-                          <Label>Full Name *</Label>
-                          <Input 
-                            value={profileForm.name} 
-                            onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
-                            className="border-purple-200 focus:border-purple-400 rounded-xl" 
-                          />
-                        </div>
-                        <div>
-                          <Label>Email *</Label>
-                          <Input 
-                            type="email"
-                            value={profileForm.email} 
-                            onChange={(e) => setProfileForm(prev => ({ ...prev, email: e.target.value }))}
-                            className="border-purple-200 focus:border-purple-400 rounded-xl" 
-                          />
-                        </div>
-                        <div>
-                          <Label>Phone *</Label>
-                          <Input 
-                            value={profileForm.phone} 
-                            onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))}
-                            className="border-purple-200 focus:border-purple-400 rounded-xl" 
-                          />
-                        </div>
-                        <div>
-                          <Label>Address</Label>
-                          <Textarea 
-                            value={profileForm.address} 
-                            onChange={(e) => setProfileForm(prev => ({ ...prev, address: e.target.value }))}
-                            className="border-purple-200 focus:border-purple-400 rounded-xl" 
-                          />
-                        </div>
-
-                        {/* Appointment Reminders UI */}
-                        <div className="pt-4 border-t border-purple-100">
-                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                            <Bell className="w-4 h-4 text-purple-500" />
-                            Appointment Reminders
-                          </h4>
-                          <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                              <Label htmlFor="mobile-email-reminders" className="flex flex-col">
-                                <span>Email Reminders</span>
-                                <span className="font-normal text-xs text-gray-500">Receive an email before your appointment</span>
-                              </Label>
-                              <Switch 
-                                id="mobile-email-reminders" 
-                                checked={profileForm.reminders.email}
-                                onCheckedChange={(checked) => setProfileForm(prev => ({ 
-                                  ...prev, 
-                                  reminders: { ...prev.reminders, email: checked } 
-                                }))}
-                              />
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <Label htmlFor="mobile-sms-reminders" className="flex flex-col">
-                                <span>SMS Reminders</span>
-                                <span className="font-normal text-xs text-gray-500">Receive a text before your appointment</span>
-                              </Label>
-                              <Switch 
-                                id="mobile-sms-reminders" 
-                                checked={profileForm.reminders.sms}
-                                onCheckedChange={(checked) => setProfileForm(prev => ({ 
-                                  ...prev, 
-                                  reminders: { ...prev.reminders, sms: checked } 
-                                }))}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Reminder Timing</Label>
-                              <Select 
-                                value={profileForm.reminders.timing} 
-                                onValueChange={(value) => setProfileForm(prev => ({ 
-                                  ...prev, 
-                                  reminders: { ...prev.reminders, timing: value } 
-                                }))}
-                              >
-                                <SelectTrigger className="border-purple-200 rounded-xl">
-                                  <SelectValue placeholder="Select timing" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="1h">1 hour before</SelectItem>
-                                  <SelectItem value="24h">24 hours before</SelectItem>
-                                  <SelectItem value="48h">48 hours before</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-sm text-gray-600 space-y-1 mt-4">
-                        <p>Member since: {safeFormatDate(profile.joinDate, 'MMMM yyyy')}</p>
-                        <p>Total appointments: {profile.totalAppointments}</p>
-                        <p>Loyalty points: {profile.loyaltyPoints}</p>
-                      </div>
-                    </div>
-                    <DialogFooter className="gap-2">
-                      <Button variant="outline" onClick={() => setIsProfileDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button 
-                        onClick={updateProfile}
-                        className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                      >
-                        Save Changes
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-                <div className="pt-4 border-t border-gray-200">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-red-600 hover:bg-red-50 rounded-xl"
-                    onClick={handleLogout}
-                  >
-                    <LogOut className="w-4 h-4 mr-3" />
-                    Logout
-                  </Button>
-                </div>
-              </CardContent>
             </Card>
           </div>
 
