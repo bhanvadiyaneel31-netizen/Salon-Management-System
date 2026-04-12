@@ -13,6 +13,7 @@ import { Progress } from "./ui/progress";
 import { Slider } from "./ui/slider";
 import { Textarea } from "./ui/textarea";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "./ui/sheet";
+import { Switch } from "./ui/switch";
 import { 
   Calendar, 
   Clock, 
@@ -84,7 +85,12 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
     name: '',
     email: '',
     phone: '',
-    address: ''
+    address: '',
+    reminders: {
+      email: true,
+      sms: true,
+      timing: '24h'
+    }
   });
 
   // Reschedule state
@@ -709,9 +715,66 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
                     className="border-purple-200 focus:border-purple-400 rounded-xl" 
                   />
                 </div>
+                
+                {/* Appointment Reminders UI */}
+                <div className="pt-4 border-t border-purple-100">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-purple-500" />
+                    Appointment Reminders
+                  </h4>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="email-reminders" className="flex flex-col">
+                        <span>Email Reminders</span>
+                        <span className="font-normal text-xs text-gray-500">Receive an email before your appointment</span>
+                      </Label>
+                      <Switch 
+                        id="email-reminders" 
+                        checked={profileForm.reminders.email}
+                        onCheckedChange={(checked) => setProfileForm(prev => ({ 
+                          ...prev, 
+                          reminders: { ...prev.reminders, email: checked } 
+                        }))}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="sms-reminders" className="flex flex-col">
+                        <span>SMS Reminders</span>
+                        <span className="font-normal text-xs text-gray-500">Receive a text before your appointment</span>
+                      </Label>
+                      <Switch 
+                        id="sms-reminders" 
+                        checked={profileForm.reminders.sms}
+                        onCheckedChange={(checked) => setProfileForm(prev => ({ 
+                          ...prev, 
+                          reminders: { ...prev.reminders, sms: checked } 
+                        }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Reminder Timing</Label>
+                      <Select 
+                        value={profileForm.reminders.timing} 
+                        onValueChange={(value) => setProfileForm(prev => ({ 
+                          ...prev, 
+                          reminders: { ...prev.reminders, timing: value } 
+                        }))}
+                      >
+                        <SelectTrigger className="border-purple-200 rounded-xl">
+                          <SelectValue placeholder="Select timing" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1h">1 hour before</SelectItem>
+                          <SelectItem value="24h">24 hours before</SelectItem>
+                          <SelectItem value="48h">48 hours before</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="text-sm text-gray-600 space-y-1">
+              <div className="text-sm text-gray-600 space-y-1 mt-4">
                 <p>Member since: {safeFormatDate(profile.joinDate, 'MMMM yyyy')}</p>
                 <p>Total appointments: {profile.totalAppointments}</p>
                 <p>Loyalty points: {profile.loyaltyPoints}</p>
@@ -892,9 +955,66 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
                             className="border-purple-200 focus:border-purple-400 rounded-xl" 
                           />
                         </div>
+
+                        {/* Appointment Reminders UI */}
+                        <div className="pt-4 border-t border-purple-100">
+                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                            <Bell className="w-4 h-4 text-purple-500" />
+                            Appointment Reminders
+                          </h4>
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <Label htmlFor="mobile-email-reminders" className="flex flex-col">
+                                <span>Email Reminders</span>
+                                <span className="font-normal text-xs text-gray-500">Receive an email before your appointment</span>
+                              </Label>
+                              <Switch 
+                                id="mobile-email-reminders" 
+                                checked={profileForm.reminders.email}
+                                onCheckedChange={(checked) => setProfileForm(prev => ({ 
+                                  ...prev, 
+                                  reminders: { ...prev.reminders, email: checked } 
+                                }))}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <Label htmlFor="mobile-sms-reminders" className="flex flex-col">
+                                <span>SMS Reminders</span>
+                                <span className="font-normal text-xs text-gray-500">Receive a text before your appointment</span>
+                              </Label>
+                              <Switch 
+                                id="mobile-sms-reminders" 
+                                checked={profileForm.reminders.sms}
+                                onCheckedChange={(checked) => setProfileForm(prev => ({ 
+                                  ...prev, 
+                                  reminders: { ...prev.reminders, sms: checked } 
+                                }))}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Reminder Timing</Label>
+                              <Select 
+                                value={profileForm.reminders.timing} 
+                                onValueChange={(value) => setProfileForm(prev => ({ 
+                                  ...prev, 
+                                  reminders: { ...prev.reminders, timing: value } 
+                                }))}
+                              >
+                                <SelectTrigger className="border-purple-200 rounded-xl">
+                                  <SelectValue placeholder="Select timing" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="1h">1 hour before</SelectItem>
+                                  <SelectItem value="24h">24 hours before</SelectItem>
+                                  <SelectItem value="48h">48 hours before</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="text-sm text-gray-600 space-y-1">
+                      <div className="text-sm text-gray-600 space-y-1 mt-4">
                         <p>Member since: {safeFormatDate(profile.joinDate, 'MMMM yyyy')}</p>
                         <p>Total appointments: {profile.totalAppointments}</p>
                         <p>Loyalty points: {profile.loyaltyPoints}</p>
@@ -1269,6 +1389,15 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
                                   {appointment.notes && <p className="mt-1">Note: {appointment.notes}</p>}
                                 </div>
                                 <div className="flex gap-2">
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-purple-600 border-purple-200 hover:bg-purple-50 rounded-xl hidden sm:flex"
+                                    onClick={() => toast.success(`Reminder set! Added ${appointment.service.name} to your calendar.`)}
+                                  >
+                                    <Calendar className="w-4 h-4 mr-1" />
+                                    Add to Calendar
+                                  </Button>
                                   <Button 
                                     variant="outline" 
                                     size="sm" 

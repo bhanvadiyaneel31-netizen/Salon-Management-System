@@ -576,15 +576,15 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
             <CardTitle className="text-lg font-semibold text-gray-900">Next Appointment</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+                <div className="w-12 flex-shrink-0 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
                   <User className="w-6 h-6 text-white" />
                 </div>
-                <div>
-                  <h4 className="font-medium text-gray-900">{upcomingAppointment.customer.name}</h4>
-                  <p className="text-gray-600">{upcomingAppointment.service.name}</p>
-                  <p className="text-sm text-gray-500">{upcomingAppointment.time} • {upcomingAppointment.service.duration} min</p>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-gray-900 truncate">{upcomingAppointment.customer.name}</h4>
+                  <p className="text-gray-600 truncate">{upcomingAppointment.service.name}</p>
+                  <p className="text-sm text-gray-500 truncate">{upcomingAppointment.time} • {upcomingAppointment.service.duration} min</p>
                 </div>
               </div>
               <Button
@@ -610,32 +610,38 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
           {todayAppointments.length > 0 ? (
             <div className="space-y-4">
               {todayAppointments.sort((a, b) => a.time.localeCompare(b.time)).map((appointment) => (
-                <div key={appointment.id} className="flex items-center gap-4 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl">
-                  <div className="flex-shrink-0">
+                <div key={appointment.id} className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl">
+                  <div className="flex items-center justify-between w-full sm:w-auto">
                     <Badge className={`${getStatusColor(appointment.status)} border`}>
                       {getStatusIcon(appointment.status)}
                       <span className="ml-1 capitalize">{appointment.status}</span>
                     </Badge>
+                    <div className="sm:hidden text-right">
+                      <p className="text-sm font-medium text-gray-900">{appointment.time}</p>
+                      <p className="text-xs text-gray-500">{appointment.service.duration} min</p>
+                    </div>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 truncate">{appointment.customer.name}</p>
                     <p className="text-sm text-gray-600 truncate">{appointment.service.name}</p>
                   </div>
-                  <div className="flex-shrink-0 text-right">
+                  <div className="hidden sm:block flex-shrink-0 text-right">
                     <p className="text-sm font-medium text-gray-900">{appointment.time}</p>
                     <p className="text-xs text-gray-500">{appointment.service.duration} min</p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="hover:bg-purple-100"
-                    onClick={() => {
-                      setSelectedAppointment(appointment);
-                      setIsDetailsPanelOpen(true);
-                    }}
-                  >
-                    <Eye className="w-4 h-4" />
-                  </Button>
+                  <div className="flex justify-end sm:block">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="hover:bg-purple-100"
+                      onClick={() => {
+                        setSelectedAppointment(appointment);
+                        setIsDetailsPanelOpen(true);
+                      }}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -829,7 +835,7 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
             </Table>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:hidden mt-4">
+          <div className="grid grid-cols-1 gap-4 md:hidden p-4">
             {filteredAppointments.map((appointment) => (
               <Card key={appointment.id} className="p-4 border-purple-100">
                 <div className="flex justify-between items-start mb-3">
@@ -975,14 +981,22 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
                       .map((appointment) => (
                         <div
                           key={appointment.id}
-                          className="flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl hover:bg-gradient-to-r hover:from-purple-100 hover:to-pink-100 transition-colors"
+                          className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl hover:bg-gradient-to-r hover:from-purple-100 hover:to-pink-100 transition-colors"
                         >
-                          <div className="flex-shrink-0 text-center">
-                            <div className="text-lg font-semibold text-gray-900">
-                              {appointment.time}
+                          <div className="flex items-center justify-between w-full sm:w-auto sm:block">
+                            <div className="flex-shrink-0 text-left sm:text-center">
+                              <div className="text-lg font-semibold text-gray-900">
+                                {appointment.time}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {appointment.service.duration}m
+                              </div>
                             </div>
-                            <div className="text-xs text-gray-500">
-                              {appointment.service.duration}m
+                            <div className="sm:hidden flex items-center gap-2">
+                              <Badge className={`${getStatusColor(appointment.status)} border`}>
+                                {getStatusIcon(appointment.status)}
+                                <span className="ml-1 capitalize">{appointment.status}</span>
+                              </Badge>
                             </div>
                           </div>
                           
@@ -1007,21 +1021,24 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
                             )}
                           </div>
                           
-                          <div className="flex-shrink-0 flex items-center gap-2">
-                            <Badge className={`${getStatusColor(appointment.status)} border`}>
-                              {getStatusIcon(appointment.status)}
-                              <span className="ml-1 capitalize">{appointment.status}</span>
-                            </Badge>
+                          <div className="flex justify-between sm:justify-end items-center sm:gap-2">
+                            <div className="hidden sm:block">
+                              <Badge className={`${getStatusColor(appointment.status)} border`}>
+                                {getStatusIcon(appointment.status)}
+                                <span className="ml-1 capitalize">{appointment.status}</span>
+                              </Badge>
+                            </div>
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="hover:bg-purple-100"
+                              className="hover:bg-purple-100 w-full sm:w-auto"
                               onClick={() => {
                                 setSelectedAppointment(appointment);
                                 setIsDetailsPanelOpen(true);
                               }}
                             >
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-4 h-4 mr-2 sm:mr-0" />
+                              <span className="sm:hidden">View Details</span>
                             </Button>
                           </div>
                         </div>
@@ -1105,7 +1122,7 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-white">
       <SidebarProvider>
-        <div className="flex min-h-screen">
+        <div className="flex min-h-screen w-full flex-col lg:flex-row">
           {renderSidebar()}
           
           <main className="flex-1 overflow-hidden">
