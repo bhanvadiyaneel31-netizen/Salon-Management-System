@@ -574,6 +574,7 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
                     <Button
                       size="sm"
                       variant="ghost"
+                      aria-label="View appointment details"
                       className="hover:bg-purple-100"
                       onClick={() => {
                         setSelectedAppointment(appointment);
@@ -731,6 +732,7 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
                         <Button
                           size="sm"
                           variant="ghost"
+                          aria-label="View appointment details"
                           className="hover:bg-purple-50"
                           onClick={() => {
                             setSelectedAppointment(appointment);
@@ -972,6 +974,7 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
                             <Button
                               size="sm"
                               variant="ghost"
+                              aria-label="View appointment details"
                               className="hover:bg-purple-100 w-full sm:w-auto"
                               onClick={() => {
                                 setSelectedAppointment(appointment);

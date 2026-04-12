@@ -1,2 +1,3 @@
+◇ injected env (3) from .env // tip: ⌘ suppress logs { quiet: true }
 Server is running on http://localhost:5001
 Connected to the SQLite database.
