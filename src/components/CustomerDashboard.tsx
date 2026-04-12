@@ -1213,9 +1213,9 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
                 </div>
 
                 <Tabs defaultValue="upcoming" className="space-y-6">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="upcoming">Upcoming ({upcomingAppointments.length})</TabsTrigger>
-                    <TabsTrigger value="past">Past ({pastAppointments.length})</TabsTrigger>
+                  <TabsList className="flex flex-col sm:grid sm:grid-cols-2 w-full h-auto gap-1 bg-purple-50 p-1 rounded-xl">
+                    <TabsTrigger value="upcoming" className="w-full">Upcoming ({upcomingAppointments.length})</TabsTrigger>
+                    <TabsTrigger value="past" className="w-full">Past ({pastAppointments.length})</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="upcoming">

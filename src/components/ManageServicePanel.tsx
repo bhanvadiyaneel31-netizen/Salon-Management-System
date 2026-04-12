@@ -674,16 +674,16 @@ export function ManageServicePanel() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 bg-purple-50 border border-purple-100 rounded-xl">
-          <TabsTrigger value="services" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-purple-600">
+        <TabsList className="flex flex-col sm:grid sm:grid-cols-3 w-full h-auto gap-1 bg-purple-50 border border-purple-100 rounded-xl p-1">
+          <TabsTrigger value="services" className="flex w-full items-center justify-center gap-2 data-[state=active]:bg-white data-[state=active]:text-purple-600">
             <Scissors className="w-4 h-4" />
             Services
           </TabsTrigger>
-          <TabsTrigger value="categories" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-purple-600">
+          <TabsTrigger value="categories" className="flex w-full items-center justify-center gap-2 data-[state=active]:bg-white data-[state=active]:text-purple-600">
             <Tag className="w-4 h-4" />
             Categories
           </TabsTrigger>
-          <TabsTrigger value="analytics" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-purple-600">
+          <TabsTrigger value="analytics" className="flex w-full items-center justify-center gap-2 data-[state=active]:bg-white data-[state=active]:text-purple-600">
             <BarChart3 className="w-4 h-4" />
             Analytics
           </TabsTrigger>
@@ -950,17 +950,18 @@ export function ManageServicePanel() {
           </Card>
 
           {/* Services Grid/List */}
-          {viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredServices.map((service) => (
-                <ServiceCard key={service.id} service={service} />
-              ))}
-            </div>
-          ) : (
-            <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
+          <div className={viewMode === 'list' ? "hidden md:block" : "block"}>
+            {viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredServices.map((service) => (
+                  <ServiceCard key={service.id} service={service} />
+                ))}
+              </div>
+            ) : (
+              <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                <CardContent className="p-0 overflow-x-auto">
+                  <Table>
+                    <TableHeader>
                     <TableRow>
                       <TableHead>Service</TableHead>
                       <TableHead>Category</TableHead>
@@ -1085,6 +1086,15 @@ export function ManageServicePanel() {
                 )}
               </CardContent>
             </Card>
+          )}
+          </div>
+          
+          {viewMode === 'list' && (
+            <div className="grid grid-cols-1 gap-6 md:hidden">
+              {filteredServices.map((service) => (
+                <ServiceCard key={service.id} service={service} />
+              ))}
+            </div>
           )}
         </TabsContent>
 

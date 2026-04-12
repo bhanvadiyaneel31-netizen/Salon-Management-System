@@ -577,22 +577,17 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-white">
 
       {/* Mobile Top Bar */}
-      <div className="lg:hidden sticky top-0 z-40 bg-white/90 backdrop-blur-sm border-b border-purple-100 px-4 py-3 flex items-center justify-between">
+      {/* Admin Panel Mobile Header (Non-sticky) */}
+      <div className="lg:hidden px-4 md:px-6 pt-4 pb-2 mb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-            <Settings className="w-4 h-4 text-white" />
+          <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+            <Settings className="w-5 h-5 text-white" />
           </div>
           <div>
-            <p className="font-semibold text-gray-900 text-sm">Admin Panel</p>
-            <p className="text-xs text-gray-500 capitalize">{activeSection.replace('-', ' ')}</p>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Admin Panel</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{activeSection.replace('-', ' ')}</p>
           </div>
         </div>
-        <button
-          onClick={() => setIsMobileMenuOpen(true)}
-          className="p-2 rounded-xl bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
       </div>
 
       {/* Mobile Slide Drawer */}
@@ -1537,10 +1532,10 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                   </CardHeader>
                   <CardContent>
                     <Tabs value={appointmentHistoryTab} onValueChange={setAppointmentHistoryTab}>
-                      <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="upcoming">Upcoming ({upcomingAppointments.length})</TabsTrigger>
-                        <TabsTrigger value="completed">Completed ({completedAppointments.length})</TabsTrigger>
-                        <TabsTrigger value="cancelled">Cancelled ({cancelledAppointments.length})</TabsTrigger>
+                      <TabsList className="flex flex-col sm:grid sm:grid-cols-3 w-full h-auto gap-1 bg-purple-50 p-1 rounded-xl">
+                        <TabsTrigger value="upcoming" className="w-full">Upcoming ({upcomingAppointments.length})</TabsTrigger>
+                        <TabsTrigger value="completed" className="w-full">Completed ({completedAppointments.length})</TabsTrigger>
+                        <TabsTrigger value="cancelled" className="w-full">Cancelled ({cancelledAppointments.length})</TabsTrigger>
                       </TabsList>
 
                       <TabsContent value="upcoming" className="mt-6">
@@ -2108,7 +2103,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                     <CardTitle className="text-xl font-bold text-gray-900">Staff Performance</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="overflow-x-auto">
+                    <div className="hidden md:block overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -2161,6 +2156,53 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                           })}
                         </TableBody>
                       </Table>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 gap-4 md:hidden">
+                      {staffMembers.filter(s => s.status === 'active' && s.appointments > 0).map((staff) => {
+                        const staffAppointments = appointments.filter(a => a.assignedStaff?.id === staff.id);
+                        const completedAppointments = staffAppointments.filter(a => a.status === 'completed');
+                        const completionRate = staffAppointments.length > 0 ? Math.round((completedAppointments.length / staffAppointments.length) * 100) : 0;
+                        const revenue = completedAppointments.reduce((sum, a) => sum + a.service.price, 0);
+                        
+                        return (
+                          <Card key={staff.id} className="p-4 border-purple-100">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <span className="text-white font-bold">
+                                    {staff.name.split(' ').map(n => n[0]).join('')}
+                                  </span>
+                                </div>
+                                <div>
+                                  <div className="font-medium text-gray-900">{staff.name}</div>
+                                  <div className="text-sm text-gray-500">{staff.role}</div>
+                                </div>
+                              </div>
+                              <Badge variant={completionRate >= 80 ? "default" : "secondary"} className={completionRate >= 80 ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
+                                {completionRate}%
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              <div>
+                                <span className="text-gray-500 block">Appointments</span>
+                                <span className="font-medium">{staffAppointments.length} Handled</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500 block">Revenue</span>
+                                <span className="font-medium text-green-600">${revenue}</span>
+                              </div>
+                              <div className="col-span-2 mt-1 pt-2 border-t border-purple-50 flex justify-between items-center">
+                                <span className="text-gray-500">Average Rating</span>
+                                <span className="font-medium flex items-center gap-1">
+                                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                                  {getStaffRating(staff.name).average} ({getStaffRating(staff.name).count} reviews)
+                                </span>
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
