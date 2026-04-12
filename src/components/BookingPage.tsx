@@ -1,12 +1,10 @@
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Calendar } from "./ui/calendar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Badge } from "./ui/badge";
-import { ArrowLeft, ArrowRight, Check, Clock, User, Scissors } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, ArrowRight, Check, Clock, User, Scissors, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { createAppointment } from "../services/appointmentStore";
 import { api } from "../services/api";
 import { toast } from "sonner";
 
@@ -20,27 +18,18 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [selectedStaff, setSelectedStaff] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const services = [
-    { id: 1, name: 'Hair Cut & Style', duration: 60, price: 85 },
-    { id: 2, name: 'Hair Coloring', duration: 120, price: 150 },
-    { id: 3, name: 'Signature Facial', duration: 75, price: 120 },
-    { id: 4, name: 'Gel Manicure', duration: 45, price: 65 },
-    { id: 5, name: 'Spa Pedicure', duration: 60, price: 75 },
-    { id: 6, name: 'Relaxing Massage', duration: 90, price: 180 }
-  ];
+  // Real data from API
+  const [services, setServices] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
+  const [loadingStaff, setLoadingStaff] = useState(false);
 
   const timeSlots = [
     '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
     '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
     '15:00', '15:30', '16:00', '16:30', '17:00', '17:30'
-  ];
-
-  const staff = [
-    { id: 1, name: 'Emma Wilson', specialty: 'Hair Styling' },
-    { id: 2, name: 'Lisa Davis', specialty: 'Facial Treatments' },
-    { id: 3, name: 'Sarah Johnson', specialty: 'Nail Care' },
-    { id: 4, name: 'Any Available Staff', specialty: 'All Services' }
   ];
 
   const steps = [
@@ -50,71 +39,96 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
     { number: 4, title: 'Confirm Booking', icon: Check }
   ];
 
-  const handleNext = () => {
+  // Load services from backend on mount
+  useEffect(() => {
+    const loadServices = async () => {
+      try {
+        const data = await api.services.getAll();
+        setServices(data);
+      } catch (error) {
+        toast.error('Failed to load services. Please try again.');
+        console.error(error);
+      } finally {
+        setLoadingServices(false);
+      }
+    };
+    loadServices();
+  }, []);
+
+  // Load staff when step 3 is reached
+  useEffect(() => {
+    if (!selectedService || currentStep !== 3) return;
+    const loadStaff = async () => {
+      setLoadingStaff(true);
+      try {
+        const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+        const data = await api.staff.getAvailable(dateStr, parseInt(selectedService));
+        setStaffList([...data, { id: 0, name: 'Any Available Staff', specialty: 'All Services' }]);
+      } catch {
+        try {
+          const allStaff = await api.staff.getAll();
+          setStaffList([...allStaff, { id: 0, name: 'Any Available Staff', specialty: 'All Services' }]);
+        } catch {
+          setStaffList([{ id: 0, name: 'Any Available Staff', specialty: 'All Services' }]);
+        }
+      } finally {
+        setLoadingStaff(false);
+      }
+    };
+    loadStaff();
+  }, [selectedService, currentStep, selectedDate]);
+
+  const handleNext = async () => {
     if (currentStep < 4) {
       setCurrentStep(currentStep + 1);
     } else {
-      // Handle booking confirmation
+      const currentUser = api.auth.getCurrentUser();
+      if (!currentUser) {
+        toast.error('Please log in to book an appointment');
+        setCurrentView('login');
+        return;
+      }
+      const selectedServiceData = services.find(s => s.id.toString() === selectedService);
+      if (!selectedServiceData || !selectedDate) {
+        toast.error('Please complete all booking steps');
+        return;
+      }
+      setIsSubmitting(true);
       try {
-        const currentUser = api.auth.getCurrentUser();
-        if (!currentUser) {
-          toast.error('Please log in to book an appointment');
-          setCurrentView('login');
-          return;
-        }
-
-        const selectedServiceData = services.find(s => s.id.toString() === selectedService);
-        const selectedStaffData = staff.find(s => s.id.toString() === selectedStaff);
-
-        if (!selectedServiceData || !selectedStaffData || !selectedDate) {
-          toast.error('Please complete all booking steps');
-          return;
-        }
-
-        // Create appointment in centralized store
-        const appointment = createAppointment({
-          customer_id: currentUser.id,
-          customer_name: currentUser.name,
-          customer_email: currentUser.email,
-          customer_phone: currentUser.phone || '',
-          staff_id: selectedStaffData.id === 4 ? null : selectedStaffData.id, // 4 is "Any Available Staff"
-          staff_name: selectedStaffData.id === 4 ? null : selectedStaffData.name,
+        await api.appointments.create({
           service_id: selectedServiceData.id,
-          service_name: selectedServiceData.name,
-          service_duration: selectedServiceData.duration,
-          service_price: selectedServiceData.price,
+          staff_id: parseInt(selectedStaff) || 0,
           appointment_date: format(selectedDate, 'yyyy-MM-dd'),
           appointment_time: selectedTime,
-          status: 'pending',
-          booked_by: 'customer',
+          notes: ''
         });
-
-        toast.success('Booking confirmed! You will receive a confirmation email shortly.');
+        toast.success('Booking confirmed! Your appointment has been scheduled.');
         setCurrentView('customer-dashboard');
-      } catch (error) {
-        console.error('Booking error:', error);
-        toast.error('Failed to create appointment. Please try again.');
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to create appointment. Please try again.');
+      } finally {
+        setIsSubmitting(false);
       }
     }
   };
 
   const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    } else {
-      setCurrentView('home');
-    }
+    if (currentStep > 1) setCurrentStep(currentStep - 1);
+    else setCurrentView('home');
   };
 
   const canProceed = () => {
     switch (currentStep) {
       case 1: return selectedService !== '';
-      case 2: return selectedDate && selectedTime !== '';
+      case 2: return !!(selectedDate && selectedTime !== '');
       case 3: return selectedStaff !== '';
       case 4: return true;
       default: return false;
     }
   };
+
+  const selectedServiceData = services.find(s => s.id.toString() === selectedService);
+  const selectedStaffData = staffList.find(s => s.id.toString() === selectedStaff);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-white py-6 sm:py-8">
@@ -124,9 +138,7 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-3 sm:mb-4">
             Book Your Appointment
           </h1>
-          <p className="text-base sm:text-lg lg:text-xl text-gray-600">
-            Follow these simple steps to schedule your visit
-          </p>
+          <p className="text-base sm:text-lg text-gray-600">Follow these simple steps to schedule your visit</p>
         </div>
 
         {/* Progress Steps */}
@@ -136,23 +148,16 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
               const Icon = step.icon;
               const isActive = currentStep === step.number;
               const isCompleted = currentStep > step.number;
-              
               return (
                 <div key={step.number} className="flex items-center flex-shrink-0">
                   <div className={`flex items-center space-x-2 sm:space-x-3 ${index < steps.length - 1 ? 'pr-2 sm:pr-4' : ''}`}>
                     <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
-                      isCompleted 
-                        ? 'bg-green-500 text-white' 
-                        : isActive 
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-                        : 'bg-gray-200 text-gray-500'
+                      isCompleted ? 'bg-green-500 text-white' : isActive ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'bg-gray-200 text-gray-500'
                     }`}>
                       {isCompleted ? <Check className="w-4 h-4 sm:w-5 sm:h-5" /> : <Icon className="w-4 h-4 sm:w-5 sm:h-5" />}
                     </div>
                     <div className="hidden sm:block">
-                      <p className={`text-sm font-medium ${isActive ? 'text-purple-600' : 'text-gray-600'}`}>
-                        {step.title}
-                      </p>
+                      <p className={`text-sm font-medium ${isActive ? 'text-purple-600' : 'text-gray-600'}`}>{step.title}</p>
                     </div>
                   </div>
                   {index < steps.length - 1 && (
@@ -172,32 +177,43 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 sm:p-6 lg:p-8">
+
             {/* Step 1: Select Service */}
             {currentStep === 1 && (
-              <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
-                {services.map((service) => (
-                  <div
-                    key={service.id}
-                    onClick={() => setSelectedService(service.id.toString())}
-                    className={`p-4 sm:p-6 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${
-                      selectedService === service.id.toString()
-                        ? 'border-purple-500 bg-purple-50'
-                        : 'border-gray-200 hover:border-purple-300 hover:bg-purple-25'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <h3 className="font-bold text-base sm:text-lg text-gray-900">{service.name}</h3>
-                      <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-xs sm:text-sm">
-                        ${service.price}
-                      </Badge>
+              loadingServices ? (
+                <div className="flex justify-center items-center py-16">
+                  <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+                  <span className="ml-3 text-gray-500">Loading services...</span>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
+                  {services.map((service) => (
+                    <div
+                      key={service.id}
+                      onClick={() => setSelectedService(service.id.toString())}
+                      className={`p-4 sm:p-6 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${
+                        selectedService === service.id.toString()
+                          ? 'border-purple-500 bg-purple-50'
+                          : 'border-gray-200 hover:border-purple-300'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <h3 className="font-bold text-base sm:text-lg text-gray-900">{service.name}</h3>
+                        <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-xs sm:text-sm">
+                          ${service.price}
+                        </Badge>
+                      </div>
+                      {service.description && (
+                        <p className="text-sm text-gray-500 mb-2">{service.description}</p>
+                      )}
+                      <p className="text-sm sm:text-base text-gray-600 flex items-center">
+                        <Clock className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
+                        {service.duration} min
+                      </p>
                     </div>
-                    <p className="text-sm sm:text-base text-gray-600 flex items-center">
-                      <Clock className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
-                      {service.duration} min
-                    </p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             )}
 
             {/* Step 2: Choose Date & Time */}
@@ -240,22 +256,32 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
 
             {/* Step 3: Select Staff */}
             {currentStep === 3 && (
-              <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
-                {staff.map((member) => (
-                  <div
-                    key={member.id}
-                    onClick={() => setSelectedStaff(member.id.toString())}
-                    className={`p-4 sm:p-6 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${
-                      selectedStaff === member.id.toString()
-                        ? 'border-purple-500 bg-purple-50'
-                        : 'border-gray-200 hover:border-purple-300 hover:bg-purple-25'
-                    }`}
-                  >
-                    <h3 className="font-bold text-base sm:text-lg text-gray-900 mb-2">{member.name}</h3>
-                    <p className="text-sm sm:text-base text-gray-600">{member.specialty}</p>
-                  </div>
-                ))}
-              </div>
+              loadingStaff ? (
+                <div className="flex justify-center items-center py-16">
+                  <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+                  <span className="ml-3 text-gray-500">Loading available staff...</span>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
+                  {staffList.map((member) => (
+                    <div
+                      key={member.id}
+                      onClick={() => setSelectedStaff(member.id.toString())}
+                      className={`p-4 sm:p-6 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${
+                        selectedStaff === member.id.toString()
+                          ? 'border-purple-500 bg-purple-50'
+                          : 'border-gray-200 hover:border-purple-300'
+                      }`}
+                    >
+                      <h3 className="font-bold text-base sm:text-lg text-gray-900 mb-2">{member.name}</h3>
+                      <p className="text-sm sm:text-base text-gray-600">{member.specialty}</p>
+                      {member.rating && (
+                        <p className="text-sm text-yellow-600 mt-1">⭐ {member.rating}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
             )}
 
             {/* Step 4: Confirm Booking */}
@@ -266,15 +292,11 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm sm:text-base">
                       <span className="text-gray-600">Service:</span>
-                      <span className="font-medium text-right">
-                        {services.find(s => s.id.toString() === selectedService)?.name}
-                      </span>
+                      <span className="font-medium text-right">{selectedServiceData?.name}</span>
                     </div>
                     <div className="flex justify-between text-sm sm:text-base">
                       <span className="text-gray-600">Date:</span>
-                      <span className="font-medium">
-                        {selectedDate?.toLocaleDateString()}
-                      </span>
+                      <span className="font-medium">{selectedDate?.toLocaleDateString()}</span>
                     </div>
                     <div className="flex justify-between text-sm sm:text-base">
                       <span className="text-gray-600">Time:</span>
@@ -282,16 +304,12 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
                     </div>
                     <div className="flex justify-between text-sm sm:text-base">
                       <span className="text-gray-600">Staff:</span>
-                      <span className="font-medium text-right">
-                        {staff.find(s => s.id.toString() === selectedStaff)?.name}
-                      </span>
+                      <span className="font-medium text-right">{selectedStaffData?.name}</span>
                     </div>
                     <div className="border-t border-purple-200 pt-3">
                       <div className="flex justify-between text-sm sm:text-base">
                         <span className="font-bold">Total:</span>
-                        <span className="font-bold text-purple-600">
-                          ${services.find(s => s.id.toString() === selectedService)?.price}
-                        </span>
+                        <span className="font-bold text-purple-600">${selectedServiceData?.price}</span>
                       </div>
                     </div>
                   </div>
@@ -306,19 +324,22 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
           <Button
             variant="outline"
             onClick={handleBack}
+            disabled={isSubmitting}
             className="border-2 border-gray-300 text-gray-600 hover:bg-gray-50 rounded-xl px-4 sm:px-6 py-3 w-full sm:w-auto"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             {currentStep === 1 ? 'Back to Home' : 'Previous'}
           </Button>
-          
           <Button
             onClick={handleNext}
-            disabled={!canProceed()}
+            disabled={!canProceed() || isSubmitting}
             className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0 rounded-xl px-4 sm:px-6 py-3 disabled:opacity-50 w-full sm:w-auto"
           >
-            {currentStep === 4 ? 'Confirm Booking' : 'Next'}
-            {currentStep !== 4 && <ArrowRight className="w-4 h-4 ml-2" />}
+            {isSubmitting ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Booking...</>
+            ) : currentStep === 4 ? 'Confirm Booking' : (
+              <>Next <ArrowRight className="w-4 h-4 ml-2" /></>
+            )}
           </Button>
         </div>
       </div>

@@ -952,11 +952,20 @@ export function ManageServicePanel() {
           {/* Services Grid/List */}
           <div className={viewMode === 'list' ? "hidden md:block" : "block"}>
             {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredServices.map((service) => (
-                  <ServiceCard key={service.id} service={service} />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredServices.map((service) => (
+                    <ServiceCard key={service.id} service={service} />
+                  ))}
+                </div>
+                {filteredServices.length === 0 && (
+                  <div className="text-center py-12 text-gray-500">
+                    <Scissors className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-lg">No services found</p>
+                    <p className="text-sm">Try adjusting your search criteria</p>
+                  </div>
+                )}
+              </>
             ) : (
               <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
                 <CardContent className="p-0 overflow-x-auto">
@@ -1090,10 +1099,37 @@ export function ManageServicePanel() {
           </div>
           
           {viewMode === 'list' && (
-            <div className="grid grid-cols-1 gap-6 md:hidden">
-              {filteredServices.map((service) => (
-                <ServiceCard key={service.id} service={service} />
-              ))}
+            <div className="md:hidden">
+              {filteredServices.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Scissors className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-lg">No services found</p>
+                  <p className="text-sm">Try adjusting your search criteria</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {filteredServices.map((service) => (
+                    <ServiceCard key={service.id} service={service} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {viewMode === 'grid' && (
+            <div className="md:hidden">
+              {filteredServices.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Scissors className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-lg">No services found</p>
+                  <p className="text-sm">Try adjusting your search criteria</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-6">
+                  {filteredServices.map((service) => (
+                    <ServiceCard key={service.id} service={service} />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </TabsContent>

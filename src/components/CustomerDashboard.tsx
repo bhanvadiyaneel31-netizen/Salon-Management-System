@@ -47,20 +47,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { toast } from "sonner";
 import { format, addDays, startOfDay, isAfter, isBefore } from 'date-fns';
-import { api } from "../services/api";
-import { safeFormatDate } from "./ui/utils";
-import { 
-  getAllAppointments, 
-  getAppointmentsByCustomer, 
-  updateAppointmentStatus,
-  updateAppointment,
-  cancelAppointment as cancelAppointmentInStore,
-  createAppointment,
-  getRemindersForCustomer,
-  getCustomerLoyaltyData,
-  redeemLoyaltyPoints,
-  addReview
-} from "../services/appointmentStore";
+import { api, appointmentsAPI } from "../services/api";
 
 interface CustomerDashboardProps {
   setCurrentView: (view: string) => void;
@@ -197,36 +184,47 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
     }
   ]);
 
-  // Customer Appointments Data - Load from centralized store
+  // Customer Appointments Data - Load from real backend
   const [appointments, setAppointments] = useState<any[]>([]);
-  
-  // Load appointments from centralized store on mount and when section changes
-  useEffect(() => {
-    const currentUser = api.auth.getCurrentUser();
-    if (currentUser) {
-      const userAppointments = getAppointmentsByCustomer(currentUser.id);
-      // Transform to match the expected format
-      const transformed = userAppointments.map(apt => ({
-        id: apt.id,
-        service: { 
-          name: apt.service_name, 
-          price: apt.service_price, 
-          duration: apt.service_duration 
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+
+  const loadAppointments = async () => {
+    setLoadingAppointments(true);
+    try {
+      const data = await appointmentsAPI.getAll();
+      // Transform backend response to match component's expected shape
+      const transformed = data.map((apt: any) => ({
+        id: String(apt.id),
+        service: {
+          name: apt.service?.name || apt.service_name || '',
+          price: apt.price || apt.service?.price || 0,
+          duration: apt.service?.duration || apt.service_duration || 0
         },
         date: apt.appointment_date,
         time: apt.appointment_time,
-        staff: { 
-          name: apt.staff_name || 'Unassigned', 
-          speciality: '' 
+        staff: {
+          name: apt.staff?.name || 'Unassigned',
+          speciality: ''
         },
         status: apt.status,
-        bookingId: apt.id,
+        bookingId: String(apt.id),
         createdAt: apt.created_at,
-        notes: apt.notes || ''
+        notes: apt.notes || '',
+        rating: apt.rating,
+        review: apt.review
       }));
       setAppointments(transformed);
+    } catch (error) {
+      console.error('Failed to load appointments:', error);
+    } finally {
+      setLoadingAppointments(false);
     }
-  }, [activeSection]); // Reload when section changes to catch new bookings
+  };
+
+  // Load appointments on mount and when section changes
+  useEffect(() => {
+    loadAppointments();
+  }, [activeSection]);
 
   // Notifications Data
   const [notifications, setNotifications] = useState([
@@ -272,38 +270,30 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
     address: '',
     joinDate: '',
     totalAppointments: 0,
-    loyaltyPoints: 0
+    loyaltyPoints: 0,
+    reminders: {
+      email: true,
+      sms: true,
+      timing: '24h'
+    }
   });
 
   // Load user profile on mount and when appointments change
   useEffect(() => {
     const currentUser = api.auth.getCurrentUser();
     if (currentUser) {
-      const totalAppointments = appointments.length;
-      const loyaltyData = getCustomerLoyaltyData(currentUser.id);
-      
       setProfile(prev => ({
         ...prev,
         name: currentUser.name,
         email: currentUser.email,
         phone: currentUser.phone || '',
-        address: '', // Can be loaded from a separate profile store if needed
+        address: '',
         joinDate: currentUser.created_at || new Date().toISOString(),
-        totalAppointments,
-        loyaltyPoints: loyaltyData.availablePoints
+        totalAppointments: appointments.length,
+        loyaltyPoints: (currentUser as any).loyalty_points || 0
       }));
-
-      // Update Notifications
-      const dynamicReminders = getRemindersForCustomer(currentUser.id);
-      if (dynamicReminders.length > 0) {
-        setNotifications(prev => {
-          const existingIds = new Set(prev.map(n => n.id));
-          const newNotifications = dynamicReminders.filter(r => !existingIds.has(r.id));
-          return [...newNotifications, ...prev];
-        });
-      }
     }
-  }, [appointments.length]); // Only update when appointment count changes
+  }, [appointments.length]);
   
   // Initialize profile form on mount
   useEffect(() => {
@@ -381,66 +371,33 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
     setIsBookingDialogOpen(true);
   };
 
-  const confirmBooking = () => {
+  const confirmBooking = async () => {
     if (!selectedDate || !selectedTime) {
       toast.error('Please select date and time');
       return;
     }
 
-    try {
-      const currentUser = api.auth.getCurrentUser();
-      if (!currentUser) {
-        toast.error('Please log in to book an appointment');
-        return;
-      }
+    const currentUser = api.auth.getCurrentUser();
+    if (!currentUser) {
+      toast.error('Please log in to book an appointment');
+      return;
+    }
 
-      // Create appointment in centralized store
-      const appointment = createAppointment({
-        customer_id: currentUser.id,
-        customer_name: currentUser.name,
-        customer_email: currentUser.email,
-        customer_phone: currentUser.phone || '',
-        staff_id: null, // Will be assigned by staff/admin
-        staff_name: selectedService.staff?.[0] || null,
+    try {
+      await appointmentsAPI.create({
         service_id: selectedService.id,
-        service_name: selectedService.name,
-        service_duration: selectedService.duration,
-        service_price: selectedService.price,
+        staff_id: 0, // any available
         appointment_date: format(selectedDate, 'yyyy-MM-dd'),
         appointment_time: selectedTime,
-        status: 'pending',
-        booked_by: 'customer',
+        notes: ''
       });
-
-      // Reload appointments to show the new one
-      const userAppointments = getAppointmentsByCustomer(currentUser.id);
-      const transformed = userAppointments.map(apt => ({
-        id: apt.id,
-        service: { 
-          name: apt.service_name, 
-          price: apt.service_price, 
-          duration: apt.service_duration 
-        },
-        date: apt.appointment_date,
-        time: apt.appointment_time,
-        staff: { 
-          name: apt.staff_name || 'Unassigned', 
-          speciality: '' 
-        },
-        status: apt.status,
-        bookingId: apt.id,
-        createdAt: apt.created_at,
-        notes: apt.notes || ''
-      }));
-      setAppointments(transformed);
-
       setIsBookingDialogOpen(false);
       setSelectedService(null);
       setSelectedTime('');
+      await loadAppointments(); // Reload from backend
       toast.success('Appointment booked successfully! You will receive a confirmation soon.');
-    } catch (error) {
-      console.error('Booking error:', error);
-      toast.error('Failed to create appointment. Please try again.');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create appointment. Please try again.');
     }
   };
 
@@ -478,13 +435,14 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
       };
       localStorage.setItem('user', JSON.stringify(updatedUser));
 
-      // Update the profile with form data
+      // Update the profile with form data (including reminder preferences)
       const updatedProfile = {
         ...profile,
         name: profileForm.name,
         email: profileForm.email,
         phone: profileForm.phone,
-        address: profileForm.address
+        address: profileForm.address,
+        reminders: profileForm.reminders
       };
 
       setProfile(updatedProfile);
@@ -496,14 +454,19 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
     }
   };
 
-  // Initialize profile form when dialog opens
+  // Initialize profile form when dialog opens — restores all fields including reminders
   const openProfileDialog = () => {
     setProfileForm(prev => ({
       ...prev,
       name: profile.name,
       email: profile.email,
       phone: profile.phone,
-      address: profile.address
+      address: profile.address,
+      reminders: {
+        email: profile.reminders?.email ?? true,
+        sms: profile.reminders?.sms ?? true,
+        timing: profile.reminders?.timing ?? '24h'
+      }
     }));
     setIsProfileDialogOpen(true);
   };
@@ -541,20 +504,18 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
   };
 
   // Handle cancel functionality
-  const handleCancelAppointment = (appointmentId: string) => {
-    setAppointments(prev => 
-      prev.map(apt => 
-        apt.id === appointmentId 
-          ? { ...apt, status: 'cancelled' }
-          : apt
-      )
-    );
-    toast.success('Appointment cancelled successfully');
+  const handleCancelAppointment = async (appointmentId: string) => {
+    try {
+      await appointmentsAPI.updateStatus(parseInt(appointmentId), 'cancelled');
+      await loadAppointments();
+      toast.success('Appointment cancelled successfully');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to cancel appointment');
+    }
   };
 
   const handleRedeemPoints = (points: number) => {
-    const currentUser = api.auth.getCurrentUser();
-    if (currentUser && redeemLoyaltyPoints(currentUser.id, points)) {
+    if (profile.loyaltyPoints >= points) {
       setProfile(prev => ({ ...prev, loyaltyPoints: prev.loyaltyPoints - points }));
       toast.success(`Successfully redeemed ${points} points for a discount!`);
     } else {
@@ -562,21 +523,22 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
     }
   };
 
-  const submitReview = () => {
+  const submitReview = async () => {
     if (!appointmentToReview) return;
-    
-    addReview(appointmentToReview.id, reviewRating, reviewText);
-    
-    // Update local state so it doesn't show button anymore, though for our UI we may not hide it, just show success
-    setAppointments(prev => prev.map(a => 
-      a.id === appointmentToReview.id ? { ...a, rating: reviewRating, review: reviewText } : a
-    ));
-    
-    setIsReviewDialogOpen(false);
-    setAppointmentToReview(null);
-    setReviewRating(5);
-    setReviewText('');
-    toast.success('Thank you for your review!');
+    try {
+      await appointmentsAPI.submitReview(appointmentToReview.id, reviewRating, reviewText);
+      // Only update state after a successful API response
+      setAppointments(prev => prev.map(a =>
+        a.id === appointmentToReview.id ? { ...a, rating: reviewRating, review: reviewText } : a
+      ));
+      setIsReviewDialogOpen(false);
+      setAppointmentToReview(null);
+      setReviewRating(5);
+      setReviewText('');
+      toast.success('Thank you for your review!');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to submit review. Please try again.');
+    }
   };
 
   // Sidebar content component (reused for both desktop and mobile)

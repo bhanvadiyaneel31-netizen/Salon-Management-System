@@ -41,6 +41,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { toast } from 'sonner';
 import { format, addDays, isSameDay } from 'date-fns';
 import { getStaffRating } from '../services/appointmentStore';
+import { api, appointmentsAPI } from '../services/api';
 
 interface StaffDashboardProps {
   setCurrentView: (view: string) => void;
@@ -62,7 +63,7 @@ interface Appointment {
   };
   date: string;
   time: string;
-  status: 'pending' | 'confirmed' | 'in-progress' | 'completed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
   notes?: string;
   preferences?: string;
   isFirstTime?: boolean;
@@ -89,109 +90,45 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Mock data
-  const [appointments, setAppointments] = useState<Appointment[]>([
-    {
-      id: 1,
-      customer: {
-        name: 'Sarah Johnson',
-        email: 'sarah.johnson@email.com',
-        phone: '+1 (555) 123-4567',
-        address: '123 Main St, City, State 12345'
-      },
-      service: {
-        name: 'Hair Cut & Style',
-        duration: 60,
-        price: 85
-      },
-      date: format(new Date(), 'yyyy-MM-dd'),
-      time: '09:00',
-      status: 'confirmed',
-      notes: 'Regular customer, prefers layered cut',
-      preferences: 'Likes to chat, prefers quiet music',
-      isFirstTime: false
-    },
-    {
-      id: 2,
-      customer: {
-        name: 'Emma Wilson',
-        email: 'emma.wilson@email.com',
-        phone: '+1 (555) 234-5678',
-        address: '456 Oak Ave, City, State 12345'
-      },
-      service: {
-        name: 'Hair Coloring & Highlights',
-        duration: 180,
-        price: 220
-      },
-      date: format(new Date(), 'yyyy-MM-dd'),
-      time: '11:00',
-      status: 'in-progress',
-      notes: 'First time coloring, wants blonde highlights',
-      preferences: 'Nervous about first coloring, needs reassurance',
-      isFirstTime: true
-    },
-    {
-      id: 3,
-      customer: {
-        name: 'Lisa Chen',
-        email: 'lisa.chen@email.com',
-        phone: '+1 (555) 345-6789',
-        address: '789 Pine Rd, City, State 12345'
-      },
-      service: {
-        name: 'Wedding Hair Styling',
-        duration: 90,
-        price: 150
-      },
-      date: format(new Date(), 'yyyy-MM-dd'),
-      time: '14:30',
-      status: 'pending',
-      notes: 'Special event styling for wedding ceremony',
-      preferences: 'Wants elegant updo, has reference photos',
-      isFirstTime: false
-    },
-    {
-      id: 4,
-      customer: {
-        name: 'Anna Rodriguez',
-        email: 'anna.rodriguez@email.com',
-        phone: '+1 (555) 456-7890',
-        address: '321 Elm St, City, State 12345'
-      },
-      service: {
-        name: 'Hair Cut & Style',
-        duration: 60,
-        price: 85
-      },
-      date: format(new Date(), 'yyyy-MM-dd'),
-      time: '16:00',
-      status: 'confirmed',
-      notes: 'Wants to try a new shorter style',
-      preferences: 'Open to suggestions, trusts stylist judgment',
-      isFirstTime: false
-    },
-    {
-      id: 5,
-      customer: {
-        name: 'Maria Garcia',
-        email: 'maria.garcia@email.com',
-        phone: '+1 (555) 567-8901',
-        address: '654 Maple Dr, City, State 12345'
-      },
-      service: {
-        name: 'Hair Treatment & Deep Conditioning',
-        duration: 75,
-        price: 95
-      },
-      date: format(addDays(new Date(), 1), 'yyyy-MM-dd'),
-      time: '10:00',
-      status: 'confirmed',
-      notes: 'Regular monthly treatment',
-      preferences: 'Prefers relaxing atmosphere, no small talk',
-      isFirstTime: false
-    }
-  ]);
+  // Appointments state - loaded from real backend
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+
+  useEffect(() => {
+    const loadAppointments = async () => {
+      setLoadingAppointments(true);
+      try {
+        const data = await appointmentsAPI.getAll();
+        // Normalize backend response to match StaffDashboard's Appointment interface
+        const normalized: Appointment[] = data.map((apt: any) => ({
+          id: apt.id,
+          customer: {
+            name: apt.customer?.name || 'Unknown Customer',
+            email: apt.customer?.email || '',
+            phone: apt.customer?.phone || '',
+            address: ''
+          },
+          service: {
+            name: apt.service?.name || '',
+            duration: apt.service?.duration || 0,
+            price: apt.price || 0
+          },
+          date: apt.appointment_date,
+          time: apt.appointment_time,
+          status: apt.status === 'in-progress' ? 'in-progress' : apt.status,
+          notes: apt.notes || '',
+          preferences: '',
+          isFirstTime: false
+        }));
+        setAppointments(normalized);
+      } catch (err) {
+        console.error('Failed to load appointments:', err);
+      } finally {
+        setLoadingAppointments(false);
+      }
+    };
+    loadAppointments();
+  }, []);
 
   // Load mock notifications
   useEffect(() => {
@@ -253,17 +190,21 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
     }
   };
 
-  const updateAppointmentStatus = (appointmentId: number, newStatus: 'pending' | 'confirmed' | 'in-progress' | 'completed' | 'cancelled') => {
-    setAppointments(prev => 
-      prev.map(apt => 
-        apt.id === appointmentId 
-          ? { ...apt, status: newStatus }
-          : apt
-      )
-    );
-    
+  const updateAppointmentStatus = async (
+    appointmentId: number,
+    newStatus: 'pending' | 'confirmed' | 'completed' | 'cancelled'
+  ) => {
+    // Look up the record before the API call to avoid reading stale state afterwards
     const appointment = appointments.find(apt => apt.id === appointmentId);
-    toast.success(`${appointment?.customer.name}'s appointment marked as ${newStatus}`);
+    try {
+      await appointmentsAPI.updateStatus(appointmentId, newStatus);
+      setAppointments(prev =>
+        prev.map(apt => apt.id === appointmentId ? { ...apt, status: newStatus } : apt)
+      );
+      toast.success(`${appointment?.customer.name}'s appointment marked as ${newStatus}`);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update appointment status');
+    }
   };
 
   const filteredAppointments = appointments.filter(appointment => {
