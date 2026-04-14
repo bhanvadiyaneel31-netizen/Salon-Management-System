@@ -112,4 +112,33 @@ router.get('/staff-performance', requireAdmin, async (req, res) => {
   }
 });
 
+// GET /api/analytics/service-performance
+router.get('/service-performance', requireAdmin, async (req, res) => {
+  try {
+    const data = await db.allAsync(`
+      SELECT 
+        s.id as service_id, s.name as service_name, s.category, s.price as base_price,
+        COUNT(a.id) as total_bookings,
+        SUM(CASE WHEN a.status = 'completed' THEN 1 ELSE 0 END) as completed_bookings,
+        SUM(CASE WHEN a.status = 'completed' THEN a.price ELSE 0 END) as total_revenue
+      FROM services s
+      LEFT JOIN appointments a ON s.id = a.service_id
+      GROUP BY s.id
+      ORDER BY total_bookings DESC
+    `);
+
+    const formatted = data.map(d => ({
+      ...d,
+      completed_bookings: d.completed_bookings || 0,
+      total_revenue: d.total_revenue || 0,
+      average_revenue: d.completed_bookings > 0 ? parseFloat((d.total_revenue / d.completed_bookings).toFixed(2)) : 0,
+      completion_rate: d.total_bookings > 0 ? parseFloat(((d.completed_bookings / d.total_bookings) * 100).toFixed(1)) : 0
+    }));
+
+    res.json(formatted);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch service performance metrics' });
+  }
+});
+
 module.exports = router;

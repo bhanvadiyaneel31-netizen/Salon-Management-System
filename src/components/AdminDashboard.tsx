@@ -51,7 +51,6 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { toast } from "sonner";
 import { exportToCSV } from "./ui/utils";
-import { getStaffRating } from '../services/appointmentStore';
 import { api, appointmentsAPI, analyticsAPI, staffAPI } from "../services/api";
 import { ManageServicePanel } from "./ManageServicePanel";
 import { format, addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
@@ -165,33 +164,36 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
     activeStaff: 0,
     growthRate: 0
   });
+  const [mostBookedServices, setMostBookedServices] = useState<any[]>([]);
 
   // Load analytics on mount
   useEffect(() => {
     const loadAnalytics = async () => {
       try {
-        const [weekly, distribution, stats] = await Promise.all([
+        const [weekly, distribution, stats, servicePerf] = await Promise.all([
           analyticsAPI.getWeeklyData(),
           analyticsAPI.getServiceDistribution(),
-          analyticsAPI.getDashboardStats()
+          analyticsAPI.getDashboardStats(),
+          analyticsAPI.getServicePerformance()
         ]);
         setDailyAppointments(weekly.map(d => ({ day: d.day, appointments: d.appointments, revenue: d.revenue })));
         setServiceDistribution(distribution);
         setDashboardStats(stats);
+        
+        // Map backend service performance to match the UI chart format
+        const mappedServices = (servicePerf || []).map(s => ({
+          id: s.service_id.toString(),
+          service: s.service_name,
+          bookings: s.total_bookings,
+          revenue: s.total_revenue
+        })).slice(0, 5); // top 5
+        setMostBookedServices(mappedServices);
       } catch (err) {
         console.error('Failed to load analytics:', err);
       }
     };
     loadAnalytics();
   }, []);
-
-  const mostBookedServices = [
-    { id: 'svc1', service: 'Hair Cut & Style', bookings: 15, revenue: 1275 },
-    { id: 'svc2', service: 'Hair Coloring', bookings: 8, revenue: 1760 },
-    { id: 'svc3', service: 'Facial Treatment', bookings: 12, revenue: 1440 },
-    { id: 'svc4', service: 'Manicure & Pedicure', bookings: 10, revenue: 650 },
-    { id: 'svc5', service: 'Massage Therapy', bookings: 6, revenue: 570 }
-  ];
 
   // Load appointments from real backend
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -910,7 +912,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                               <p className="text-gray-600">{staff.role}</p>
                             </div>
                             <Badge variant="secondary" className="bg-purple-100 text-purple-700">
-                              ⭐ {getStaffRating(staff.name).average} ({getStaffRating(staff.name).count})
+                              ⭐ {staff.rating.toFixed(1)}
                             </Badge>
                           </div>
                           <div className="flex justify-between items-center">
@@ -1076,7 +1078,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-purple-100">Avg Rating</p>
-                          <p className="text-3xl font-bold">{staffMembers.length > 0 ? (staffMembers.reduce((acc, s) => acc + getStaffRating(s.name).average, 0) / staffMembers.length).toFixed(1) : '0.0'}</p>
+                          <p className="text-3xl font-bold">{staffMembers.length > 0 ? (staffMembers.reduce((acc, s) => acc + s.rating, 0) / staffMembers.length).toFixed(1) : '0.0'}</p>
                         </div>
                         <Star className="w-10 h-10 text-purple-200" />
                       </div>
@@ -1193,7 +1195,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                                 <TableCell>
                                   <div className="flex items-center gap-1">
                                     <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                                    <span className="font-medium">{getStaffRating(staff.name).average} ({getStaffRating(staff.name).count})</span>
+                                    <span className="font-medium">{staff.rating.toFixed(1)}</span>
                                   </div>
                                 </TableCell>
                                 <TableCell>
@@ -1277,7 +1279,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                               <div>
                                 <span className="text-gray-500 block">Rating</span>
                                 <span className="font-medium flex items-center gap-1">
-                                  <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" /> {getStaffRating(staff.name).average} ({getStaffRating(staff.name).count} reviews)
+                                  <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" /> {staff.rating.toFixed(1)}
                                 </span>
                               </div>
                               <div className="col-span-2">
@@ -2091,7 +2093,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                                 <TableCell>
                                   <div className="flex items-center gap-1">
                                     <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                                    <span className="font-medium">{getStaffRating(staff.name).average} ({getStaffRating(staff.name).count})</span>
+                                    <span className="font-medium">{staff.rating.toFixed(1)}</span>
                                   </div>
                                 </TableCell>
                               </TableRow>
@@ -2139,7 +2141,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                                 <span className="text-gray-500">Average Rating</span>
                                 <span className="font-medium flex items-center gap-1">
                                   <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                                  {getStaffRating(staff.name).average} ({getStaffRating(staff.name).count} reviews)
+                                  {staff.rating.toFixed(1)}
                                 </span>
                               </div>
                             </div>
@@ -2318,8 +2320,8 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                           <div className="text-xs text-purple-600">Total Clients</div>
                         </div>
                         <div className="bg-pink-50 p-3 rounded-xl text-center">
-                          <div className="text-2xl font-bold text-pink-600">{getStaffRating(selectedStaff.name).average}</div>
-                          <div className="text-xs text-pink-600">Avg Rating ({getStaffRating(selectedStaff.name).count})</div>
+                          <div className="text-2xl font-bold text-pink-600">{selectedStaff.rating.toFixed(1)}</div>
+                          <div className="text-xs text-pink-600">Avg Rating</div>
                         </div>
                         <div className="bg-blue-50 p-3 rounded-xl text-center">
                           <div className="text-2xl font-bold text-blue-600">{selectedStaff.appointments}</div>

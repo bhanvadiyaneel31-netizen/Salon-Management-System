@@ -47,7 +47,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { toast } from "sonner";
 import { format, addDays, startOfDay, isAfter, isBefore } from 'date-fns';
-import { api, appointmentsAPI } from "../services/api";
+import { api, appointmentsAPI, servicesAPI, staffAPI } from "../services/api";
 import { safeFormatDate } from "./ui/utils";
 
 
@@ -94,97 +94,10 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState('');
 
-  // Available Services Data
-  const [services] = useState([
-    {
-      id: 1,
-      name: 'Hair Cut & Style',
-      description: 'Professional haircut with styling and blow-dry',
-      price: 85,
-      duration: 60,
-      category: 'hair',
-      image: 'https://picsum.photos/seed/haircut-service/400/300',
-      rating: 4.9,
-      staff: ['Emma Wilson', 'Sarah Johnson']
-    },
-    {
-      id: 2,
-      name: 'Hair Coloring',
-      description: 'Full hair coloring with premium products',
-      price: 220,
-      duration: 180,
-      category: 'hair',
-      image: 'https://picsum.photos/seed/haircolor-service/400/300',
-      rating: 4.8,
-      staff: ['Emma Wilson', 'Mike Roberts']
-    },
-    {
-      id: 3,
-      name: 'Facial Treatment',
-      description: 'Rejuvenating facial with deep cleansing and moisturizing',
-      price: 120,
-      duration: 90,
-      category: 'facial',
-      image: 'https://picsum.photos/seed/facial-service/400/300',
-      rating: 4.9,
-      staff: ['Lisa Davis']
-    },
-    {
-      id: 4,
-      name: 'Anti-Aging Facial',
-      description: 'Advanced anti-aging treatment with collagen boost',
-      price: 180,
-      duration: 120,
-      category: 'facial',
-      image: 'https://picsum.photos/seed/antiaging-service/400/300',
-      rating: 4.7,
-      staff: ['Lisa Davis']
-    },
-    {
-      id: 5,
-      name: 'Manicure & Pedicure',
-      description: 'Complete nail care with polish and cuticle treatment',
-      price: 65,
-      duration: 75,
-      category: 'nails',
-      image: 'https://picsum.photos/seed/manicure-service/400/300',
-      rating: 4.8,
-      staff: ['Sarah Johnson']
-    },
-    {
-      id: 6,
-      name: 'Gel Manicure',
-      description: 'Long-lasting gel manicure with UV curing',
-      price: 45,
-      duration: 45,
-      category: 'nails',
-      image: 'https://picsum.photos/seed/gelmanicure-service/400/300',
-      rating: 4.6,
-      staff: ['Sarah Johnson']
-    },
-    {
-      id: 7,
-      name: 'Massage Therapy',
-      description: 'Relaxing full-body massage with essential oils',
-      price: 95,
-      duration: 60,
-      category: 'wellness',
-      image: 'https://picsum.photos/seed/massage-service/400/300',
-      rating: 4.9,
-      staff: ['Carlos Martinez']
-    },
-    {
-      id: 8,
-      name: 'Eyebrow Shaping',
-      description: 'Professional eyebrow shaping and tinting',
-      price: 35,
-      duration: 30,
-      category: 'beauty',
-      image: 'https://picsum.photos/seed/eyebrow-service/400/300',
-      rating: 4.7,
-      staff: ['Lisa Davis', 'Sarah Johnson']
-    }
-  ]);
+  // Available Services & Staff Data
+  const [services, setServices] = useState<any[]>([]);
+  const [staffMembers, setStaffMembers] = useState<any[]>([]);
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('0');
 
   // Customer Appointments Data - Load from real backend
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -223,9 +136,26 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
     }
   };
 
-  // Load appointments on mount and when section changes
+  // Load data on mount and when section changes
   useEffect(() => {
-    loadAppointments();
+    const loadAllData = async () => {
+      try {
+        const [servicesData, staffData] = await Promise.all([
+          servicesAPI.getAll(),
+          staffAPI.getAll()
+        ]);
+        setServices(servicesData.map((s: any) => ({
+          ...s,
+          image: `https://picsum.photos/seed/${(s.name || 'salon').replace(/\s+/g, '')}/400/300`,
+          staff: staffData.filter((st: any) => st.status === 'active' || st.is_available).map((st: any) => st.name)
+        })));
+        setStaffMembers(staffData.filter((s:any) => s.status === 'active' || s.is_available));
+      } catch (err) {
+        console.error('Failed to load services or staff:', err);
+      }
+      await loadAppointments();
+    };
+    loadAllData();
   }, [activeSection]);
 
   // Notifications Data
@@ -351,8 +281,8 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
 
   // Filter services based on search and filters
   const filteredServices = services.filter(service => {
-    const matchesSearch = service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         service.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (service.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (service.description || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || service.category === categoryFilter;
     const matchesPrice = service.price >= priceRange[0] && service.price <= priceRange[1];
     
@@ -388,7 +318,7 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
     try {
       await appointmentsAPI.create({
         service_id: selectedService.id,
-        staff_id: 0, // any available
+        staff_id: parseInt(selectedStaffId),
         appointment_date: format(selectedDate, 'yyyy-MM-dd'),
         appointment_time: selectedTime,
         notes: ''
@@ -1408,6 +1338,21 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
                         <SelectItem value="15:00">3:00 PM</SelectItem>
                         <SelectItem value="16:00">4:00 PM</SelectItem>
                         <SelectItem value="17:00">5:00 PM</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Select Professional</Label>
+                    <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
+                      <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
+                        <SelectValue placeholder="Any Available" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">Any Available</SelectItem>
+                        {staffMembers.map((staff) => (
+                          <SelectItem key={staff.id} value={staff.id.toString()}>{staff.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

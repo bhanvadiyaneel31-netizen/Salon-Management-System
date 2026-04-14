@@ -40,7 +40,6 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { toast } from 'sonner';
 import { format, addDays, isSameDay } from 'date-fns';
-import { getStaffRating } from '../services/appointmentStore';
 import { api, appointmentsAPI } from '../services/api';
 
 interface StaffDashboardProps {
@@ -252,7 +251,7 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
     .filter(apt => apt.status === 'completed')
     .reduce((sum, apt) => sum + apt.service.price, 0);
 
-  const staffRating = getStaffRating('Emma Wilson');
+  const staffRating = { average: 0, count: 0 };
 
   const renderSidebar = () => (
     <Sidebar className="border-r border-purple-200">
