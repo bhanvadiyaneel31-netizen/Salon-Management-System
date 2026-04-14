@@ -136,12 +136,12 @@ router.delete('/:id/remove-service', requireAdmin, async (req, res) => {
 router.post('/', requireAdmin, async (req, res) => {
   const bcrypt = require('bcrypt');
   const { name, email, phone, specialty, password } = req.body;
-  if (!name || !email) {
-    return res.status(400).json({ error: 'name and email are required' });
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'name, email, and password are required' });
   }
   try {
     const salt = await bcrypt.genSalt(10);
-    const password_hash = await bcrypt.hash(password || 'password123', salt);
+    const password_hash = await bcrypt.hash(password, salt);
     const result = await db.runAsync(
       "INSERT INTO users (name, email, password_hash, phone, role) VALUES (?, ?, ?, ?, 'staff')",
       [name, email, password_hash, phone || null]

@@ -132,6 +132,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
     name: '',
     email: '',
     phone: '',
+    password: '',
     role: '',
     status: 'active' as const,
     specialty: ''
@@ -275,6 +276,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
       name: '',
       email: '',
       phone: '',
+      password: '',
       role: '',
       status: 'active',
       specialty: ''
@@ -282,8 +284,8 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
   };
 
   const handleAddStaff = async () => {
-    if (!staffForm.name || !staffForm.email) {
-      toast.error('Please fill in name and email');
+    if (!staffForm.name || !staffForm.email || !staffForm.password) {
+      toast.error('Please fill in name, email, and password');
       return;
     }
     try {
@@ -291,6 +293,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
         name: staffForm.name,
         email: staffForm.email,
         phone: staffForm.phone,
+        password: staffForm.password,
         specialty: staffForm.specialty || staffForm.role,
         is_available: staffForm.status === 'active',
         rating: 0
@@ -969,6 +972,16 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                             placeholder="Enter email address" 
                             value={staffForm.email}
                             onChange={(e) => setStaffForm(prev => ({ ...prev, email: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="password">Password *</Label>
+                          <Input 
+                            id="password" 
+                            type="password" 
+                            placeholder="Enter initial password" 
+                            value={staffForm.password}
+                            onChange={(e) => setStaffForm(prev => ({ ...prev, password: e.target.value }))}
                           />
                         </div>
                         <div className="space-y-2">
