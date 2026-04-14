@@ -168,7 +168,8 @@ router.post('/', verifyToken, async (req, res) => {
     const newRow = await fetchAppointmentWithDetails(result.lastID);
     res.status(201).json(mapAppointmentRow(newRow));
   } catch (error) {
-    res.status(500).json({ error: 'Failed to book appointment' });
+    console.error("DEBUG APPOINTMENT BOOKING:", error);
+    res.status(500).json({ error: error.message || 'Failed to book appointment' });
   }
 });
 
