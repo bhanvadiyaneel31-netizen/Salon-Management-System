@@ -43,6 +43,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { toast } from 'sonner';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
+import { servicesAPI, analyticsAPI } from '../services/api';
 
 interface ServiceCategory {
   id: number;
@@ -140,144 +141,78 @@ export function ManageServicePanel() {
 
   // Mock data - In real implementation, this would come from API calls
   useEffect(() => {
-    loadMockData();
+    loadServices();
   }, []);
 
-  const loadMockData = () => {
-    // Mock categories
-    const mockCategories: ServiceCategory[] = [
-      { id: 1, name: 'Hair Services', description: 'All hair-related treatments', icon: 'scissors', color: '#8B5CF6', service_count: 4 },
-      { id: 2, name: 'Facial Treatments', description: 'Skin care and facial services', icon: 'star', color: '#EC4899', service_count: 2 },
-      { id: 3, name: 'Nail Care', description: 'Manicure and pedicure services', icon: 'palette', color: '#10B981', service_count: 3 },
-      { id: 4, name: 'Massage Therapy', description: 'Relaxation and therapeutic massages', icon: 'activity', color: '#F59E0B', service_count: 2 }
-    ];
+  const mockCategories: ServiceCategory[] = [
+    { id: 1, name: 'Hair', description: 'All hair-related treatments', icon: 'scissors', color: '#8B5CF6', service_count: 4 },
+    { id: 2, name: 'Facial', description: 'Skin care and facial services', icon: 'star', color: '#EC4899', service_count: 2 },
+    { id: 3, name: 'Nails', description: 'Manicure and pedicure services', icon: 'palette', color: '#10B981', service_count: 3 },
+    { id: 4, name: 'Massage', description: 'Relaxation and therapeutic massages', icon: 'activity', color: '#F59E0B', service_count: 2 },
+    { id: 5, name: 'Wellness', description: 'Holistic wellness treatments', icon: 'activity', color: '#10B981', service_count: 0 },
+    { id: 6, name: 'Beauty', description: 'General beauty services', icon: 'star', color: '#EC4899', service_count: 0 }
+  ];
 
-    // Mock services
-    const mockServices: Service[] = [
-      {
-        id: 1,
-        name: 'Premium Hair Cut & Style',
-        description: 'Professional haircut with styling and blow-dry',
-        duration: 60,
-        price: 85,
-        image_url: '/api/placeholder/300/200',
-        category: mockCategories[0],
-        is_active: true,
-        is_available: true,
-        booking_count: 145,
-        average_rating: 4.8,
-        created_at: '2024-01-15T10:00:00Z',
-        updated_at: '2024-12-15T10:00:00Z'
-      },
-      {
-        id: 2,
-        name: 'Hair Coloring & Highlights',
-        description: 'Full hair coloring service with professional color consultation',
-        duration: 180,
-        price: 220,
-        image_url: '/api/placeholder/300/200',
-        category: mockCategories[0],
-        is_active: true,
-        is_available: true,
-        booking_count: 89,
-        average_rating: 4.9,
-        created_at: '2024-01-20T10:00:00Z',
-        updated_at: '2024-12-10T10:00:00Z'
-      },
-      {
-        id: 3,
-        name: 'Signature Facial Treatment',
-        description: 'Rejuvenating facial with deep cleansing and moisturizing',
-        duration: 75,
-        price: 120,
-        image_url: '/api/placeholder/300/200',
-        category: mockCategories[1],
-        is_active: true,
-        is_available: true,
-        booking_count: 167,
-        average_rating: 4.7,
-        created_at: '2024-02-01T10:00:00Z',
-        updated_at: '2024-12-12T10:00:00Z'
-      },
-      {
-        id: 4,
-        name: 'Gel Manicure',
-        description: 'Long-lasting gel manicure with nail art options',
-        duration: 45,
-        price: 65,
-        image_url: '/api/placeholder/300/200',
-        category: mockCategories[2],
-        is_active: true,
-        is_available: true,
-        booking_count: 203,
-        average_rating: 4.6,
-        created_at: '2024-02-10T10:00:00Z',
-        updated_at: '2024-12-08T10:00:00Z'
-      },
-      {
-        id: 5,
-        name: 'Luxury Spa Pedicure',
-        description: 'Relaxing pedicure with foot massage and nail care',
-        duration: 60,
-        price: 75,
-        image_url: '/api/placeholder/300/200',
-        category: mockCategories[2],
-        is_active: false,
-        is_available: false,
-        booking_count: 78,
-        average_rating: 4.5,
-        created_at: '2024-02-15T10:00:00Z',
-        updated_at: '2024-11-20T10:00:00Z'
-      },
-      {
-        id: 6,
-        name: 'Deep Tissue Massage',
-        description: 'Therapeutic massage for muscle tension relief',
-        duration: 90,
-        price: 180,
-        image_url: '/api/placeholder/300/200',
-        category: mockCategories[3],
-        is_active: true,
-        is_available: true,
-        booking_count: 124,
-        average_rating: 4.8,
-        created_at: '2024-03-01T10:00:00Z',
-        updated_at: '2024-12-05T10:00:00Z'
+  const loadServices = async () => {
+    setIsLoading(true);
+    try {
+      const data = await servicesAPI.getAll();
+      const mappedServices: Service[] = data.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        description: s.description || '',
+        duration: s.duration,
+        price: s.price,
+        image_url: '/api/placeholder/300/200', // Mock image
+        // Match string category from backend to pseudo category object for UI
+        category: mockCategories.find(c => c.name === s.category) || mockCategories[0],
+        is_active: Boolean(s.is_active),
+        is_available: Boolean(s.is_active), // Alias for UI
+        booking_count: s.booking_count || 0,
+        average_rating: s.average_rating || 0,
+        created_at: s.created_at || new Date().toISOString(),
+        updated_at: s.updated_at || new Date().toISOString()
+      }));
+
+      setCategories(mockCategories);
+      setServices(mappedServices);
+
+      // Load true stats if possible, otherwise use a placeholder wrapper
+      try {
+        const perf = await analyticsAPI.getServicePerformance();
+        setStats({
+          overview: {
+            total_services: mappedServices.length,
+            active_services: mappedServices.filter(s => s.is_active).length,
+            inactive_services: mappedServices.filter(s => !s.is_active).length
+          },
+          popular_services: [...mappedServices].sort((a, b) => b.booking_count - a.booking_count).slice(0, 5),
+          revenue_services: perf.map((p: any) => ({ id: p.service_id, name: p.service_name, total_revenue: p.total_revenue })).slice(0, 5),
+          category_stats: mockCategories.map(c => ({
+            name: c.name,
+            color: c.color,
+            service_count: mappedServices.filter(s => s.category.name === c.name).length,
+            total_bookings: mappedServices.filter(s => s.category.name === c.name).reduce((sum, s) => sum + s.booking_count, 0)
+          }))
+        });
+      } catch (e) {
+        // Fallback stats without real analytics
+        setStats({
+          overview: {
+            total_services: mappedServices.length,
+            active_services: mappedServices.filter(s => s.is_active).length,
+            inactive_services: mappedServices.filter(s => !s.is_active).length
+          },
+          popular_services: [],
+          revenue_services: [],
+          category_stats: []
+        });
       }
-    ];
-
-    // Mock stats
-    const mockStats: ServiceStats = {
-      overview: {
-        total_services: 6,
-        active_services: 5,
-        inactive_services: 1
-      },
-      popular_services: [
-        { id: 4, name: 'Gel Manicure', booking_count: 203, price: 65 },
-        { id: 3, name: 'Signature Facial Treatment', booking_count: 167, price: 120 },
-        { id: 1, name: 'Premium Hair Cut & Style', booking_count: 145, price: 85 },
-        { id: 6, name: 'Deep Tissue Massage', booking_count: 124, price: 180 },
-        { id: 2, name: 'Hair Coloring & Highlights', booking_count: 89, price: 220 }
-      ],
-      revenue_services: [
-        { id: 2, name: 'Hair Coloring & Highlights', total_revenue: 19580 },
-        { id: 6, name: 'Deep Tissue Massage', total_revenue: 22320 },
-        { id: 3, name: 'Signature Facial Treatment', total_revenue: 20040 },
-        { id: 4, name: 'Gel Manicure', total_revenue: 13195 },
-        { id: 1, name: 'Premium Hair Cut & Style', total_revenue: 12325 }
-      ],
-      category_stats: [
-        { name: 'Hair Services', color: '#8B5CF6', service_count: 2, total_bookings: 234 },
-        { name: 'Facial Treatments', color: '#EC4899', service_count: 1, total_bookings: 167 },
-        { name: 'Nail Care', color: '#10B981', service_count: 2, total_bookings: 281 },
-        { name: 'Massage Therapy', color: '#F59E0B', service_count: 1, total_bookings: 124 }
-      ]
-    };
-
-    setCategories(mockCategories);
-    setServices(mockServices);
-    setStats(mockStats);
+    } catch (error) {
+      toast.error('Failed to load services');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Utility functions
@@ -327,28 +262,24 @@ export function ManageServicePanel() {
 
     setIsLoading(true);
     try {
-      // In real implementation, this would be an API call
       const category = categories.find(c => c.id === serviceForm.category_id);
       if (!category) {
         toast.error('Invalid category selected');
         return;
       }
 
-      const newService: Service = {
-        id: Math.max(...services.map(s => s.id)) + 1,
-        ...serviceForm,
-        category,
-        booking_count: 0,
-        average_rating: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        image_url: imagePreview || serviceForm.image_url
-      };
+      await servicesAPI.create({
+        name: serviceForm.name,
+        description: serviceForm.description,
+        duration: serviceForm.duration,
+        price: serviceForm.price,
+        category: category.name as any
+      });
 
-      setServices(prev => [...prev, newService]);
+      await loadServices();
       resetServiceForm();
       setIsServiceDialogOpen(false);
-      toast.success(`${newService.name} has been added successfully!`);
+      toast.success(`${serviceForm.name} has been added successfully!`);
     } catch (error) {
       toast.error('Failed to add service');
     } finally {
@@ -370,20 +301,15 @@ export function ManageServicePanel() {
         return;
       }
 
-      setServices(prev => 
-        prev.map(service => 
-          service.id === isEditingService.id 
-            ? { 
-                ...service, 
-                ...serviceForm, 
-                category,
-                updated_at: new Date().toISOString(),
-                image_url: imagePreview || serviceForm.image_url
-              }
-            : service
-        )
-      );
+      await servicesAPI.update(isEditingService.id, {
+        name: serviceForm.name,
+        description: serviceForm.description,
+        duration: serviceForm.duration,
+        price: serviceForm.price,
+        category: category.name as any
+      });
       
+      await loadServices();
       resetServiceForm();
       setIsEditingService(null);
       setIsServiceDialogOpen(false);
@@ -398,29 +324,26 @@ export function ManageServicePanel() {
   const handleDeleteService = async (serviceId: number) => {
     const service = services.find(s => s.id === serviceId);
     try {
-      setServices(prev => prev.filter(service => service.id !== serviceId));
-      toast.success(`${service?.name} has been deleted`);
-    } catch (error) {
-      toast.error('Failed to delete service');
+      await servicesAPI.delete(serviceId);
+      await loadServices();
+      toast.success(`${service?.name} has been deleted/deactivated`);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to delete service');
     }
   };
 
   const toggleServiceAvailability = async (serviceId: number) => {
     try {
-      setServices(prev => 
-        prev.map(service => 
-          service.id === serviceId 
-            ? { 
-                ...service, 
-                is_available: !service.is_available,
-                updated_at: new Date().toISOString()
-              }
-            : service
-        )
-      );
-      
       const service = services.find(s => s.id === serviceId);
-      toast.success(`${service?.name} ${service?.is_available ? 'disabled' : 'enabled'} successfully`);
+      if (!service) return;
+      
+      // We pass is_active as any because it's intercepted dynamically by backend
+      await servicesAPI.update(serviceId, {
+        is_active: !service.is_active
+      } as any);
+      
+      await loadServices();
+      toast.success(`${service?.name} ${!service.is_active ? 'enabled' : 'disabled'} successfully`);
     } catch (error) {
       toast.error('Failed to update service availability');
     }
@@ -952,11 +875,20 @@ export function ManageServicePanel() {
           {/* Services Grid/List */}
           <div className={viewMode === 'list' ? "hidden md:block" : "block"}>
             {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredServices.map((service) => (
-                  <ServiceCard key={service.id} service={service} />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredServices.map((service) => (
+                    <ServiceCard key={service.id} service={service} />
+                  ))}
+                </div>
+                {filteredServices.length === 0 && (
+                  <div className="text-center py-12 text-gray-500">
+                    <Scissors className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-lg">No services found</p>
+                    <p className="text-sm">Try adjusting your search criteria</p>
+                  </div>
+                )}
+              </>
             ) : (
               <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
                 <CardContent className="p-0 overflow-x-auto">
@@ -1090,10 +1022,37 @@ export function ManageServicePanel() {
           </div>
           
           {viewMode === 'list' && (
-            <div className="grid grid-cols-1 gap-6 md:hidden">
-              {filteredServices.map((service) => (
-                <ServiceCard key={service.id} service={service} />
-              ))}
+            <div className="md:hidden">
+              {filteredServices.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Scissors className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-lg">No services found</p>
+                  <p className="text-sm">Try adjusting your search criteria</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {filteredServices.map((service) => (
+                    <ServiceCard key={service.id} service={service} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {viewMode === 'grid' && (
+            <div className="md:hidden">
+              {filteredServices.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Scissors className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-lg">No services found</p>
+                  <p className="text-sm">Try adjusting your search criteria</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-6">
+                  {filteredServices.map((service) => (
+                    <ServiceCard key={service.id} service={service} />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </TabsContent>

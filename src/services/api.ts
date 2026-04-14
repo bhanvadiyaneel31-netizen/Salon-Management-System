@@ -1,5 +1,5 @@
 // API configuration
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://localhost:5001/api';
 
 // Types for API responses
 export interface User {
@@ -86,7 +86,7 @@ async function apiRequest<T>(
     
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'API request failed');
+      throw new Error(error.error || error.message || 'API request failed');
     }
     
     return await response.json();
@@ -131,9 +131,14 @@ export const authAPI = {
   },
 
   async logout(): Promise<void> {
-    await apiRequest('/auth/logout', { method: 'POST' });
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user');
+    try {
+      await apiRequest('/auth/logout', { method: 'POST' });
+    } catch {
+      // Clear local data even if server call fails
+    } finally {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+    }
   },
 
   getCurrentUser(): User | null {
@@ -349,6 +354,13 @@ export const appointmentsAPI = {
     await apiRequest(`/appointments/${id}`, {
       method: 'DELETE',
       body: JSON.stringify({ reason }),
+    });
+  },
+
+  async submitReview(id: number | string, rating: number, review: string): Promise<void> {
+    await apiRequest(`/appointments/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ rating, review }),
     });
   }
 };
@@ -687,8 +699,8 @@ export const mockAPI = {
 };
 
 // Configuration for API usage
-// Set this to true when you want to use the real Flask backend
-const USE_REAL_API = false;
+// Set this to true when you want to use the real Node.js/Express backend
+const USE_REAL_API = true;
 
 export const api = USE_REAL_API ? {
   auth: authAPI,

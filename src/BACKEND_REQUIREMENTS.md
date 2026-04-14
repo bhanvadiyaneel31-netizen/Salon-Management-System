@@ -56,6 +56,10 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     phone VARCHAR(20),
     role VARCHAR(20) NOT NULL DEFAULT 'customer',  -- 'customer', 'staff', 'admin'
+    loyalty_points INTEGER DEFAULT 0,
+    reminder_email BOOLEAN DEFAULT 1,
+    reminder_sms BOOLEAN DEFAULT 1,
+    reminder_timing VARCHAR(10) DEFAULT '24h',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     CHECK (role IN ('customer', 'staff', 'admin'))
@@ -151,6 +155,8 @@ CREATE TABLE appointments (
     status VARCHAR(20) DEFAULT 'pending',  -- 'pending', 'confirmed', 'completed', 'cancelled'
     notes TEXT,
     price DECIMAL(10, 2) NOT NULL,
+    rating INTEGER,  -- 1 to 5 stars
+    review TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
@@ -159,7 +165,8 @@ CREATE TABLE appointments (
     FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE RESTRICT,
     
     CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled')),
-    CHECK (price >= 0)
+    CHECK (price >= 0),
+    CHECK (rating >= 1 AND rating <= 5)
 );
 
 -- Indexes
@@ -217,6 +224,12 @@ CORS(app, origins=['http://localhost:3000'])
     "email": "john@example.com",
     "phone": "+1 (555) 123-4567",
     "role": "customer",
+    "loyalty_points": 0,
+    "reminders": {
+      "email": true,
+      "sms": true,
+      "timing": "24h"
+    },
     "created_at": "2026-04-08T10:30:00Z"
   },
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -261,6 +274,12 @@ user.role = 'customer'  # Hardcoded, ignore request body
     "email": "john@example.com",
     "phone": "+1 (555) 123-4567",
     "role": "customer",
+    "loyalty_points": 100,
+    "reminders": {
+      "email": true,
+      "sms": true,
+      "timing": "24h"
+    },
     "created_at": "2026-04-08T10:30:00Z"
   },
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -327,6 +346,12 @@ Authorization: Bearer <token>
   "email": "john@example.com",
   "phone": "+1 (555) 123-4567",
   "role": "customer",
+  "loyalty_points": 100,
+  "reminders": {
+    "email": true,
+    "sms": true,
+    "timing": "24h"
+  },
   "created_at": "2026-04-08T10:30:00Z"
 }
 ```
@@ -868,6 +893,30 @@ Authorization: Bearer <token>
 
 ---
 
+### **POST /api/appointments/:id/review**
+
+**Purpose**: Submit a rating and review for a completed appointment (CUSTOMER ONLY)
+
+**Headers**:
+```
+Authorization: Bearer <customer_token>
+```
+
+**Request Body**:
+```json
+{
+  "rating": 5,
+  "review": "Great service! Lisa was very professional."
+}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "message": "Review submitted successfully"
+}
+```
+
 ### **PATCH /api/appointments/:id**
 
 **Purpose**: Update appointment details (reschedule, reassign staff) (ADMIN/STAFF ONLY)
@@ -1175,10 +1224,10 @@ Implement rate limiting on:
 ### **Users**
 ```sql
 -- Password: "password123" (hashed with bcrypt)
-INSERT INTO users (name, email, password_hash, phone, role) VALUES
-('John Customer', 'customer@example.com', '$2b$10$...', '+1 (555) 123-4567', 'customer'),
-('Sarah Staff', 'staff@example.com', '$2b$10$...', '+1 (555) 234-5678', 'staff'),
-('Admin User', 'admin@example.com', '$2b$10$...', '+1 (555) 345-6789', 'admin'),
+INSERT INTO users (name, email, password_hash, phone, role, loyalty_points) VALUES
+('John Customer', 'customer@example.com', '$2b$10$...', '+1 (555) 123-4567', 'customer', 100),
+('Sarah Staff', 'staff@example.com', '$2b$10$...', '+1 (555) 234-5678', 'staff', 0),
+('Admin User', 'admin@example.com', '$2b$10$...', '+1 (555) 345-6789', 'admin', 0),
 ('Emma Wilson', 'emma@salon.com', '$2b$10$...', '+1 (555) 456-7890', 'staff'),
 ('Lisa Davis', 'lisa@salon.com', '$2b$10$...', '+1 (555) 567-8901', 'staff');
 ```

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -52,6 +52,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { toast } from "sonner";
 import { exportToCSV } from "./ui/utils";
 import { getStaffRating } from '../services/appointmentStore';
+import { api, appointmentsAPI, analyticsAPI, staffAPI } from "../services/api";
 import { ManageServicePanel } from "./ManageServicePanel";
 import { format, addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
@@ -91,105 +92,47 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
   const [selectedReportStaff, setSelectedReportStaff] = useState('all');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
-  // Staff members state
-  const [staffMembers, setStaffMembers] = useState([
-    { 
-      id: 1, 
-      name: 'Emma Wilson', 
-      email: 'emma.wilson@salon.com',
-      phone: '+1 (555) 123-4567',
-      role: 'Senior Stylist', 
-      status: 'active' as const,
-      appointments: 28, 
-      rating: 4.9,
-      totalClients: 156,
-      hoursWorked: 42,
-      joinDate: '2022-03-15',
-      specialty: 'Hair Cutting & Styling',
-      avatar: '/api/placeholder/40/40'
-    },
-    { 
-      id: 2, 
-      name: 'Lisa Davis', 
-      email: 'lisa.davis@salon.com',
-      phone: '+1 (555) 234-5678',
-      role: 'Facial Specialist', 
-      status: 'active' as const,
-      appointments: 22, 
-      rating: 4.8,
-      totalClients: 134,
-      hoursWorked: 38,
-      joinDate: '2021-11-20',
-      specialty: 'Skin Care & Treatments',
-      avatar: '/api/placeholder/40/40'
-    },
-    { 
-      id: 3, 
-      name: 'Sarah Johnson', 
-      email: 'sarah.johnson@salon.com',
-      phone: '+1 (555) 345-6789',
-      role: 'Nail Technician', 
-      status: 'active' as const,
-      appointments: 25, 
-      rating: 4.7,
-      totalClients: 189,
-      hoursWorked: 40,
-      joinDate: '2023-01-10',
-      specialty: 'Manicure & Pedicure',
-      avatar: '/api/placeholder/40/40'
-    },
-    { 
-      id: 4, 
-      name: 'Mike Roberts', 
-      email: 'mike.roberts@salon.com',
-      phone: '+1 (555) 456-7890',
-      role: 'Hair Colorist', 
-      status: 'inactive' as const,
-      appointments: 20, 
-      rating: 4.6,
-      totalClients: 98,
-      hoursWorked: 35,
-      joinDate: '2023-05-22',
-      specialty: 'Hair Coloring & Highlights',
-      avatar: '/api/placeholder/40/40'
-    },
-    { 
-      id: 5, 
-      name: 'Jennifer Kim', 
-      email: 'jennifer.kim@salon.com',
-      phone: '+1 (555) 567-8901',
-      role: 'Receptionist', 
-      status: 'active' as const,
-      appointments: 0, 
-      rating: 4.9,
-      totalClients: 0,
-      hoursWorked: 40,
-      joinDate: '2022-08-01',
-      specialty: 'Customer Service',
-      avatar: '/api/placeholder/40/40'
-    },
-    { 
-      id: 6, 
-      name: 'Carlos Martinez', 
-      email: 'carlos.martinez@salon.com',
-      phone: '+1 (555) 678-9012',
-      role: 'Massage Therapist', 
-      status: 'active' as const,
-      appointments: 18, 
-      rating: 4.8,
-      totalClients: 87,
-      hoursWorked: 30,
-      joinDate: '2023-02-14',
-      specialty: 'Relaxation & Therapeutic Massage',
-      avatar: '/api/placeholder/40/40'
+  // Staff members state — loaded from the real backend
+  const [staffMembers, setStaffMembers] = useState<any[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+
+  const loadStaff = async () => {
+    setLoadingStaff(true);
+    try {
+      const data = await staffAPI.getAll();
+      // Normalise backend shape to what the UI expects
+      const normalized = data.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        phone: s.phone || '',
+        role: s.specialty || 'Staff',
+        status: s.is_available ? 'active' : 'inactive',
+        specialty: s.specialty || '',
+        rating: s.rating ?? 0,
+        appointments: 0,
+        totalClients: 0,
+        hoursWorked: 0,
+        joinDate: s.created_at ? s.created_at.split('T')[0] : '',
+        avatar: '/api/placeholder/40/40'
+      }));
+      setStaffMembers(normalized);
+    } catch (err) {
+      console.error('Failed to load staff:', err);
+      toast.error('Failed to load staff members');
+    } finally {
+      setLoadingStaff(false);
     }
-  ]);
+  };
+
+  useEffect(() => { loadStaff(); }, []);
 
   // Form states for add/edit staff
   const [staffForm, setStaffForm] = useState({
     name: '',
     email: '',
     phone: '',
+    password: '',
     role: '',
     status: 'active' as const,
     specialty: ''
@@ -200,23 +143,47 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
     setCurrentView('home');
   };
 
-  // Mock data for charts
-  const dailyAppointments = [
-    { day: 'Mon', appointments: 12, revenue: 1200 },
-    { day: 'Tue', appointments: 15, revenue: 1850 },
-    { day: 'Wed', appointments: 18, revenue: 2100 },
-    { day: 'Thu', appointments: 22, revenue: 2650 },
-    { day: 'Fri', appointments: 28, revenue: 3200 },
-    { day: 'Sat', appointments: 35, revenue: 4100 },
-    { day: 'Sun', appointments: 20, revenue: 2400 }
-  ];
+  // Analytics state - loaded from real backend
+  const [dailyAppointments, setDailyAppointments] = useState([
+    { day: 'Mon', appointments: 0, revenue: 0 },
+    { day: 'Tue', appointments: 0, revenue: 0 },
+    { day: 'Wed', appointments: 0, revenue: 0 },
+    { day: 'Thu', appointments: 0, revenue: 0 },
+    { day: 'Fri', appointments: 0, revenue: 0 },
+    { day: 'Sat', appointments: 0, revenue: 0 },
+    { day: 'Sun', appointments: 0, revenue: 0 }
+  ]);
+  const [serviceDistribution, setServiceDistribution] = useState([
+    { name: 'Hair Services', value: 0, color: '#8B5CF6' },
+    { name: 'Facial Treatments', value: 0, color: '#EC4899' },
+    { name: 'Nail Care', value: 0, color: '#06B6D4' },
+    { name: 'Other', value: 0, color: '#10B981' }
+  ]);
+  const [dashboardStats, setDashboardStats] = useState({
+    todayAppointments: 0,
+    todayRevenue: 0,
+    activeStaff: 0,
+    growthRate: 0
+  });
 
-  const serviceDistribution = [
-    { name: 'Hair Services', value: 45, color: '#8B5CF6' },
-    { name: 'Facial Treatments', value: 25, color: '#EC4899' },
-    { name: 'Nail Care', value: 20, color: '#06B6D4' },
-    { name: 'Other', value: 10, color: '#10B981' }
-  ];
+  // Load analytics on mount
+  useEffect(() => {
+    const loadAnalytics = async () => {
+      try {
+        const [weekly, distribution, stats] = await Promise.all([
+          analyticsAPI.getWeeklyData(),
+          analyticsAPI.getServiceDistribution(),
+          analyticsAPI.getDashboardStats()
+        ]);
+        setDailyAppointments(weekly.map(d => ({ day: d.day, appointments: d.appointments, revenue: d.revenue })));
+        setServiceDistribution(distribution);
+        setDashboardStats(stats);
+      } catch (err) {
+        console.error('Failed to load analytics:', err);
+      }
+    };
+    loadAnalytics();
+  }, []);
 
   const mostBookedServices = [
     { id: 'svc1', service: 'Hair Cut & Style', bookings: 15, revenue: 1275 },
@@ -226,93 +193,45 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
     { id: 'svc5', service: 'Massage Therapy', bookings: 6, revenue: 570 }
   ];
 
-  // Extended appointments data for comprehensive management
-  const [appointments, setAppointments] = useState([
-    { 
-      id: 'APT001', 
-      customer: { name: 'Sarah Johnson', email: 'sarah.j@email.com', phone: '+1 (555) 123-4567' },
-      service: { name: 'Hair Cut & Style', duration: 60, price: 85 },
-      assignedStaff: { id: 1, name: 'Emma Wilson' },
-      date: format(new Date(), 'yyyy-MM-dd'),
-      time: '14:00', 
-      status: 'confirmed',
-      notes: 'Regular customer, prefers layered cut',
-      createdAt: format(subDays(new Date(), 2), 'yyyy-MM-dd'),
-      bookedBy: 'customer'
-    },
-    { 
-      id: 'APT002', 
-      customer: { name: 'Mike Chen', email: 'mike.c@email.com', phone: '+1 (555) 234-5678' },
-      service: { name: 'Facial Treatment', duration: 90, price: 120 },
-      assignedStaff: { id: 2, name: 'Lisa Davis' },
-      date: format(new Date(), 'yyyy-MM-dd'),
-      time: '15:30', 
-      status: 'pending',
-      notes: 'First-time facial treatment',
-      createdAt: format(subDays(new Date(), 1), 'yyyy-MM-dd'),
-      bookedBy: 'phone'
-    },
-    { 
-      id: 'APT003', 
-      customer: { name: 'Anna Rodriguez', email: 'anna.r@email.com', phone: '+1 (555) 345-6789' },
-      service: { name: 'Manicure & Pedicure', duration: 75, price: 65 },
-      assignedStaff: { id: 3, name: 'Sarah Johnson' },
-      date: format(new Date(), 'yyyy-MM-dd'),
-      time: '16:00', 
-      status: 'confirmed',
-      notes: 'Regular manicure, gel polish',
-      createdAt: format(subDays(new Date(), 3), 'yyyy-MM-dd'),
-      bookedBy: 'online'
-    },
-    { 
-      id: 'APT004', 
-      customer: { name: 'David Kim', email: 'david.k@email.com', phone: '+1 (555) 456-7890' },
-      service: { name: 'Hair Coloring', duration: 180, price: 220 },
-      assignedStaff: { id: 4, name: 'Mike Roberts' },
-      date: format(subDays(new Date(), 1), 'yyyy-MM-dd'),
-      time: '13:00', 
-      status: 'completed',
-      notes: 'Full color change, blonde highlights',
-      createdAt: format(subDays(new Date(), 5), 'yyyy-MM-dd'),
-      bookedBy: 'customer'
-    },
-    { 
-      id: 'APT005', 
-      customer: { name: 'Lisa Wilson', email: 'lisa.w@email.com', phone: '+1 (555) 567-8901' },
-      service: { name: 'Massage Therapy', duration: 60, price: 95 },
-      assignedStaff: { id: 6, name: 'Carlos Martinez' },
-      date: format(addDays(new Date(), 1), 'yyyy-MM-dd'),
-      time: '10:00', 
-      status: 'confirmed',
-      notes: 'Relaxation massage, prefer quiet environment',
-      createdAt: format(new Date(), 'yyyy-MM-dd'),
-      bookedBy: 'phone'
-    },
-    { 
-      id: 'APT006', 
-      customer: { name: 'Robert Smith', email: 'robert.s@email.com', phone: '+1 (555) 678-9012' },
-      service: { name: 'Hair Cut & Style', duration: 60, price: 85 },
-      assignedStaff: null,
-      date: format(addDays(new Date(), 2), 'yyyy-MM-dd'),
-      time: '11:00', 
-      status: 'pending',
-      notes: 'New customer, requested modern style',
-      createdAt: format(new Date(), 'yyyy-MM-dd'),
-      bookedBy: 'online'
-    },
-    { 
-      id: 'APT007', 
-      customer: { name: 'Emily Davis', email: 'emily.d@email.com', phone: '+1 (555) 789-0123' },
-      service: { name: 'Wedding Hair & Makeup', duration: 180, price: 350 },
-      assignedStaff: { id: 1, name: 'Emma Wilson' },
-      date: format(subDays(new Date(), 3), 'yyyy-MM-dd'),
-      time: '09:00', 
-      status: 'cancelled',
-      notes: 'Special occasion styling, cancelled due to weather',
-      createdAt: format(subDays(new Date(), 10), 'yyyy-MM-dd'),
-      bookedBy: 'phone'
-    }
-  ]);
+  // Load appointments from real backend
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+
+  useEffect(() => {
+    const loadAppointments = async () => {
+      setLoadingAppointments(true);
+      try {
+        const data = await appointmentsAPI.getAll();
+        // Normalize backend response to match AdminDashboard's expected shape
+        const normalized = data.map((apt: any) => ({
+          id: String(apt.id),
+          customer: {
+            name: apt.customer?.name || 'Unknown',
+            email: apt.customer?.email || '',
+            phone: apt.customer?.phone || ''
+          },
+          service: {
+            name: apt.service?.name || '',
+            duration: apt.service?.duration || 0,
+            price: apt.price || 0
+          },
+          assignedStaff: apt.staff ? { id: apt.staff.id, name: apt.staff.name } : null,
+          date: apt.appointment_date,
+          time: apt.appointment_time,
+          status: apt.status,
+          notes: apt.notes || '',
+          createdAt: apt.created_at,
+          bookedBy: 'customer'
+        }));
+        setAppointments(normalized);
+      } catch (err) {
+        console.error('Failed to load appointments:', err);
+      } finally {
+        setLoadingAppointments(false);
+      }
+    };
+    loadAppointments();
+  }, []);
 
   const recentAppointments = appointments.slice(0, 4).map(apt => ({
     id: apt.id,
@@ -357,33 +276,35 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
       name: '',
       email: '',
       phone: '',
+      password: '',
       role: '',
       status: 'active',
       specialty: ''
     });
   };
 
-  const handleAddStaff = () => {
-    if (!staffForm.name || !staffForm.email || !staffForm.role) {
-      toast.error('Please fill in all required fields');
+  const handleAddStaff = async () => {
+    if (!staffForm.name || !staffForm.email || !staffForm.password) {
+      toast.error('Please fill in name, email, and password');
       return;
     }
-
-    const newStaff = {
-      id: Math.max(...staffMembers.map(s => s.id)) + 1,
-      ...staffForm,
-      appointments: 0,
-      rating: 5.0,
-      totalClients: 0,
-      hoursWorked: 0,
-      joinDate: new Date().toISOString().split('T')[0],
-      avatar: '/api/placeholder/40/40'
-    };
-
-    setStaffMembers(prev => [...prev, newStaff]);
-    resetForm();
-    setIsAddStaffOpen(false);
-    toast.success(`${newStaff.name} has been added to the team!`);
+    try {
+      await staffAPI.create({
+        name: staffForm.name,
+        email: staffForm.email,
+        phone: staffForm.phone,
+        password: staffForm.password,
+        specialty: staffForm.specialty || staffForm.role,
+        is_available: staffForm.status === 'active',
+        rating: 0
+      } as any);
+      toast.success(`${staffForm.name} has been added to the team!`);
+      resetForm();
+      setIsAddStaffOpen(false);
+      await loadStaff(); // re-fetch from DB
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to add staff member');
+    }
   };
 
   const handleEditStaff = () => {
@@ -406,10 +327,15 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
     toast.success('Staff member updated successfully!');
   };
 
-  const handleDeleteStaff = (staffId: number) => {
+  const handleDeleteStaff = async (staffId: number) => {
     const staff = staffMembers.find(s => s.id === staffId);
-    setStaffMembers(prev => prev.filter(staff => staff.id !== staffId));
-    toast.success(`${staff?.name} has been removed from the team`);
+    try {
+      await staffAPI.delete(staffId);
+      setStaffMembers(prev => prev.filter(s => s.id !== staffId));
+      toast.success(`${staff?.name} has been permanently removed from the team`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete staff member');
+    }
   };
 
   const openEditStaff = (staff: any) => {
@@ -588,6 +514,13 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
             <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{activeSection.replace('-', ' ')}</p>
           </div>
         </div>
+        <button
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="p-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-purple-50 hover:text-purple-600 transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Mobile Slide Drawer */}
@@ -763,7 +696,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-blue-100">Today's Appointments</p>
-                          <p className="text-3xl font-bold">24</p>
+                          <p className="text-3xl font-bold">{dashboardStats.todayAppointments}</p>
                         </div>
                         <Calendar className="w-10 h-10 text-blue-200" />
                       </div>
@@ -775,7 +708,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-green-100">Today's Revenue</p>
-                          <p className="text-3xl font-bold">$2,850</p>
+                          <p className="text-3xl font-bold">${dashboardStats.todayRevenue.toFixed(0)}</p>
                         </div>
                         <DollarSign className="w-10 h-10 text-green-200" />
                       </div>
@@ -787,7 +720,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-purple-100">Active Staff</p>
-                          <p className="text-3xl font-bold">8</p>
+                          <p className="text-3xl font-bold">{dashboardStats.activeStaff}</p>
                         </div>
                         <Users className="w-10 h-10 text-purple-200" />
                       </div>
@@ -799,7 +732,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-pink-100">Growth Rate</p>
-                          <p className="text-3xl font-bold">+12%</p>
+                          <p className="text-3xl font-bold">+{dashboardStats.growthRate}%</p>
                         </div>
                         <TrendingUp className="w-10 h-10 text-pink-200" />
                       </div>
@@ -1039,6 +972,16 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                             placeholder="Enter email address" 
                             value={staffForm.email}
                             onChange={(e) => setStaffForm(prev => ({ ...prev, email: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="password">Password *</Label>
+                          <Input 
+                            id="password" 
+                            type="password" 
+                            placeholder="Enter initial password" 
+                            value={staffForm.password}
+                            onChange={(e) => setStaffForm(prev => ({ ...prev, password: e.target.value }))}
                           />
                         </div>
                         <div className="space-y-2">
