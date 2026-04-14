@@ -37,3 +37,7 @@ app.listen(PORT, async () => {
     console.error("Failed to initialize database", err);
   }
 });
+
+app.get('/', (req, res) => {
+  res.send('Backend is running 🚀');
+});

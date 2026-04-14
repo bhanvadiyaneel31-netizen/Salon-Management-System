@@ -132,4 +132,57 @@ router.delete('/:id/remove-service', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /api/staff — create a new staff member (admin only)
+router.post('/', requireAdmin, async (req, res) => {
+  const bcrypt = require('bcrypt');
+  const { name, email, phone, specialty, password } = req.body;
+  if (!name || !email) {
+    return res.status(400).json({ error: 'name and email are required' });
+  }
+  try {
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password || 'password123', salt);
+    const result = await db.runAsync(
+      "INSERT INTO users (name, email, password_hash, phone, role) VALUES (?, ?, ?, ?, 'staff')",
+      [name, email, password_hash, phone || null]
+    );
+    const userId = result.lastID;
+    await db.runAsync(
+      "INSERT INTO staff_profiles (user_id, specialty, rating, is_available) VALUES (?, ?, 0, 1)",
+      [userId, specialty || '']
+    );
+    const newStaff = await db.getAsync(
+      `SELECT u.id, u.name, u.email, u.phone, sp.specialty, sp.rating, sp.is_available
+       FROM users u JOIN staff_profiles sp ON u.id = sp.user_id WHERE u.id = ?`,
+      [userId]
+    );
+    res.status(201).json({ ...newStaff, is_available: Boolean(newStaff.is_available) });
+  } catch (error) {
+    if (error.message && error.message.includes('UNIQUE constraint failed')) {
+      return res.status(409).json({ error: 'A user with this email already exists' });
+    }
+    res.status(500).json({ error: 'Failed to create staff member' });
+  }
+});
+
+// DELETE /api/staff/:id — permanently delete a staff member (admin only)
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const staffId = req.params.id;
+  try {
+    // Verify the user exists and is a staff member
+    const user = await db.getAsync(
+      "SELECT id, name FROM users WHERE id = ? AND role = 'staff'",
+      [staffId]
+    );
+    if (!user) {
+      return res.status(404).json({ error: 'Staff member not found' });
+    }
+    // Deleting from users cascades to staff_profiles and staff_service_assignments
+    await db.runAsync("DELETE FROM users WHERE id = ?", [staffId]);
+    res.json({ message: `Staff member '${user.name}' deleted successfully` });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete staff member' });
+  }
+});
+
 module.exports = router;

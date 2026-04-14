@@ -51,7 +51,7 @@ router.post('/', requireAdmin, async (req, res) => {
 
 // PUT /api/services/:id
 router.put('/:id', requireAdmin, async (req, res) => {
-  const { price, duration, description, name, category } = req.body;
+  const { price, duration, description, name, category, is_active } = req.body;
   
   try {
     const service = await db.getAsync("SELECT * FROM services WHERE id = ?", [req.params.id]);
@@ -65,9 +65,10 @@ router.put('/:id', requireAdmin, async (req, res) => {
          duration = COALESCE(?, duration), 
          description = COALESCE(?, description),
          name = COALESCE(?, name),
-         category = COALESCE(?, category)
+         category = COALESCE(?, category),
+         is_active = COALESCE(?, is_active)
        WHERE id = ?`,
-      [price, duration, description, name, category, req.params.id]
+      [price, duration, description, name, category, is_active, req.params.id]
     );
 
     const updated = await db.getAsync("SELECT * FROM services WHERE id = ?", [req.params.id]);

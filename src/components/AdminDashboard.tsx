@@ -52,7 +52,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { toast } from "sonner";
 import { exportToCSV } from "./ui/utils";
 import { getStaffRating } from '../services/appointmentStore';
-import { api, appointmentsAPI, analyticsAPI } from "../services/api";
+import { api, appointmentsAPI, analyticsAPI, staffAPI } from "../services/api";
 import { ManageServicePanel } from "./ManageServicePanel";
 import { format, addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
@@ -92,99 +92,40 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
   const [selectedReportStaff, setSelectedReportStaff] = useState('all');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
-  // Staff members state
-  const [staffMembers, setStaffMembers] = useState([
-    { 
-      id: 1, 
-      name: 'Emma Wilson', 
-      email: 'emma.wilson@salon.com',
-      phone: '+1 (555) 123-4567',
-      role: 'Senior Stylist', 
-      status: 'active' as const,
-      appointments: 28, 
-      rating: 4.9,
-      totalClients: 156,
-      hoursWorked: 42,
-      joinDate: '2022-03-15',
-      specialty: 'Hair Cutting & Styling',
-      avatar: '/api/placeholder/40/40'
-    },
-    { 
-      id: 2, 
-      name: 'Lisa Davis', 
-      email: 'lisa.davis@salon.com',
-      phone: '+1 (555) 234-5678',
-      role: 'Facial Specialist', 
-      status: 'active' as const,
-      appointments: 22, 
-      rating: 4.8,
-      totalClients: 134,
-      hoursWorked: 38,
-      joinDate: '2021-11-20',
-      specialty: 'Skin Care & Treatments',
-      avatar: '/api/placeholder/40/40'
-    },
-    { 
-      id: 3, 
-      name: 'Sarah Johnson', 
-      email: 'sarah.johnson@salon.com',
-      phone: '+1 (555) 345-6789',
-      role: 'Nail Technician', 
-      status: 'active' as const,
-      appointments: 25, 
-      rating: 4.7,
-      totalClients: 189,
-      hoursWorked: 40,
-      joinDate: '2023-01-10',
-      specialty: 'Manicure & Pedicure',
-      avatar: '/api/placeholder/40/40'
-    },
-    { 
-      id: 4, 
-      name: 'Mike Roberts', 
-      email: 'mike.roberts@salon.com',
-      phone: '+1 (555) 456-7890',
-      role: 'Hair Colorist', 
-      status: 'inactive' as const,
-      appointments: 20, 
-      rating: 4.6,
-      totalClients: 98,
-      hoursWorked: 35,
-      joinDate: '2023-05-22',
-      specialty: 'Hair Coloring & Highlights',
-      avatar: '/api/placeholder/40/40'
-    },
-    { 
-      id: 5, 
-      name: 'Jennifer Kim', 
-      email: 'jennifer.kim@salon.com',
-      phone: '+1 (555) 567-8901',
-      role: 'Receptionist', 
-      status: 'active' as const,
-      appointments: 0, 
-      rating: 4.9,
-      totalClients: 0,
-      hoursWorked: 40,
-      joinDate: '2022-08-01',
-      specialty: 'Customer Service',
-      avatar: '/api/placeholder/40/40'
-    },
-    { 
-      id: 6, 
-      name: 'Carlos Martinez', 
-      email: 'carlos.martinez@salon.com',
-      phone: '+1 (555) 678-9012',
-      role: 'Massage Therapist', 
-      status: 'active' as const,
-      appointments: 18, 
-      rating: 4.8,
-      totalClients: 87,
-      hoursWorked: 30,
-      joinDate: '2023-02-14',
-      specialty: 'Relaxation & Therapeutic Massage',
-      avatar: '/api/placeholder/40/40'
+  // Staff members state — loaded from the real backend
+  const [staffMembers, setStaffMembers] = useState<any[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+
+  const loadStaff = async () => {
+    setLoadingStaff(true);
+    try {
+      const data = await staffAPI.getAll();
+      // Normalise backend shape to what the UI expects
+      const normalized = data.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        phone: s.phone || '',
+        role: s.specialty || 'Staff',
+        status: s.is_available ? 'active' : 'inactive',
+        specialty: s.specialty || '',
+        rating: s.rating ?? 0,
+        appointments: 0,
+        totalClients: 0,
+        hoursWorked: 0,
+        joinDate: s.created_at ? s.created_at.split('T')[0] : '',
+        avatar: '/api/placeholder/40/40'
+      }));
+      setStaffMembers(normalized);
+    } catch (err) {
+      console.error('Failed to load staff:', err);
+      toast.error('Failed to load staff members');
+    } finally {
+      setLoadingStaff(false);
     }
-  ]);
+  };
+
+  useEffect(() => { loadStaff(); }, []);
 
   // Form states for add/edit staff
   const [staffForm, setStaffForm] = useState({
@@ -340,27 +281,27 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
     });
   };
 
-  const handleAddStaff = () => {
-    if (!staffForm.name || !staffForm.email || !staffForm.role) {
-      toast.error('Please fill in all required fields');
+  const handleAddStaff = async () => {
+    if (!staffForm.name || !staffForm.email) {
+      toast.error('Please fill in name and email');
       return;
     }
-
-    const newStaff = {
-      id: Math.max(...staffMembers.map(s => s.id)) + 1,
-      ...staffForm,
-      appointments: 0,
-      rating: 5.0,
-      totalClients: 0,
-      hoursWorked: 0,
-      joinDate: new Date().toISOString().split('T')[0],
-      avatar: '/api/placeholder/40/40'
-    };
-
-    setStaffMembers(prev => [...prev, newStaff]);
-    resetForm();
-    setIsAddStaffOpen(false);
-    toast.success(`${newStaff.name} has been added to the team!`);
+    try {
+      await staffAPI.create({
+        name: staffForm.name,
+        email: staffForm.email,
+        phone: staffForm.phone,
+        specialty: staffForm.specialty || staffForm.role,
+        is_available: staffForm.status === 'active',
+        rating: 0
+      } as any);
+      toast.success(`${staffForm.name} has been added to the team!`);
+      resetForm();
+      setIsAddStaffOpen(false);
+      await loadStaff(); // re-fetch from DB
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to add staff member');
+    }
   };
 
   const handleEditStaff = () => {
@@ -383,10 +324,15 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
     toast.success('Staff member updated successfully!');
   };
 
-  const handleDeleteStaff = (staffId: number) => {
+  const handleDeleteStaff = async (staffId: number) => {
     const staff = staffMembers.find(s => s.id === staffId);
-    setStaffMembers(prev => prev.filter(staff => staff.id !== staffId));
-    toast.success(`${staff?.name} has been removed from the team`);
+    try {
+      await staffAPI.delete(staffId);
+      setStaffMembers(prev => prev.filter(s => s.id !== staffId));
+      toast.success(`${staff?.name} has been permanently removed from the team`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete staff member');
+    }
   };
 
   const openEditStaff = (staff: any) => {

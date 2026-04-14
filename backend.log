@@ -1,3 +1,3 @@
-◇ injected env (3) from .env // tip: ⌘ suppress logs { quiet: true }
+◇ injected env (3) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
 Server is running on http://localhost:5001
 Connected to the SQLite database.

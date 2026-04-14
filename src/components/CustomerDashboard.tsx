@@ -48,6 +48,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { toast } from "sonner";
 import { format, addDays, startOfDay, isAfter, isBefore } from 'date-fns';
 import { api, appointmentsAPI } from "../services/api";
+import { safeFormatDate } from "./ui/utils";
+
 
 interface CustomerDashboardProps {
   setCurrentView: (view: string) => void;
@@ -694,7 +696,7 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
                       </Label>
                       <Switch 
                         id="email-reminders" 
-                        checked={profileForm.reminders.email}
+                        checked={profileForm.reminders?.email}
                         onCheckedChange={(checked) => setProfileForm(prev => ({ 
                           ...prev, 
                           reminders: { ...prev.reminders, email: checked } 
@@ -708,7 +710,7 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
                       </Label>
                       <Switch 
                         id="sms-reminders" 
-                        checked={profileForm.reminders.sms}
+                        checked={profileForm.reminders?.sms}
                         onCheckedChange={(checked) => setProfileForm(prev => ({ 
                           ...prev, 
                           reminders: { ...prev.reminders, sms: checked } 
@@ -718,7 +720,7 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
                     <div className="space-y-2">
                       <Label>Reminder Timing</Label>
                       <Select 
-                        value={profileForm.reminders.timing} 
+                        value={profileForm.reminders?.timing} 
                         onValueChange={(value) => setProfileForm(prev => ({ 
                           ...prev, 
                           reminders: { ...prev.reminders, timing: value } 
