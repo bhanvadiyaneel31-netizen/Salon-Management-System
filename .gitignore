@@ -6,3 +6,4 @@ backend.log
 *.db
 build/
 dist/
+backend/salon.db
