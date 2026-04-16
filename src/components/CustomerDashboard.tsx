@@ -46,7 +46,7 @@ import {
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { toast } from "sonner";
-import { format, addDays, startOfDay, isAfter, isBefore } from 'date-fns';
+import { format, addDays, startOfDay, isAfter, isBefore, formatDistanceToNow } from 'date-fns';
 import { api, appointmentsAPI, servicesAPI, staffAPI } from "../services/api";
 import { safeFormatDate } from "./ui/utils";
 
@@ -66,7 +66,7 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [priceRange, setPriceRange] = useState([0, 300]);
-  const [unreadNotifications, setUnreadNotifications] = useState(3);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   
   // Profile form state
@@ -136,6 +136,23 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
     }
   };
 
+  const loadNotifications = async () => {
+    try {
+      const data = await api.notifications.getAll();
+      setNotifications(data.map((n: any) => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        type: n.type,
+        timestamp: formatDistanceToNow(new Date(n.created_at), { addSuffix: true }),
+        read: !!n.is_read
+      })));
+      setUnreadNotifications(data.filter((n: any) => !n.is_read).length);
+    } catch (error) {
+      console.error('Failed to load notifications:', error);
+    }
+  };
+
   // Load data on mount and when section changes
   useEffect(() => {
     const loadAllData = async () => {
@@ -154,45 +171,38 @@ export function CustomerDashboard({ setCurrentView, setUserRole }: CustomerDashb
         console.error('Failed to load services or staff:', err);
       }
       await loadAppointments();
+      await loadNotifications();
     };
     loadAllData();
+    
+    // Refresh every minute to keep relative timestamps up to date and check for new ones
+    const interval = setInterval(loadNotifications, 60000);
+    return () => clearInterval(interval);
   }, [activeSection]);
 
-  // Notifications Data
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      title: 'Appointment Confirmed',
-      message: 'Your Hair Cut & Style appointment has been confirmed for January 15th at 2:00 PM',
-      type: 'confirmation',
-      timestamp: '2 hours ago',
-      read: false
-    },
-    {
-      id: 2,
-      title: 'Reminder',
-      message: 'You have an appointment tomorrow at 11:00 AM for Facial Treatment',
-      type: 'reminder',
-      timestamp: '1 day ago',
-      read: false
-    },
-    {
-      id: 3,
-      title: 'New Service Available',
-      message: 'Try our new Anti-Aging Facial treatment with 20% off for first-time customers',
-      type: 'promotion',
-      timestamp: '3 days ago',
-      read: false
-    },
-    {
-      id: 4,
-      title: 'Appointment Completed',
-      message: 'Thank you for visiting! Please rate your experience with Sarah Johnson',
-      type: 'completion',
-      timestamp: '1 week ago',
-      read: true
+  // Transform backend notifications to UI format
+  const [notifications, setNotifications] = useState<any[]>([]);
+
+  // Function to handle read status update in UI and Backend
+  const markAsRead = async (id: number) => {
+    try {
+      await api.notifications.markAsRead(id);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      setUnreadNotifications(prev => Math.max(0, prev - 1));
+    } catch (err) {
+       console.error('Failed to mark as read', err);
     }
-  ]);
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      await api.notifications.markAllRead();
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadNotifications(0);
+    } catch (err) {
+       console.error('Failed to mark all as read', err);
+    }
+  };
 
   // Customer Profile Data - Load from authenticated user
   const [profile, setProfile] = useState({

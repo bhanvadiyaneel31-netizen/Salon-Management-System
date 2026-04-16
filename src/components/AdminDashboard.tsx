@@ -199,39 +199,40 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loadingAppointments, setLoadingAppointments] = useState(false);
 
+  const loadAppointments = async () => {
+    setLoadingAppointments(true);
+    try {
+      const data = await appointmentsAPI.getAll();
+      // Normalize backend response to match AdminDashboard's expected shape
+      const normalized = data.map((apt: any) => ({
+        id: String(apt.id),
+        customer: {
+          name: apt.customer?.name || 'Unknown',
+          email: apt.customer?.email || '',
+          phone: apt.customer?.phone || ''
+        },
+        service: {
+          name: apt.service?.name || '',
+          duration: apt.service?.duration || 0,
+          price: apt.price || 0
+        },
+        assignedStaff: apt.staff ? { id: apt.staff.id, name: apt.staff.name } : null,
+        date: apt.appointment_date,
+        time: apt.appointment_time,
+        status: apt.status,
+        notes: apt.notes || '',
+        createdAt: apt.created_at,
+        bookedBy: 'customer'
+      }));
+      setAppointments(normalized);
+    } catch (err) {
+      console.error('Failed to load appointments:', err);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  };
+
   useEffect(() => {
-    const loadAppointments = async () => {
-      setLoadingAppointments(true);
-      try {
-        const data = await appointmentsAPI.getAll();
-        // Normalize backend response to match AdminDashboard's expected shape
-        const normalized = data.map((apt: any) => ({
-          id: String(apt.id),
-          customer: {
-            name: apt.customer?.name || 'Unknown',
-            email: apt.customer?.email || '',
-            phone: apt.customer?.phone || ''
-          },
-          service: {
-            name: apt.service?.name || '',
-            duration: apt.service?.duration || 0,
-            price: apt.price || 0
-          },
-          assignedStaff: apt.staff ? { id: apt.staff.id, name: apt.staff.name } : null,
-          date: apt.appointment_date,
-          time: apt.appointment_time,
-          status: apt.status,
-          notes: apt.notes || '',
-          createdAt: apt.created_at,
-          bookedBy: 'customer'
-        }));
-        setAppointments(normalized);
-      } catch (err) {
-        console.error('Failed to load appointments:', err);
-      } finally {
-        setLoadingAppointments(false);
-      }
-    };
     loadAppointments();
   }, []);
 
@@ -359,41 +360,40 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
   };
 
   // Appointment Management Functions
-  const updateAppointmentStatus = (appointmentId: string, newStatus: string) => {
-    setAppointments(prev => 
-      prev.map(apt => 
-        apt.id === appointmentId 
-          ? { ...apt, status: newStatus }
-          : apt
-      )
-    );
-    const appointment = appointments.find(apt => apt.id === appointmentId);
-    toast.success(`Appointment ${appointmentId} status updated to ${newStatus}`);
+  const updateAppointmentStatus = async (appointmentId: string, newStatus: string) => {
+    try {
+      await appointmentsAPI.updateStatusAdmin(Number(appointmentId), newStatus);
+      toast.success(`Appointment ${appointmentId} status updated to ${newStatus}`);
+      await loadAppointments(); // Reload to get consistent state
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update status');
+    }
   };
 
-  const assignStaffToAppointment = (appointmentId: string, staffId: number) => {
-    const staff = staffMembers.find(s => s.id === staffId);
-    setAppointments(prev => 
-      prev.map(apt => 
-        apt.id === appointmentId 
-          ? { ...apt, assignedStaff: { id: staffId, name: staff?.name || '' } }
-          : apt
-      )
-    );
-    toast.success(`${staff?.name} assigned to appointment ${appointmentId}`);
-    setIsAssignStaffOpen(false);
+  const assignStaffToAppointment = async (appointmentId: string, staffId: number) => {
+    try {
+      await appointmentsAPI.rescheduleAdmin(Number(appointmentId), { staff_id: staffId });
+      const staff = staffMembers.find(s => s.id === staffId);
+      toast.success(`${staff?.name} assigned to appointment ${appointmentId}`);
+      setIsAssignStaffOpen(false);
+      await loadAppointments();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to assign staff');
+    }
   };
 
-  const rescheduleAppointment = (appointmentId: string, newDate: string, newTime: string) => {
-    setAppointments(prev => 
-      prev.map(apt => 
-        apt.id === appointmentId 
-          ? { ...apt, date: newDate, time: newTime }
-          : apt
-      )
-    );
-    toast.success(`Appointment ${appointmentId} rescheduled`);
-    setIsEditAppointmentOpen(false);
+  const rescheduleAppointment = async (appointmentId: string, newDate: string, newTime: string) => {
+    try {
+      await appointmentsAPI.rescheduleAdmin(Number(appointmentId), {
+        appointment_date: newDate,
+        appointment_time: newTime
+      });
+      toast.success(`Appointment ${appointmentId} rescheduled`);
+      setIsEditAppointmentOpen(false);
+      await loadAppointments();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reschedule');
+    }
   };
 
   const cancelAppointment = (appointmentId: string) => {

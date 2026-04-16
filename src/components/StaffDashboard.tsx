@@ -39,7 +39,7 @@ import {
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { toast } from 'sonner';
-import { format, addDays, isSameDay } from 'date-fns';
+import { format, addDays, isSameDay, formatDistanceToNow } from 'date-fns';
 import { api, appointmentsAPI } from '../services/api';
 
 interface StaffDashboardProps {
@@ -129,37 +129,38 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
     loadAppointments();
   }, []);
 
-  // Load mock notifications
+  const loadNotifications = async () => {
+    try {
+      const data = await api.notifications.getAll();
+      setNotifications(data.map((n: any) => ({
+        id: n.id,
+        type: n.type as any,
+        title: n.title,
+        message: n.message,
+        time: formatDistanceToNow(new Date(n.created_at), { addSuffix: true }),
+        read: !!n.is_read
+      })));
+      setUnreadCount(data.filter((n: any) => !n.is_read).length);
+    } catch (error) {
+      console.error('Failed to load notifications:', error);
+    }
+  };
+
   useEffect(() => {
-    const mockNotifications: Notification[] = [
-      {
-        id: 1,
-        type: 'new_appointment',
-        title: 'New Appointment Booked',
-        message: 'Sarah Johnson booked Hair Cut & Style for tomorrow at 2:00 PM',
-        time: '5 minutes ago',
-        read: false
-      },
-      {
-        id: 2,
-        type: 'reminder',
-        title: 'Upcoming Appointment',
-        message: 'Emma Wilson - Hair Coloring in 30 minutes',
-        time: '30 minutes ago',
-        read: false
-      },
-      {
-        id: 3,
-        type: 'update',
-        title: 'Appointment Updated',
-        message: 'Lisa Chen rescheduled wedding styling to 2:30 PM',
-        time: '1 hour ago',
-        read: true
-      }
-    ];
-    setNotifications(mockNotifications);
-    setUnreadCount(mockNotifications.filter(n => !n.read).length);
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 60000);
+    return () => clearInterval(interval);
   }, []);
+
+  const markAsRead = async (id: number) => {
+    try {
+      await api.notifications.markAsRead(id);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err) {
+       console.error('Failed to mark as read', err);
+    }
+  };
 
   const handleLogout = () => {
     setUserRole(null);
@@ -261,8 +262,8 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
             <User className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Emma Wilson</h3>
-            <p className="text-sm text-gray-600">Senior Hair Stylist</p>
+            <h3 className="font-semibold text-gray-900">{api.auth.getCurrentUser()?.name || 'Staff Member'}</h3>
+            <p className="text-sm text-gray-600">{api.auth.getCurrentUser()?.role === 'staff' ? 'Salon Professional' : 'Staff'}</p>
           </div>
         </div>
       </SidebarHeader>
@@ -447,7 +448,7 @@ export function StaffDashboard({ setCurrentView, setUserRole }: StaffDashboardPr
       {/* Welcome Header */}
       <Card className="border-0 bg-gradient-to-r from-purple-500 to-pink-500 text-white">
         <CardContent className="p-6">
-          <h2 className="text-2xl font-semibold mb-2">Good morning, Emma!</h2>
+          <h2 className="text-2xl font-semibold mb-2">Good morning, {api.auth.getCurrentUser()?.name.split(' ')[0] || 'Professional'}!</h2>
           <p className="text-purple-100">
             {totalToday > 0 ? (
               <>You have {totalToday} appointment{totalToday !== 1 ? 's' : ''} scheduled for today. Let's make it a great day!</>

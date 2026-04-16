@@ -119,7 +119,19 @@ async function initDb() {
       FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE RESTRICT,
       CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled')),
       CHECK (price >= 0),
-      CHECK (rating >= 1 AND rating <= 5)
+      CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5))
+    )`);
+
+    // 6. notifications
+    db.run(`CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      title VARCHAR(100) NOT NULL,
+      message TEXT NOT NULL,
+      type VARCHAR(20) NOT NULL,
+      is_read BOOLEAN DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`);
   });
 

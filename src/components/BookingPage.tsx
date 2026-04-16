@@ -95,13 +95,14 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
       }
       setIsSubmitting(true);
       try {
+        const staffIdValue = parseInt(selectedStaff);
         await api.appointments.create({
           service_id: selectedServiceData.id,
-          staff_id: parseInt(selectedStaff) || 0,
+          staff_id: staffIdValue > 0 ? staffIdValue : null,
           appointment_date: format(selectedDate, 'yyyy-MM-dd'),
           appointment_time: selectedTime,
           notes: ''
-        });
+        } as any);
         toast.success('Booking confirmed! Your appointment has been scheduled.');
         setCurrentView('customer-dashboard');
       } catch (error: any) {

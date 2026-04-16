@@ -59,10 +59,20 @@ export interface RegisterRequest {
 
 export interface BookingRequest {
   service_id: number;
-  staff_id: number;
+  staff_id: number | null;
   appointment_date: string;
   appointment_time: string;
   notes?: string;
+}
+
+export interface Notification {
+  id: number;
+  user_id: number;
+  title: string;
+  message: string;
+  type: string;
+  is_read: boolean;
+  created_at: string;
 }
 
 // API utility functions
@@ -430,6 +440,21 @@ export const analyticsAPI = {
   }
 };
 
+// Notifications API
+export const notificationsAPI = {
+  async getAll(): Promise<Notification[]> {
+    return apiRequest<Notification[]>('/notifications');
+  },
+  
+  async markAsRead(id: number): Promise<void> {
+    await apiRequest(`/notifications/${id}/read`, { method: 'PATCH' });
+  },
+  
+  async markAllRead(): Promise<void> {
+    await apiRequest('/notifications/read-all', { method: 'POST' });
+  }
+};
+
 // Mock data for development (when Flask backend is not available)
 export const mockAPI = {
   auth: {
@@ -695,6 +720,13 @@ export const mockAPI = {
         { staff_id: 5, staff_name: 'Carlos Martinez', role: 'Massage Therapist', total_appointments: 22, completed_appointments: 20, total_hours: 30, total_revenue: 3600, completion_rate: 90.9 }
       ];
     }
+  },
+  notifications: {
+    async getAll(): Promise<Notification[]> {
+      return [];
+    },
+    async markAsRead(): Promise<void> {},
+    async markAllRead(): Promise<void> {}
   }
 };
 
@@ -707,5 +739,6 @@ export const api = USE_REAL_API ? {
   services: servicesAPI,
   staff: staffAPI,
   appointments: appointmentsAPI,
-  analytics: analyticsAPI
+  analytics: analyticsAPI,
+  notifications: notificationsAPI
 } : mockAPI;

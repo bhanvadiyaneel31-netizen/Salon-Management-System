@@ -165,11 +165,27 @@ router.post('/', verifyToken, async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
     `, [customer_id, staff_id || null, service_id, appointment_date, appointment_time, notes, service.price]);
 
+    // Notify Staff if assigned
+    if (staff_id) {
+      await db.runAsync(
+        "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
+        [staff_id, 'New Appointment', `New booking for ${service.name} on ${appointment_date} at ${appointment_time}`, 'new_appointment']
+      );
+    }
+    // Notify Admin
+    const admin = await db.getAsync("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    if (admin) {
+      await db.runAsync(
+        "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
+        [admin.id, 'New Booking', `A new appointment has been booked for ${service.name}`, 'new_appointment']
+      );
+    }
+
     const newRow = await fetchAppointmentWithDetails(result.lastID);
     res.status(201).json(mapAppointmentRow(newRow));
   } catch (error) {
     console.error("DEBUG APPOINTMENT BOOKING:", error);
-    res.status(500).json({ error: error.message || 'Failed to book appointment' });
+    res.status(500).json({ error: "DEBUG: " + (error.message || JSON.stringify(error) || String(error)) });
   }
 });
 
@@ -202,6 +218,20 @@ router.patch('/:id/status', verifyToken, async (req, res) => {
       "UPDATE appointments SET status = ?, notes = COALESCE(?, notes), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
       [status, notes, req.params.id]
     );
+
+    // Notify Customer
+    await db.runAsync(
+      "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
+      [row.customer_id, `Appointment ${status.charAt(0).toUpperCase() + status.slice(1)}`, `Your appointment for ${row.service_name || 'service'} has been ${status}.`, 'update']
+    );
+
+    // Notify Staff if assigned and status is important
+    if (row.staff_id) {
+      await db.runAsync(
+        "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
+        [row.staff_id, 'Status Update', `Appointment for ${row.customer_name || 'customer'} is now ${status}.`, 'update']
+      );
+    }
 
     const updatedRow = await fetchAppointmentWithDetails(req.params.id);
     
@@ -252,6 +282,25 @@ router.patch('/:id', requireAdminOrStaff, async (req, res) => {
        WHERE id = ?`,
       [appointment_date, appointment_time, staff_id, notes, req.params.id]
     );
+
+    // Fetch details to get customer/service info for notification
+    const apt = await fetchAppointmentWithDetails(req.params.id);
+    
+    // Notify Customer
+    if (apt) {
+      await db.runAsync(
+        "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
+        [apt.customer_id, 'Appointment Updated', `Your appointment has been rescheduled/updated. Check details for changes.`, 'update']
+      );
+      
+      // Notify new Staff if changed or assigned
+      if (staff_id && staff_id !== apt.staff_id) {
+         await db.runAsync(
+          "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
+          [staff_id, 'New Assignment', `You have been assigned to a new appointment on ${apt.appointment_date}.`, 'assignment']
+        );
+      }
+    }
     const updated = await fetchAppointmentWithDetails(req.params.id);
     res.json(mapAppointmentRow(updated));
   } catch (error) {
