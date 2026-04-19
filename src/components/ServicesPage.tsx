@@ -3,98 +3,49 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Clock, ArrowRight, Scissors, Sparkles, Heart, Users } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
+import { api, API_ORIGIN } from "../services/api";
+import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 
 interface ServicesPageProps {
   setCurrentView: (view: string) => void;
+  setPreselectedServiceId: (id: string | null) => void;
 }
 
-export function ServicesPage({ setCurrentView }: ServicesPageProps) {
-  const serviceCategories = [
-    {
-      category: "Hair Services",
-      icon: Scissors,
-      color: "from-purple-500 to-purple-600",
-      services: [
-        {
-          name: "Hair Cut & Style",
-          description: "Professional cuts, styling, and blow-dry. Includes consultation and hair wash.",
-          duration: 60,
-          price: 85,
-          image: "https://picsum.photos/seed/haircut-style/400/300"
-        },
-        {
-          name: "Hair Coloring",
-          description: "Full color, highlights, balayage, and color correction by expert colorists.",
-          duration: 120,
-          price: 150,
-          image: "https://picsum.photos/seed/hair-coloring/400/300"
-        },
-        {
-          name: "Hair Treatment",
-          description: "Deep conditioning, keratin treatments, and scalp therapy.",
-          duration: 75,
-          price: 95,
-          image: "https://picsum.photos/seed/hair-treatment/400/300"
-        }
-      ]
-    },
-    {
-      category: "Facial Treatments",
-      icon: Sparkles,
-      color: "from-pink-500 to-pink-600",
-      services: [
-        {
-          name: "Signature Facial",
-          description: "Custom facial treatment tailored to your skin type and concerns.",
-          duration: 75,
-          price: 120,
-          image: "https://picsum.photos/seed/signature-facial/400/300"
-        },
-        {
-          name: "Anti-Aging Facial",
-          description: "Advanced treatment targeting fine lines and wrinkles with premium products.",
-          duration: 90,
-          price: 180,
-          image: "https://picsum.photos/seed/antiaging-facial/400/300"
-        },
-        {
-          name: "Hydrating Facial",
-          description: "Intensive moisture treatment for dry and dehydrated skin.",
-          duration: 60,
-          price: 100,
-          image: "https://picsum.photos/seed/hydrating-facial/400/300"
-        }
-      ]
-    },
-    {
-      category: "Nail Care",
-      icon: Heart,
-      color: "from-blue-500 to-blue-600",
-      services: [
-        {
-          name: "Gel Manicure",
-          description: "Long-lasting gel polish manicure with nail shaping and cuticle care.",
-          duration: 45,
-          price: 65,
-          image: "https://picsum.photos/seed/gel-manicure/400/300"
-        },
-        {
-          name: "Spa Pedicure",
-          description: "Luxurious pedicure with foot soak, exfoliation, and massage.",
-          duration: 60,
-          price: 75,
-          image: "https://picsum.photos/seed/spa-pedicure/400/300"
-        },
-        {
-          name: "Nail Art",
-          description: "Custom nail art designs and decorations by skilled nail technicians.",
-          duration: 75,
-          price: 85,
-          image: "https://picsum.photos/seed/nail-art/400/300"
-        }
-      ]
-    }
+export function ServicesPage({ setCurrentView, setPreselectedServiceId }: ServicesPageProps) {
+  const [services, setServices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadServices = async () => {
+      try {
+        const data = await api.services.getAll({ bookable: true });
+        setServices(data.map((s: any) => ({
+          ...s,
+          image: s.image_url ? `${API_ORIGIN}${s.image_url}` : `https://picsum.photos/seed/${s.id}/400/300`
+        })));
+      } catch (error) {
+        console.error('Failed to load services:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadServices();
+  }, []);
+
+  // Categorize services
+  const categories = [
+    { name: "Hair Services", key: "hair", icon: Scissors, color: "from-purple-500 to-purple-600" },
+    { name: "Facial Treatments", key: "facial", icon: Sparkles, color: "from-pink-500 to-pink-600" },
+    { name: "Nail Care", key: "nails", icon: Heart, color: "from-blue-500 to-blue-600" },
+    { name: "Massage", key: "massage", icon: Heart, color: "from-orange-500 to-orange-600" },
+    { name: "Wellness", key: "wellness", icon: Sparkles, color: "from-green-500 to-green-600" },
+    { name: "Beauty", key: "beauty", icon: Sparkles, color: "from-amber-500 to-amber-600" }
   ];
+
+  const getServicesByCategory = (key: string) => {
+    return services.filter(s => s.category === key);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-white">
@@ -112,65 +63,84 @@ export function ServicesPage({ setCurrentView }: ServicesPageProps) {
 
         {/* Service Categories */}
         <div className="space-y-12 sm:space-y-16">
-          {serviceCategories.map((category) => {
-            const Icon = category.icon;
-            return (
-              <section key={category.category}>
-                {/* Category Header */}
-                <div className={`bg-gradient-to-r ${category.color} rounded-2xl sm:rounded-3xl p-6 sm:p-8 mb-6 sm:mb-8`}>
-                  <div className="flex items-center justify-center text-white">
-                    <Icon className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 mr-3 sm:mr-4" />
-                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold">{category.category}</h2>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="w-16 h-16 text-purple-500 animate-spin mb-4" />
+              <p className="text-xl text-gray-600">Loading our premium services...</p>
+            </div>
+          ) : services.length > 0 ? (
+            categories.map((cat) => {
+              const categoryServices = getServicesByCategory(cat.key);
+              if (categoryServices.length === 0) return null;
+              
+              const Icon = cat.icon;
+              return (
+                <section key={cat.key}>
+                  {/* Category Header */}
+                  <div className={`bg-gradient-to-r ${cat.color} rounded-2xl sm:rounded-3xl p-6 sm:p-8 mb-6 sm:mb-8`}>
+                    <div className="flex items-center justify-center text-white">
+                      <Icon className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 mr-3 sm:mr-4" />
+                      <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold">{cat.name}</h2>
+                    </div>
                   </div>
-                </div>
 
-                {/* Services Grid */}
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-                  {category.services.map((service) => (
-                    <Card key={service.name} className="group hover:shadow-2xl transition-all duration-300 border-0 bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden">
-                      <div className="relative h-48 overflow-hidden">
-                        <ImageWithFallback
-                          src={service.image}
-                          alt={service.name}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-                        <div className="absolute top-4 right-4">
-                          <Badge className="bg-white/90 text-gray-900 font-bold text-base sm:text-lg px-3 py-1">
-                            ${service.price}
-                          </Badge>
+                  {/* Services Grid */}
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+                    {categoryServices.map((service) => (
+                      <Card key={service.id} className="group hover:shadow-2xl transition-all duration-300 border-0 bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden">
+                        <div className="relative h-48 overflow-hidden">
+                          <ImageWithFallback
+                            src={service.image}
+                            alt={service.name}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+                          <div className="absolute top-4 right-4">
+                            <Badge className="bg-white/90 text-gray-900 font-bold text-base sm:text-lg px-3 py-1">
+                              ${service.price}
+                            </Badge>
+                          </div>
                         </div>
-                      </div>
-                      
-                      <CardHeader className="pb-3 px-4 sm:px-6">
-                        <CardTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
-                          {service.name}
-                        </CardTitle>
-                        <div className="flex items-center text-purple-600">
-                          <Clock className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
-                          <span className="text-sm sm:text-base font-medium">{service.duration} minutes</span>
-                        </div>
-                      </CardHeader>
-                      
-                      <CardContent className="pt-0 px-4 sm:px-6">
-                        <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6 leading-relaxed">
-                          {service.description}
-                        </p>
                         
-                        <Button
-                          onClick={() => setCurrentView('booking')}
-                          className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0 rounded-xl py-3"
-                        >
-                          Book This Service
-                          <ArrowRight className="w-4 h-4 ml-2" />
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+                        <CardHeader className="pb-3 px-4 sm:px-6">
+                          <CardTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
+                            {service.name}
+                          </CardTitle>
+                          <div className="flex items-center text-purple-600">
+                            <Clock className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
+                            <span className="text-sm sm:text-base font-medium">{service.duration} minutes</span>
+                          </div>
+                        </CardHeader>
+                        
+                        <CardContent className="pt-0 px-4 sm:px-6">
+                          <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6 leading-relaxed line-clamp-3">
+                            {service.description}
+                          </p>
+                          
+                          <Button
+                            onClick={() => {
+                              setPreselectedServiceId(service.id.toString());
+                              setCurrentView('booking');
+                            }}
+                            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0 rounded-xl py-3"
+                          >
+                            Book This Service
+                            <ArrowRight className="w-4 h-4 ml-2" />
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </section>
+              );
+            })
+          ) : (
+            <div className="text-center py-20 bg-white/50 backdrop-blur-sm rounded-3xl shadow-xl">
+              <Sparkles className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">No services available right now</h2>
+              <p className="text-gray-600">Please check back later or explore our other wellness offerings.</p>
+            </div>
+          )}
         </div>
 
         {/* CTA Section */}

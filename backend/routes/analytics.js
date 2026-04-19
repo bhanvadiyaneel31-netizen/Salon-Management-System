@@ -39,16 +39,41 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
 
 // GET /api/analytics/weekly-data
 router.get('/weekly-data', requireAdmin, async (req, res) => {
-  // Normally dynamically generated, we supply standard dummy data reflecting the required format structure.
-  res.json([
-    { "day": "Mon", "appointments": 8, "revenue": 920.00 },
-    { "day": "Tue", "appointments": 12, "revenue": 1340.00 },
-    { "day": "Wed", "appointments": 10, "revenue": 1150.00 },
-    { "day": "Thu", "appointments": 15, "revenue": 1680.00 },
-    { "day": "Fri", "appointments": 18, "revenue": 2100.00 },
-    { "day": "Sat", "appointments": 22, "revenue": 2750.00 },
-    { "day": "Sun", "appointments": 14, "revenue": 1890.00 }
-  ]);
+  try {
+    const data = await db.allAsync(`
+      SELECT 
+        strftime('%w', appointment_date) as weekday,
+        COUNT(*) as appointments,
+        SUM(CASE WHEN status = 'completed' THEN price ELSE 0 END) as revenue
+      FROM appointments 
+      WHERE appointment_date >= date('now', '-6 days')
+      GROUP BY weekday
+    `);
+
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const weeklyFormat = [
+      { day: 'Mon', appointments: 0, revenue: 0 },
+      { day: 'Tue', appointments: 0, revenue: 0 },
+      { day: 'Wed', appointments: 0, revenue: 0 },
+      { day: 'Thu', appointments: 0, revenue: 0 },
+      { day: 'Fri', appointments: 0, revenue: 0 },
+      { day: 'Sat', appointments: 0, revenue: 0 },
+      { day: 'Sun', appointments: 0, revenue: 0 }
+    ];
+
+    data.forEach(row => {
+      const dayName = dayNames[parseInt(row.weekday)];
+      const target = weeklyFormat.find(d => d.day === dayName);
+      if (target) {
+        target.appointments = row.appointments;
+        target.revenue = row.revenue || 0;
+      }
+    });
+
+    res.json(weeklyFormat);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch weekly data' });
+  }
 });
 
 // GET /api/analytics/service-distribution

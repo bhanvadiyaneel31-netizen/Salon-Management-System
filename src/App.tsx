@@ -8,11 +8,17 @@ import { BookingPage } from './components/BookingPage';
 import { CustomerDashboard } from './components/CustomerDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
 import { StaffDashboard } from './components/StaffDashboard';
+import { Sidebar } from './components/Sidebar';
+import { Sheet, SheetContent } from './components/ui/sheet';
 import { api } from './services/api';
 import { initializeSampleAppointments } from './services/appointmentStore';
+
 export default function App() {
   const [currentView, setCurrentView] = useState('home');
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState('dashboard');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [preselectedServiceId, setPreselectedServiceId] = useState<string | null>(null);
   const [isDark, setIsDark] = useState<boolean>(() => {
     const saved = localStorage.getItem('salon_dark_mode');
     return saved === 'true';
@@ -20,64 +26,57 @@ export default function App() {
 
   // Check for existing authentication on app load
   useEffect(() => {
-    // Initialize sample appointments for demo
     initializeSampleAppointments();
-    
     const currentUser = api.auth.getCurrentUser();
     if (currentUser) {
       setUserRole(currentUser.role);
-      
-      // Auto-redirect to appropriate dashboard if user is logged in
-      // Only redirect on initial load (when current view is one of the public pages)
       if (currentView === 'home' || currentView === 'login' || currentView === 'register') {
         switch (currentUser.role) {
-          case 'admin':
-            setCurrentView('admin-dashboard');
-            break;
-          case 'staff':
-            setCurrentView('staff-dashboard');
-            break;
-          case 'customer':
-            setCurrentView('customer-dashboard');
-            break;
+          case 'admin': setCurrentView('admin-dashboard'); break;
+          case 'staff': setCurrentView('staff-dashboard'); break;
+          case 'customer': setCurrentView('customer-dashboard'); break;
         }
       }
     }
-  }, []); // Empty dependency array - only run once on mount
+  }, []);
 
-  // Apply/remove dark class on <html> whenever isDark changes
   useEffect(() => {
     const html = document.documentElement;
-    if (isDark) {
-      html.classList.add('dark');
-    } else {
-      html.classList.remove('dark');
-    }
+    if (isDark) html.classList.add('dark');
+    else html.classList.remove('dark');
     localStorage.setItem('salon_dark_mode', String(isDark));
   }, [isDark]);
 
   const toggleDark = () => setIsDark(prev => !prev);
+  const handleLogout = () => {
+    api.auth.logout();
+    setUserRole(null);
+    setCurrentView('home');
+    setActiveSection('dashboard');
+  };
+
+  const isDashboard = currentView.includes('dashboard');
 
   const renderView = () => {
     switch (currentView) {
       case 'home':
-        return <HomePage setCurrentView={setCurrentView} />;
+        return <HomePage setCurrentView={setCurrentView} setPreselectedServiceId={setPreselectedServiceId} />;
       case 'login':
         return <AuthPages view="login" setCurrentView={setCurrentView} setUserRole={setUserRole} />;
       case 'register':
         return <AuthPages view="register" setCurrentView={setCurrentView} setUserRole={setUserRole} />;
       case 'booking':
-        return <BookingPage setCurrentView={setCurrentView} />;
+        return <BookingPage setCurrentView={setCurrentView} initialServiceId={preselectedServiceId} onResetSelection={() => setPreselectedServiceId(null)} />;
       case 'customer-dashboard':
-        return <CustomerDashboard setCurrentView={setCurrentView} setUserRole={setUserRole} />;
+        return <CustomerDashboard activeSection={activeSection} setActiveSection={setActiveSection} setCurrentView={setCurrentView} setUserRole={setUserRole} setPreselectedServiceId={setPreselectedServiceId} isDark={isDark} toggleDark={toggleDark} />;
       case 'admin-dashboard':
-        return <AdminDashboard setCurrentView={setCurrentView} setUserRole={setUserRole} />;
+        return <AdminDashboard activeSection={activeSection} setActiveSection={setActiveSection} setCurrentView={setCurrentView} setUserRole={setUserRole} isDark={isDark} toggleDark={toggleDark} />;
       case 'staff-dashboard':
-        return <StaffDashboard setCurrentView={setCurrentView} setUserRole={setUserRole} />;
+        return <StaffDashboard activeSection={activeSection} setActiveSection={setActiveSection} setCurrentView={setCurrentView} setUserRole={setUserRole} isDark={isDark} toggleDark={toggleDark} />;
       case 'services':
-        return <ServicesPage setCurrentView={setCurrentView} />;
+        return <ServicesPage setCurrentView={setCurrentView} setPreselectedServiceId={setPreselectedServiceId} />;
       case 'contact':
-        return <HomePage setCurrentView={setCurrentView} />; // Reusing homepage for now
+        return <HomePage setCurrentView={setCurrentView} />;
       default:
         return <HomePage setCurrentView={setCurrentView} />;
     }
@@ -92,8 +91,45 @@ export default function App() {
         setUserRole={setUserRole}
         isDark={isDark}
         toggleDark={toggleDark}
+        isDashboard={isDashboard}
+        onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
+        setActiveSection={setActiveSection}
       />
-      {renderView()}
+      
+      <div className="flex">
+        {isDashboard && (
+          <>
+            {/* Desktop Sidebar */}
+            <aside className="hidden lg:block w-64 fixed left-0 top-16 bottom-0 p-4 overflow-y-auto">
+              <Sidebar 
+                role={userRole} 
+                activeSection={activeSection} 
+                setActiveSection={setActiveSection}
+                handleLogout={handleLogout}
+              />
+            </aside>
+
+            {/* Mobile Sidebar */}
+            <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
+              <SheetContent side="left" className="w-72 p-0 border-0 bg-transparent shadow-none">
+                <div className="h-full bg-white p-4">
+                  <Sidebar 
+                    role={userRole} 
+                    activeSection={activeSection} 
+                    setActiveSection={setActiveSection}
+                    handleLogout={handleLogout}
+                    onNavigate={() => setIsMobileSidebarOpen(false)}
+                  />
+                </div>
+              </SheetContent>
+            </Sheet>
+          </>
+        )}
+        
+        <main className={`flex-1 transition-all duration-300 ${isDashboard ? 'lg:ml-64' : ''}`}>
+          {renderView()}
+        </main>
+      </div>
       <Toaster />
     </div>
   );

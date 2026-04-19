@@ -17,8 +17,11 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
-// PATCH /api/notifications/:id/read
-router.patch('/:id/read', verifyToken, async (req, res) => {
+// PUT/PATCH /api/notifications/:id/read
+router.put('/:id/read', verifyToken, markAsRead);
+router.patch('/:id/read', verifyToken, markAsRead);
+
+async function markAsRead(req, res) {
   try {
     const result = await db.runAsync(
       "UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?",
@@ -34,7 +37,7 @@ router.patch('/:id/read', verifyToken, async (req, res) => {
     console.error('Failed to mark notification as read:', error);
     res.status(500).json({ error: 'Failed to update notification' });
   }
-});
+}
 
 // POST /api/notifications/read-all
 router.post('/read-all', verifyToken, async (req, res) => {

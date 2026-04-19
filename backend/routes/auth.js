@@ -12,7 +12,11 @@ const formatUserResponse = (user) => {
     email: user.email,
     phone: user.phone,
     role: user.role,
+    address: user.address || '',
+    profile_image: user.profile_image || '',
     loyalty_points: user.loyalty_points || 0,
+    rating: user.rating || 0,
+    review_count: user.review_count || 0,
     reminders: {
       email: Boolean(user.reminder_email),
       sms: Boolean(user.reminder_sms),
@@ -52,7 +56,13 @@ router.post('/register', async (req, res) => {
       [name, email, passwordHash, phone || null]
     );
 
-    const newUser = await db.getAsync("SELECT * FROM users WHERE email = ?", [email]);
+    const newUser = await db.getAsync(`
+      SELECT u.*, sp.rating, 
+             (SELECT COUNT(*) FROM appointments a WHERE a.staff_id = u.id AND a.status = 'completed') as review_count
+      FROM users u 
+      LEFT JOIN staff_profiles sp ON u.id = sp.user_id 
+      WHERE u.email = ?
+    `, [email]);
     const token = generateToken(newUser);
 
     res.status(201).json({
@@ -73,7 +83,13 @@ router.post('/login', async (req, res) => {
   }
 
   try {
-    const user = await db.getAsync("SELECT * FROM users WHERE email = ?", [email]);
+    const user = await db.getAsync(`
+      SELECT u.*, sp.rating, 
+             (SELECT COUNT(*) FROM appointments a WHERE a.staff_id = u.id AND a.status = 'completed') as review_count
+      FROM users u 
+      LEFT JOIN staff_profiles sp ON u.id = sp.user_id 
+      WHERE u.email = ?
+    `, [email]);
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -97,7 +113,13 @@ router.post('/login', async (req, res) => {
 // GET /api/auth/me
 router.get('/me', verifyToken, async (req, res) => {
   try {
-    const user = await db.getAsync("SELECT * FROM users WHERE id = ?", [req.user.user_id]);
+    const user = await db.getAsync(`
+      SELECT u.*, sp.rating, 
+             (SELECT COUNT(*) FROM appointments a WHERE a.staff_id = u.id AND a.status = 'completed') as review_count
+      FROM users u 
+      LEFT JOIN staff_profiles sp ON u.id = sp.user_id 
+      WHERE u.id = ?
+    `, [req.user.user_id]);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }

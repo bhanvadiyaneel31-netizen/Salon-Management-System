@@ -10,11 +10,13 @@ import { toast } from "sonner";
 
 interface BookingPageProps {
   setCurrentView: (view: string) => void;
+  initialServiceId?: string | null;
+  onResetSelection?: () => void;
 }
 
-export function BookingPage({ setCurrentView }: BookingPageProps) {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [selectedService, setSelectedService] = useState<string>('');
+export function BookingPage({ setCurrentView, initialServiceId, onResetSelection }: BookingPageProps) {
+  const [currentStep, setCurrentStep] = useState(initialServiceId ? 2 : 1);
+  const [selectedService, setSelectedService] = useState<string>(initialServiceId || '');
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [selectedStaff, setSelectedStaff] = useState<string>('');
@@ -25,29 +27,25 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
   const [staffList, setStaffList] = useState<any[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
   const [loadingStaff, setLoadingStaff] = useState(false);
-
-  const timeSlots = [
-    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-    '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
-    '15:00', '15:30', '16:00', '16:30', '17:00', '17:30'
-  ];
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   const steps = [
     { number: 1, title: 'Select Service', icon: Scissors },
-    { number: 2, title: 'Choose Date & Time', icon: Clock },
-    { number: 3, title: 'Select Staff', icon: User },
+    { number: 2, title: 'Select Staff', icon: User },
+    { number: 3, title: 'Choose Date & Time', icon: Clock },
     { number: 4, title: 'Confirm Booking', icon: Check }
   ];
 
-  // Load services from backend on mount
+  // Load services with bookable filter
   useEffect(() => {
     const loadServices = async () => {
+      setLoadingServices(true);
       try {
-        const data = await api.services.getAll();
+        const data = await api.services.getAll({ bookable: true });
         setServices(data);
       } catch (error) {
-        toast.error('Failed to load services. Please try again.');
-        console.error(error);
+        toast.error('Failed to load services');
       } finally {
         setLoadingServices(false);
       }
@@ -55,28 +53,53 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
     loadServices();
   }, []);
 
-  // Load staff when step 3 is reached
+  // Load staff when service is selected
   useEffect(() => {
-    if (!selectedService || currentStep !== 3) return;
+    if (!selectedService) {
+      setStaffList([]);
+      return;
+    }
     const loadStaff = async () => {
       setLoadingStaff(true);
       try {
-        const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
-        const data = await api.staff.getAvailable(dateStr, parseInt(selectedService));
-        setStaffList([...data, { id: 0, name: 'Any Available Staff', specialty: 'All Services' }]);
-      } catch {
-        try {
-          const allStaff = await api.staff.getAll();
-          setStaffList([...allStaff, { id: 0, name: 'Any Available Staff', specialty: 'All Services' }]);
-        } catch {
-          setStaffList([{ id: 0, name: 'Any Available Staff', specialty: 'All Services' }]);
-        }
+        const data = await api.staff.getAvailable('', parseInt(selectedService));
+        setStaffList(data);
+      } catch (error) {
+        toast.error('Failed to load staff');
       } finally {
         setLoadingStaff(false);
       }
     };
     loadStaff();
-  }, [selectedService, currentStep, selectedDate]);
+  }, [selectedService]);
+
+  // Load slots when step 3 is reached and date is selected
+  useEffect(() => {
+    if (currentStep !== 3 || !selectedDate || !selectedService || !selectedStaff) {
+      setAvailableTimeSlots([]);
+      return;
+    }
+    const loadSlots = async () => {
+      setLoadingSlots(true);
+      try {
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        console.log(`[FRONTEND] Loading slots for staff: ${selectedStaff}, service: ${selectedService}, date: ${dateStr}`);
+        const data = await api.appointments.getAvailableSlots(dateStr, parseInt(selectedStaff));
+        setAvailableTimeSlots(data);
+        if (selectedTime && !data.includes(selectedTime)) {
+           setSelectedTime('');
+        }
+      } catch (error: any) {
+        // Only show error if parameters were actually valid
+        console.error('Slot loading error:', error);
+        toast.error(`Failed to load slots: ${error.message}`);
+        setAvailableTimeSlots([]);
+      } finally {
+        setLoadingSlots(false);
+      }
+    };
+    loadSlots();
+  }, [selectedDate, selectedService, selectedStaff, currentStep]);
 
   const handleNext = async () => {
     if (currentStep < 4) {
@@ -114,15 +137,22 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
   };
 
   const handleBack = () => {
-    if (currentStep > 1) setCurrentStep(currentStep - 1);
-    else setCurrentView('home');
+    if (currentStep > 1) {
+      if (currentStep === 2 && initialServiceId) {
+        onResetSelection?.();
+      }
+      setCurrentStep(currentStep - 1);
+    } else {
+      onResetSelection?.();
+      setCurrentView('home');
+    }
   };
 
   const canProceed = () => {
     switch (currentStep) {
       case 1: return selectedService !== '';
-      case 2: return !!(selectedDate && selectedTime !== '');
-      case 3: return selectedStaff !== '';
+      case 2: return selectedStaff !== '';
+      case 3: return !!(selectedDate && selectedTime !== '');
       case 4: return true;
       default: return false;
     }
@@ -217,50 +247,18 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
               )
             )}
 
-            {/* Step 2: Choose Date & Time */}
+            {/* Step 2: Select Staff */}
             {currentStep === 2 && (
-              <div className="grid lg:grid-cols-2 gap-6 sm:gap-8">
-                <div className="flex flex-col">
-                  <h3 className="font-bold text-base sm:text-lg mb-4">Select Date</h3>
-                  <div className="flex justify-center lg:justify-start">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      className="rounded-2xl border border-purple-200"
-                      disabled={(date) => date < new Date()}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="font-bold text-base sm:text-lg mb-4">Available Times</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 max-h-96 overflow-y-auto">
-                    {timeSlots.map((time) => (
-                      <Button
-                        key={time}
-                        variant={selectedTime === time ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setSelectedTime(time)}
-                        className={`rounded-xl text-sm ${
-                          selectedTime === time
-                            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0'
-                            : 'border-purple-200 text-purple-600 hover:bg-purple-50'
-                        }`}
-                      >
-                        {time}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Select Staff */}
-            {currentStep === 3 && (
               loadingStaff ? (
                 <div className="flex justify-center items-center py-16">
                   <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
                   <span className="ml-3 text-gray-500">Loading available staff...</span>
+                </div>
+              ) : staffList.length === 0 ? (
+                <div className="text-center py-16 text-gray-500">
+                  <User className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="font-medium text-gray-700">No staff available</p>
+                  <p className="text-sm mt-1">There are currently no active staff members for this service. Please try another service or check back later.</p>
                 </div>
               ) : (
                 <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
@@ -283,6 +281,54 @@ export function BookingPage({ setCurrentView }: BookingPageProps) {
                   ))}
                 </div>
               )
+            )}
+
+            {/* Step 3: Choose Date & Time */}
+            {currentStep === 3 && (
+              <div className="grid lg:grid-cols-2 gap-6 sm:gap-8">
+                <div className="flex flex-col">
+                  <h3 className="font-bold text-base sm:text-lg mb-4">Select Date</h3>
+                  <div className="flex justify-center lg:justify-start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={setSelectedDate}
+                      className="rounded-2xl border border-purple-200"
+                      disabled={(date) => date < new Date()}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-bold text-base sm:text-lg mb-4">Available Times</h3>
+                  {!selectedDate ? (
+                    <p className="text-gray-500 italic">Please select a date first.</p>
+                  ) : loadingSlots ? (
+                    <div className="flex items-center text-purple-500 py-4">
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading slots...
+                    </div>
+                  ) : availableTimeSlots.length === 0 ? (
+                    <p className="text-red-500 italic">No slots available for this date.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 max-h-96 overflow-y-auto">
+                      {availableTimeSlots.map((time) => (
+                        <Button
+                          key={time}
+                          variant={selectedTime === time ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setSelectedTime(time)}
+                          className={`rounded-xl text-sm ${
+                            selectedTime === time
+                              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0'
+                              : 'border-purple-200 text-purple-600 hover:bg-purple-50'
+                          }`}
+                        >
+                          {time}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* Step 4: Confirm Booking */}

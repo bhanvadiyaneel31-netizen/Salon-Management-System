@@ -2,35 +2,39 @@ import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import { Star, Scissors, Sparkles, Heart, ArrowRight } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
+import { api, API_ORIGIN } from "../services/api";
+import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 
 interface HomePageProps {
   setCurrentView: (view: string) => void;
+  setPreselectedServiceId?: (id: string | null) => void;
 }
 
-export function HomePage({ setCurrentView }: HomePageProps) {
-  const services = [
-    {
-      name: "Hair Styling",
-      description: "Professional cuts, coloring, and styling",
-      price: "From $85",
-      icon: Scissors,
-      image: "https://picsum.photos/seed/hair-styling/400/300"
-    },
-    {
-      name: "Facial Treatments",
-      description: "Rejuvenating facial care and treatments",
-      price: "From $120",
-      icon: Sparkles,
-      image: "https://picsum.photos/seed/facial-treatment/400/300"
-    },
-    {
-      name: "Nail Care",
-      description: "Manicures, pedicures, and nail art",
-      price: "From $65",
-      icon: Heart,
-      image: "https://picsum.photos/seed/nail-care/400/300"
-    }
-  ];
+export function HomePage({ setCurrentView, setPreselectedServiceId }: HomePageProps) {
+  const [services, setServices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadServices = async () => {
+      try {
+        const data = await api.services.getAll({ bookable: true });
+        setServices(data.slice(0, 3).map(s => {
+          const cat = (s.category || '').toLowerCase();
+          return {
+            ...s,
+            icon: cat === 'hair' ? Scissors : cat === 'facial' ? Sparkles : Heart,
+            image: s.image_url ? `${API_ORIGIN}${s.image_url}` : `https://picsum.photos/seed/${s.id}/400/300`
+          };
+        }));
+      } catch (error) {
+        console.error('Failed to load services:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadServices();
+  }, []);
 
   const reviews = [
     {
@@ -112,40 +116,58 @@ export function HomePage({ setCurrentView }: HomePageProps) {
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-            {services.map((service, index) => {
-              const Icon = service.icon;
-              return (
-                <Card key={index} className="group hover:shadow-2xl transition-all duration-300 border-0 bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden">
-                  <div className="relative h-48 overflow-hidden">
-                    <ImageWithFallback
-                      src={service.image}
-                      alt={service.name}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-                    <div className="absolute bottom-4 left-4">
-                      <div className="bg-white/90 backdrop-blur-sm rounded-full p-3">
-                        <Icon className="w-6 h-6 text-purple-600" />
+            {loading ? (
+              <div className="col-span-full flex flex-col items-center justify-center py-12">
+                <Loader2 className="w-12 h-12 text-purple-500 animate-spin mb-4" />
+                <p className="text-gray-500">Finding the best services for you...</p>
+              </div>
+            ) : services.length > 0 ? (
+              services.map((service, index) => {
+                const Icon = service.icon || Scissors;
+                return (
+                  <Card key={index} className="group hover:shadow-2xl transition-all duration-300 border-0 bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden">
+                    <div className="relative h-48 overflow-hidden">
+                      <ImageWithFallback
+                        src={service.image}
+                        alt={service.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+                      <div className="absolute bottom-4 left-4">
+                        <div className="bg-white/90 backdrop-blur-sm rounded-full p-3">
+                          <Icon className="w-6 h-6 text-purple-600" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <CardContent className="p-4 sm:p-6">
-                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">{service.name}</h3>
-                    <p className="text-sm sm:text-base text-gray-600 mb-4">{service.description}</p>
-                    <div className="flex justify-between items-center">
-                      <span className="text-base sm:text-lg font-bold text-purple-600">{service.price}</span>
-                      <Button
-                        size="sm"
-                        onClick={() => setCurrentView('booking')}
-                        className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0 rounded-xl"
-                      >
-                        Book Now
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    <CardContent className="p-4 sm:p-6">
+                      <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">{service.name}</h3>
+                      <p className="text-sm sm:text-base text-gray-600 mb-4 line-clamp-2">{service.description}</p>
+                      <div className="flex justify-between items-center">
+                        <span className="text-base sm:text-lg font-bold text-purple-600">${service.price}</span>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            if (setPreselectedServiceId) {
+                              setPreselectedServiceId(service.id.toString());
+                            }
+                            setCurrentView('booking');
+                          }}
+                          className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0 rounded-xl"
+                        >
+                          Book Now
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
+            ) : (
+              <div className="col-span-full text-center py-12">
+                <Sparkles className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-xl font-medium text-gray-900 mb-2">No services available right now</p>
+                <p className="text-gray-600">Please check back later or contact us directly.</p>
+              </div>
+            )}
           </div>
         </div>
       </section>

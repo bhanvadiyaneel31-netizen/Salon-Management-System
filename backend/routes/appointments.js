@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
-const { verifyToken, requireAdminOrStaff } = require('../middleware/authMiddleware');
+const { verifyToken, requireAdmin, requireAdminOrStaff } = require('../middleware/authMiddleware');
 
 const fetchAppointmentWithDetails = async (appointmentId) => {
   return await db.getAsync(`
@@ -105,6 +105,88 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/appointments/slots
+router.get('/slots', async (req, res) => {
+  const { date, staff_id, service_id } = req.query;
+  console.log(`[BACKEND] Fetching slots for staff_id: ${staff_id}, date: ${date}, service_id: ${service_id}`);
+  if (!date || !staff_id) {
+    console.log('[BACKEND] Missing required parameters');
+    return res.status(400).json({ error: 'date and staff_id are required' });
+  }
+
+  try {
+    // Check if service is active
+    if (service_id) {
+      const service = await db.getAsync("SELECT is_active, duration FROM services WHERE id = ?", [service_id]);
+      if (!service || !service.is_active) {
+        return res.status(400).json({ error: 'This service is currently inactive' });
+      }
+    }
+
+    // Check if staff is active
+    const staff = await db.getAsync("SELECT is_available FROM staff_profiles WHERE user_id = ?", [staff_id]);
+    if (!staff || !staff.is_available) {
+      return res.status(400).json({ error: 'This staff member is currently inactive' });
+    }
+
+    const allSlots = [
+      '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+      '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
+      '15:00', '15:30', '16:00', '16:30', '17:00', '17:30'
+    ];
+
+    // Filter out past time slots when booking for today.
+    // Use local date (not UTC) so the date comparison matches what the client sent.
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const isToday = date === todayStr;
+
+    const appointments = await db.allAsync(`
+      SELECT appointment_time, s.duration
+      FROM appointments a
+      JOIN services s ON a.service_id = s.id
+      WHERE a.staff_id = ? AND a.appointment_date = ? AND a.status != 'cancelled'
+    `, [staff_id, date]);
+
+    // Build a set of blocked minutes (start time + duration of each booked appointment)
+    const blockedMinuteRanges = appointments.map(a => {
+      const [h, m] = a.appointment_time.substring(0, 5).split(':').map(Number);
+      const start = h * 60 + m;
+      return { start, end: start + (a.duration || 30) };
+    });
+
+    const slotToMinutes = (slot) => {
+      const [h, m] = slot.split(':').map(Number);
+      return h * 60 + m;
+    };
+
+    // Determine duration of requested service for overlap check
+    let requestedDuration = 30;
+    if (service_id) {
+      const svc = await db.getAsync("SELECT duration FROM services WHERE id = ?", [service_id]);
+      if (svc) requestedDuration = svc.duration;
+    }
+
+    const availableSlots = allSlots.filter(slot => {
+      const slotMinutes = slotToMinutes(slot);
+      // Filter past slots for today
+      if (isToday && slotMinutes <= nowMinutes) return false;
+      // Filter slots that overlap with any existing booking
+      const slotEnd = slotMinutes + requestedDuration;
+      for (const range of blockedMinuteRanges) {
+        if (slotMinutes < range.end && slotEnd > range.start) return false;
+      }
+      return true;
+    });
+    
+    res.json(availableSlots);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch available slots' });
+  }
+});
+
 // GET /api/appointments/:id
 router.get('/:id', verifyToken, async (req, res) => {
   try {
@@ -141,20 +223,52 @@ router.post('/', verifyToken, async (req, res) => {
   }
 
   try {
-    // Validate service
-    const service = await db.getAsync("SELECT price, is_active FROM services WHERE id = ?", [service_id]);
+    // Validate service — fetch category too for category-based staff matching
+    const service = await db.getAsync("SELECT id, name, price, is_active, duration, category FROM services WHERE id = ?", [service_id]);
     if (!service || !service.is_active) {
       return res.status(404).json({ error: 'Service not found or inactive' });
     }
 
-    // Checking overlaps 
+    // Validate staff availability and conflicts
     if (staff_id) {
-      const conflict = await db.getAsync(`
-        SELECT id FROM appointments 
-        WHERE staff_id = ? AND appointment_date = ? AND appointment_time = ? AND status != 'cancelled'
-      `, [staff_id, appointment_date, appointment_time]);
-      if (conflict) {
-        return res.status(409).json({ error: 'Staff is not available at this time' });
+      const staffProfile = await db.getAsync(`
+        SELECT sp.is_available, sp.category
+        FROM staff_profiles sp
+        WHERE sp.user_id = ?
+      `, [staff_id]);
+      if (!staffProfile || !staffProfile.is_available) {
+        return res.status(400).json({ error: 'This staff member is currently inactive' });
+      }
+
+      // Category-based validation: staff.category must match service.category
+      // Only enforce if both sides have category data (guard against legacy NULL rows)
+      if (service.category && staffProfile.category && staffProfile.category !== service.category) {
+        return res.status(400).json({
+          error: `This staff member handles ${staffProfile.category} services, not ${service.category}`
+        });
+      }
+
+      // Duration-aware overlap check — block if any existing booking overlaps the requested slot
+      const reqMinutes = (() => {
+        const [h, m] = appointment_time.split(':').map(Number);
+        return h * 60 + m;
+      })();
+      const reqEnd = reqMinutes + service.duration;
+
+      const existingBookings = await db.allAsync(`
+        SELECT a.appointment_time, s.duration
+        FROM appointments a
+        JOIN services s ON a.service_id = s.id
+        WHERE a.staff_id = ? AND a.appointment_date = ? AND a.status != 'cancelled'
+      `, [staff_id, appointment_date]);
+
+      for (const booking of existingBookings) {
+        const [h, m] = booking.appointment_time.substring(0, 5).split(':').map(Number);
+        const existStart = h * 60 + m;
+        const existEnd = existStart + (booking.duration || 30);
+        if (reqMinutes < existEnd && reqEnd > existStart) {
+          return res.status(409).json({ error: 'This staff is already booked during this time slot' });
+        }
       }
     }
 
@@ -168,16 +282,16 @@ router.post('/', verifyToken, async (req, res) => {
     // Notify Staff if assigned
     if (staff_id) {
       await db.runAsync(
-        "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
-        [staff_id, 'New Appointment', `New booking for ${service.name} on ${appointment_date} at ${appointment_time}`, 'new_appointment']
+        "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
+        [staff_id, 'New Appointment', `New booking for ${service.name} on ${appointment_date} at ${appointment_time}`, 'new_appointment', result.lastID]
       );
     }
     // Notify Admin
     const admin = await db.getAsync("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
     if (admin) {
       await db.runAsync(
-        "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
-        [admin.id, 'New Booking', `A new appointment has been booked for ${service.name}`, 'new_appointment']
+        "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
+        [admin.id, 'New Booking', `A new appointment has been booked for ${service.name}`, 'new_appointment', result.lastID]
       );
     }
 
@@ -197,17 +311,32 @@ router.patch('/:id/status', verifyToken, async (req, res) => {
     const row = await db.getAsync("SELECT * FROM appointments WHERE id = ?", [req.params.id]);
     if (!row) return res.status(404).json({ error: 'Appointment not found' });
     
-    // RBAC
-    if (req.user.role === 'customer' && (row.customer_id !== req.user.user_id || status !== 'cancelled' || row.status !== 'pending')) {
-      return res.status(403).json({ error: 'Not authorized to update this appointment to ' + status });
-    }
-    if (req.user.role === 'staff' && row.staff_id !== req.user.user_id) {
-      return res.status(403).json({ error: 'Not authorized to update this appointment' });
+    // RBAC & Ownership
+    if (req.user.role === 'customer') {
+      if (row.customer_id !== req.user.user_id) {
+        return res.status(403).json({ error: 'Not authorized to access this appointment' });
+      }
+      if (status !== 'cancelled') {
+        return res.status(403).json({ error: 'Customers can only cancel their own appointments' });
+      }
+      if (row.status !== 'pending') {
+        return res.status(400).json({ error: 'Only pending appointments can be cancelled by customers' });
+      }
+    } else if (req.user.role === 'staff') {
+      if (row.staff_id !== req.user.user_id) {
+        return res.status(403).json({ error: 'Not authorized to manage this appointment' });
+      }
+      const allowedStatuses = ['confirmed', 'in-progress', 'completed', 'cancelled'];
+      if (!allowedStatuses.includes(status)) {
+        return res.status(403).json({ error: 'Unauthorized status transition for staff' });
+      }
     }
 
+    // State machine transitions
     const transitions = {
       'pending': ['confirmed', 'cancelled'],
-      'confirmed': ['completed', 'cancelled']
+      'confirmed': ['in-progress', 'cancelled'],
+      'in-progress': ['completed', 'cancelled']
     };
 
     if (req.user.role !== 'admin' && (!transitions[row.status] || !transitions[row.status].includes(status))) {
@@ -219,40 +348,50 @@ router.patch('/:id/status', verifyToken, async (req, res) => {
       [status, notes, req.params.id]
     );
 
-    // Notify Customer
+    const updatedRow = await fetchAppointmentWithDetails(req.params.id);
+    if (!updatedRow) return res.status(404).json({ error: 'Appointment not found after update' });
+
+    // Notify Customer — use flat column names from the raw DB row
     await db.runAsync(
-      "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
-      [row.customer_id, `Appointment ${status.charAt(0).toUpperCase() + status.slice(1)}`, `Your appointment for ${row.service_name || 'service'} has been ${status}.`, 'update']
+      "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
+      [updatedRow.customer_id, `Appointment ${status.charAt(0).toUpperCase() + status.slice(1)}`, `Your appointment for ${updatedRow.service_name} has been ${status}.`, 'update', updatedRow.id]
     );
 
-    // Notify Staff if assigned and status is important
-    if (row.staff_id) {
+    // Notify Staff
+    if (updatedRow.staff_id) {
       await db.runAsync(
-        "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
-        [row.staff_id, 'Status Update', `Appointment for ${row.customer_name || 'customer'} is now ${status}.`, 'update']
+        "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
+        [updatedRow.staff_id, 'Status Update', `Appointment for ${updatedRow.customer_name} is now ${status}.`, 'update', updatedRow.id]
       );
     }
-
-    const updatedRow = await fetchAppointmentWithDetails(req.params.id);
     
-    // If completing the appointment, give the user loyalty points!
+    // If completing the appointment, award customer loyalty points
     if (status === 'completed' && row.status !== 'completed') {
       await db.runAsync("UPDATE users SET loyalty_points = loyalty_points + ? WHERE id = ?", [Math.floor(row.price), row.customer_id]);
     }
     
     res.json(mapAppointmentRow(updatedRow));
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update appointment' });
+    console.error('[STATUS UPDATE ERROR]', error.message);
+    res.status(500).json({ error: 'Failed to update appointment status' });
   }
 });
 
 // POST /api/appointments/:id/review
 router.post('/:id/review', verifyToken, async (req, res) => {
   const { rating, review } = req.body;
-  
+
   if (req.user.role !== 'customer') {
     return res.status(403).json({ error: 'Only customers can leave reviews' });
   }
+
+  // Coerce to number first — this catches strings like "abc" (→ NaN) and rejects them
+  const ratingNum = Number(rating);
+  if (!Number.isFinite(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+    return res.status(400).json({ error: 'Rating must be a number between 1 and 5' });
+  }
+  // Round to nearest integer (1–5 are whole stars; reject e.g. 3.7 by rounding to integer)
+  const ratingInt = Math.round(ratingNum);
 
   try {
     const apt = await db.getAsync("SELECT * FROM appointments WHERE id = ?", [req.params.id]);
@@ -260,17 +399,63 @@ router.post('/:id/review', verifyToken, async (req, res) => {
     if (apt.customer_id !== req.user.user_id) return res.status(403).json({ error: "Not authorized" });
     if (apt.status !== 'completed') return res.status(400).json({ error: "Can only review completed appointments" });
 
-    await db.runAsync("UPDATE appointments SET rating = ?, review = ? WHERE id = ?", [rating, review, req.params.id]);
-    res.json({ message: "Review submitted successfully" });
+    // Save the review on the appointment — use ratingInt (number, not raw string)
+    await db.runAsync(
+      "UPDATE appointments SET rating = ?, review = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      [ratingInt, review, req.params.id]
+    );
+
+    // Recalculate and persist the staff member's average rating if staff was assigned
+    let newAvgRating = null;
+    if (apt.staff_id) {
+      const avgRow = await db.getAsync(`
+        SELECT ROUND(AVG(CAST(rating AS REAL)), 2) AS avg_rating,
+               COUNT(*) AS review_count
+        FROM appointments
+        WHERE staff_id = ? AND rating IS NOT NULL AND status = 'completed'
+      `, [apt.staff_id]);
+
+      if (avgRow && avgRow.avg_rating !== null) {
+        newAvgRating = avgRow.avg_rating;
+        await db.runAsync(
+          "UPDATE staff_profiles SET rating = ? WHERE user_id = ?",
+          [newAvgRating, apt.staff_id]
+        );
+      }
+    }
+
+    res.json({
+      message: "Review submitted successfully",
+      staff_rating: newAvgRating
+    });
   } catch (error) {
+    console.error('[REVIEW ERROR]', error.message);
     res.status(500).json({ error: "Failed to submit review" });
   }
 });
 
 // PATCH /api/appointments/:id
-router.patch('/:id', requireAdminOrStaff, async (req, res) => {
-  // Omitted complex rescheduling constraints for brevity, updating directly
+router.patch('/:id', verifyToken, async (req, res) => {
   try {
+    const row = await db.getAsync("SELECT * FROM appointments WHERE id = ?", [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Appointment not found' });
+
+    // RBAC: Admin can do anything. Staff can update their own. Customers can reschedule their own IF pending.
+    if (req.user.role === 'staff' && row.staff_id !== req.user.user_id) {
+      return res.status(403).json({ error: 'Not authorized to manage this appointment' });
+    }
+    if (req.user.role === 'customer') {
+      if (row.customer_id !== req.user.user_id) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      if (row.status !== 'pending') {
+        return res.status(400).json({ error: 'Only pending appointments can be rescheduled' });
+      }
+    }
+    if (req.user.role !== 'admin' && req.user.role !== 'staff' && req.user.role !== 'customer') {
+       return res.status(403).json({ error: 'Unauthorized' });
+    }
+
     const { appointment_date, appointment_time, staff_id, notes } = req.body;
     await db.runAsync(
       `UPDATE appointments SET
@@ -289,15 +474,15 @@ router.patch('/:id', requireAdminOrStaff, async (req, res) => {
     // Notify Customer
     if (apt) {
       await db.runAsync(
-        "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
-        [apt.customer_id, 'Appointment Updated', `Your appointment has been rescheduled/updated. Check details for changes.`, 'update']
+        "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
+        [apt.customer_id, 'Appointment Updated', `Your appointment has been rescheduled/updated. Check details for changes.`, 'update', req.params.id]
       );
       
       // Notify new Staff if changed or assigned
       if (staff_id && staff_id !== apt.staff_id) {
          await db.runAsync(
-          "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
-          [staff_id, 'New Assignment', `You have been assigned to a new appointment on ${apt.appointment_date}.`, 'assignment']
+          "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
+          [staff_id, 'New Assignment', `You have been assigned to a new appointment on ${apt.appointment_date}.`, 'assignment', req.params.id]
         );
       }
     }
@@ -309,7 +494,7 @@ router.patch('/:id', requireAdminOrStaff, async (req, res) => {
 });
 
 // DELETE /api/appointments/:id
-router.delete('/:id', requireAdminOrStaff, async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const apt = await db.getAsync("SELECT id FROM appointments WHERE id = ?", [req.params.id]);
     if (!apt) return res.status(404).json({ error: 'Appointment not found' });

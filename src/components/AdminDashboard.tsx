@@ -46,22 +46,35 @@ import {
   UserCog,
   Zap,
   Menu,
-  X
+  X,
+  Loader2,
+  Moon,
+  Sun
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { toast } from "sonner";
 import { exportToCSV } from "./ui/utils";
-import { api, appointmentsAPI, analyticsAPI, staffAPI } from "../services/api";
+import { api, appointmentsAPI, analyticsAPI, staffAPI, servicesAPI } from "../services/api";
 import { ManageServicePanel } from "./ManageServicePanel";
 import { format, addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
 interface AdminDashboardProps {
+  activeSection: string;
+  setActiveSection: (section: string) => void;
   setCurrentView: (view: string) => void;
   setUserRole: (role: string | null) => void;
+  isDark?: boolean;
+  toggleDark?: () => void;
 }
 
-export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardProps) {
-  const [activeSection, setActiveSection] = useState('dashboard');
+export function AdminDashboard({ 
+  activeSection, 
+  setActiveSection, 
+  setCurrentView, 
+  setUserRole, 
+  isDark, 
+  toggleDark 
+}: AdminDashboardProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [manageServiceTab, setManageServiceTab] = useState<'services' | 'staff' | 'appointments'>('services');
   const [searchTerm, setSearchTerm] = useState('');
@@ -94,6 +107,19 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
   // Staff members state — loaded from the real backend
   const [staffMembers, setStaffMembers] = useState<any[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
+  const [services, setServices] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadServices = async () => {
+      try {
+        const data = await servicesAPI.getAll();
+        setServices(data);
+      } catch (err) {
+        console.error('Failed to load services:', err);
+      }
+    };
+    loadServices();
+  }, []);
 
   const loadStaff = async () => {
     setLoadingStaff(true);
@@ -105,11 +131,13 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
         name: s.name,
         email: s.email,
         phone: s.phone || '',
-        role: s.specialty || 'Staff',
+        role: s.category || 'Staff',
+        category: s.category || 'Hair',
         status: s.is_available ? 'active' : 'inactive',
         specialty: s.specialty || '',
         rating: s.rating ?? 0,
-        appointments: 0,
+        appointments: s.completed_appointments ?? 0,
+        assigned_service_ids: s.assigned_service_ids || [],
         totalClients: 0,
         hoursWorked: 0,
         joinDate: s.created_at ? s.created_at.split('T')[0] : '',
@@ -124,7 +152,11 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
     }
   };
 
-  useEffect(() => { loadStaff(); }, []);
+  useEffect(() => { 
+    loadStaff(); 
+    const interval = setInterval(loadStaff, 60000); // Poll every minute
+    return () => clearInterval(interval);
+  }, []);
 
   // Form states for add/edit staff
   const [staffForm, setStaffForm] = useState({
@@ -132,7 +164,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
     email: '',
     phone: '',
     password: '',
-    role: '',
+    category: 'Hair',
     status: 'active' as const,
     specialty: ''
   });
@@ -193,11 +225,14 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
       }
     };
     loadAnalytics();
+    const interval = setInterval(loadAnalytics, 60000); // Poll every minute
+    return () => clearInterval(interval);
   }, []);
 
   // Load appointments from real backend
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const loadAppointments = async () => {
     setLoadingAppointments(true);
@@ -212,6 +247,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
           phone: apt.customer?.phone || ''
         },
         service: {
+          id: apt.service?.id,
           name: apt.service?.name || '',
           duration: apt.service?.duration || 0,
           price: apt.price || 0
@@ -234,6 +270,8 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
 
   useEffect(() => {
     loadAppointments();
+    const interval = setInterval(loadAppointments, 60000); // Poll every minute
+    return () => clearInterval(interval);
   }, []);
 
   const recentAppointments = appointments.slice(0, 4).map(apt => ({
@@ -267,8 +305,9 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
   const filteredStaff = staffMembers.filter(staff => {
     const matchesSearch = staff.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          staff.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         staff.role.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = filterRole === 'all' || staff.role.toLowerCase().includes(filterRole.toLowerCase());
+                         (staff.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (staff.specialty || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = filterRole === 'all' || staff.category === filterRole;
     const matchesStatus = filterStatus === 'all' || staff.status === filterStatus;
     
     return matchesSearch && matchesRole && matchesStatus;
@@ -280,15 +319,15 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
       email: '',
       phone: '',
       password: '',
-      role: '',
+      category: 'Hair',
       status: 'active',
       specialty: ''
     });
   };
 
   const handleAddStaff = async () => {
-    if (!staffForm.name || !staffForm.email || !staffForm.password) {
-      toast.error('Please fill in name, email, and password');
+    if (!staffForm.name || !staffForm.email || !staffForm.password || !staffForm.category) {
+      toast.error('Please fill in name, email, password, and category');
       return;
     }
     try {
@@ -297,7 +336,8 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
         email: staffForm.email,
         phone: staffForm.phone,
         password: staffForm.password,
-        specialty: staffForm.specialty || staffForm.role,
+        specialty: staffForm.specialty,
+        category: staffForm.category,
         is_available: staffForm.status === 'active',
         rating: 0
       } as any);
@@ -310,32 +350,43 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
     }
   };
 
-  const handleEditStaff = () => {
-    if (!editingStaff || !staffForm.name || !staffForm.email || !staffForm.role) {
+  const handleEditStaff = async () => {
+    if (!editingStaff || !staffForm.name || !staffForm.email || !staffForm.category) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    setStaffMembers(prev => 
-      prev.map(staff => 
-        staff.id === editingStaff.id 
-          ? { ...staff, ...staffForm }
-          : staff
-      )
-    );
-    
-    resetForm();
-    setEditingStaff(null);
-    setIsEditStaffOpen(false);
-    toast.success('Staff member updated successfully!');
+    if (isLoading) return;
+
+    setIsLoading(true);
+    try {
+      await staffAPI.update(editingStaff.id, {
+        name: staffForm.name,
+        email: staffForm.email,
+        phone: staffForm.phone,
+        specialty: staffForm.specialty,
+        category: staffForm.category,
+        status: staffForm.status
+      });
+      
+      toast.success('Staff member system fields updated successfully!');
+      resetForm();
+      setEditingStaff(null);
+      setIsEditStaffOpen(false);
+      await loadStaff(); // re-fetch from DB
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update staff member');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDeleteStaff = async (staffId: number) => {
     const staff = staffMembers.find(s => s.id === staffId);
     try {
       await staffAPI.delete(staffId);
-      setStaffMembers(prev => prev.filter(s => s.id !== staffId));
       toast.success(`${staff?.name} has been permanently removed from the team`);
+      await loadStaff(); // re-fetch from DB
     } catch (err: any) {
       toast.error(err?.message || 'Failed to delete staff member');
     }
@@ -347,7 +398,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
       name: staff.name,
       email: staff.email,
       phone: staff.phone,
-      role: staff.role,
+      category: staff.category || 'Hair',
       status: staff.status,
       specialty: staff.specialty
     });
@@ -460,11 +511,21 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
   const generateReport = async (type: string) => {
     setIsGeneratingReport(true);
     
-    // Simulate report generation
-    setTimeout(() => {
-      toast.success(`${type} report generated successfully!`);
-      setIsGeneratingReport(false);
-    }, 2000);
+    // Derived from current state (already fetched from analyticsAPI on mount)
+    const reportData = {
+      totalRevenue: dashboardStats.todayRevenue,
+      totalAppointments: dashboardStats.todayAppointments,
+      completedAppointments: completedAppointments.length,
+      cancelledAppointments: cancelledAppointments.length,
+      generatedAt: new Date().toLocaleString()
+    };
+
+    // Simulate API delay for realism
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    console.log(`Report [${type}] Data:`, reportData);
+    toast.success(`${type} report generated successfully! Check console for data summary.`);
+    setIsGeneratingReport(false);
   };
 
   const exportReport = (format: 'pdf' | 'excel') => {
@@ -486,209 +547,29 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
       toast.success(`Report exported as PDF format! (Mock)`);
     }
   };
-
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: TrendingUp },
-    { id: 'manage-services', label: 'Manage Services', icon: Scissors },
-    { id: 'staff', label: 'Manage Staff', icon: Users },
-    { id: 'appointments', label: 'Appointments', icon: Calendar },
-    { id: 'reports', label: 'Reports', icon: DollarSign },
-  ];
-
-  const handleNavClick = (id: string) => {
-    setActiveSection(id);
-    if (id === 'manage-services') setManageServiceTab('services');
-    setIsMobileMenuOpen(false);
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-white">
-
-      {/* Mobile Top Bar */}
-      {/* Admin Panel Mobile Header (Non-sticky) */}
-      <div className="lg:hidden px-4 md:px-6 pt-4 pb-2 mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-            <Settings className="w-5 h-5 text-white" />
-          </div>
+    <div className="py-4 lg:py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto space-y-6 lg:space-y-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Admin Panel</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{activeSection.replace('-', ' ')}</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              {activeSection === 'dashboard' ? 'Dashboard Overview' :
+               activeSection === 'staff' ? 'Staff Management' :
+               activeSection === 'manage-services' ? 'Service Management' :
+               activeSection === 'appointments' ? 'Appointment Management' :
+               activeSection === 'reports' ? 'Reports & Analytics' :
+               activeSection.replace('-', ' ')}
+            </h1>
+            <p className="text-gray-500">Admin Portal • Manage your salon operations and staff</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-purple-50 text-purple-600 border-purple-100 px-3 py-1">
+              Admin Mode
+            </Badge>
           </div>
         </div>
-        <button
-          onClick={() => setIsMobileMenuOpen(true)}
-          className="p-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-purple-50 hover:text-purple-600 transition-colors"
-          aria-label="Open menu"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
-      </div>
 
-      {/* Mobile Slide Drawer */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => setIsMobileMenuOpen(false)}
-          />
-          {/* Drawer */}
-          <div className="absolute left-0 top-0 h-full w-72 bg-white shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between p-5 border-b border-purple-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                  <Settings className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <p className="font-bold text-gray-900">Admin Panel</p>
-                  <p className="text-xs text-gray-500">Management Dashboard</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="p-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-              {navItems.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => handleNavClick(id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${
-                    activeSection === id
-                      ? 'bg-purple-50 text-purple-700 font-semibold'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {label}
-                </button>
-              ))}
-            </nav>
-            <div className="p-4 border-t border-gray-100">
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-red-600 hover:bg-red-50 transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile Bottom Navigation */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-purple-100 px-2 py-2 flex items-center justify-around">
-        {navItems.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => handleNavClick(id)}
-            className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-colors ${
-              activeSection === id ? 'text-purple-600' : 'text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            <Icon className="w-5 h-5" />
-            <span className="text-[9px] font-medium leading-none">{label.split(' ')[0]}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-8 pb-24 lg:pb-8">
-        <div className="grid lg:grid-cols-5 gap-6 lg:gap-8">
-          {/* Sidebar — desktop only */}
-          <div className="hidden lg:block lg:col-span-1">
-            <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl sticky top-24">
-              <CardHeader className="text-center pb-4">
-                <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mx-auto flex items-center justify-center mb-4">
-                  <Settings className="w-10 h-10 text-white" />
-                </div>
-                <CardTitle className="text-xl font-bold text-gray-900">Admin Panel</CardTitle>
-                <p className="text-gray-600">Management Dashboard</p>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl ${
-                    activeSection === 'dashboard' 
-                      ? 'text-purple-600 bg-purple-50' 
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                  onClick={() => setActiveSection('dashboard')}
-                >
-                  <TrendingUp className="w-4 h-4 mr-3" />
-                  Dashboard
-                </Button>
-                <Button
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl ${
-                    activeSection === 'manage-services' 
-                      ? 'text-purple-600 bg-purple-50' 
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                  onClick={() => {
-                    setActiveSection('manage-services');
-                    setManageServiceTab('services');
-                  }}
-                >
-                  <Scissors className="w-4 h-4 mr-3" />
-                  Manage Services
-                </Button>
-                <Button
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl ${
-                    activeSection === 'staff' 
-                      ? 'text-purple-600 bg-purple-50' 
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                  onClick={() => setActiveSection('staff')}
-                >
-                  <Users className="w-4 h-4 mr-3" />
-                  Manage Staff
-                </Button>
-                <Button
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl ${
-                    activeSection === 'appointments' 
-                      ? 'text-purple-600 bg-purple-50' 
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                  onClick={() => setActiveSection('appointments')}
-                >
-                  <Calendar className="w-4 h-4 mr-3" />
-                  Appointments
-                </Button>
-                <Button
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl ${
-                    activeSection === 'reports' 
-                      ? 'text-purple-600 bg-purple-50' 
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                  onClick={() => setActiveSection('reports')}
-                >
-                  <DollarSign className="w-4 h-4 mr-3" />
-                  Reports
-                </Button>
-                <div className="pt-4 border-t border-gray-200">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-red-600 hover:bg-red-50 rounded-xl"
-                    onClick={handleLogout}
-                  >
-                    <LogOut className="w-4 h-4 mr-3" />
-                    Logout
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Main Content */}
-          <div className="col-span-full lg:col-span-4 space-y-6 lg:space-y-8">
+        <div className="space-y-6 lg:space-y-8">
             {activeSection === 'dashboard' && (
               <>
                 {/* Stats Cards */}
@@ -936,12 +817,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
 
             {activeSection === 'staff' && (
               <>
-                {/* Staff Management Header */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Staff Management</h1>
-                    <p className="text-gray-600 mt-1">Manage your salon's staff members and track their performance</p>
-                  </div>
+                <div className="flex justify-end mb-6">
                   <Dialog open={isAddStaffOpen} onOpenChange={setIsAddStaffOpen}>
                     <DialogTrigger asChild>
                       <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl">
@@ -1006,20 +882,18 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="role">Role *</Label>
-                          <Select value={staffForm.role} onValueChange={(value) => setStaffForm(prev => ({ ...prev, role: value }))}>
+                          <Label htmlFor="category">Primary Service Category *</Label>
+                          <Select value={staffForm.category} onValueChange={(value) => setStaffForm(prev => ({ ...prev, category: value }))}>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select role" />
+                              <SelectValue placeholder="Select category" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Senior Stylist">Senior Stylist</SelectItem>
-                              <SelectItem value="Hair Stylist">Hair Stylist</SelectItem>
-                              <SelectItem value="Hair Colorist">Hair Colorist</SelectItem>
-                              <SelectItem value="Nail Technician">Nail Technician</SelectItem>
-                              <SelectItem value="Facial Specialist">Facial Specialist</SelectItem>
-                              <SelectItem value="Massage Therapist">Massage Therapist</SelectItem>
-                              <SelectItem value="Receptionist">Receptionist</SelectItem>
-                              <SelectItem value="Cleaner">Cleaner</SelectItem>
+                              <SelectItem value="Hair">Hair</SelectItem>
+                              <SelectItem value="Facial">Facial</SelectItem>
+                              <SelectItem value="Nails">Nails</SelectItem>
+                              <SelectItem value="Massage">Massage</SelectItem>
+                              <SelectItem value="Wellness">Wellness</SelectItem>
+                              <SelectItem value="Beauty">Beauty</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -1089,8 +963,8 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-pink-100">Total Hours</p>
-                          <p className="text-3xl font-bold">{staffMembers.reduce((acc, s) => acc + s.hoursWorked, 0)}</p>
+                          <p className="text-pink-100">Total Completed</p>
+                          <p className="text-3xl font-bold">{staffMembers.reduce((acc, s) => acc + s.appointments, 0)}</p>
                         </div>
                         <Clock className="w-10 h-10 text-pink-200" />
                       </div>
@@ -1115,16 +989,16 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                         <Select value={filterRole} onValueChange={setFilterRole}>
                           <SelectTrigger className="w-40 border-purple-200 focus:border-purple-400 rounded-xl">
                             <Filter className="w-4 h-4 mr-2" />
-                            <SelectValue placeholder="Role" />
+                            <SelectValue placeholder="Category" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="all">All Roles</SelectItem>
-                            <SelectItem value="stylist">Stylist</SelectItem>
-                            <SelectItem value="specialist">Specialist</SelectItem>
-                            <SelectItem value="technician">Technician</SelectItem>
-                            <SelectItem value="receptionist">Receptionist</SelectItem>
-                            <SelectItem value="colorist">Colorist</SelectItem>
-                            <SelectItem value="therapist">Therapist</SelectItem>
+                            <SelectItem value="all">All Categories</SelectItem>
+                            <SelectItem value="Hair">Hair</SelectItem>
+                            <SelectItem value="Facial">Facial</SelectItem>
+                            <SelectItem value="Nails">Nails</SelectItem>
+                            <SelectItem value="Massage">Massage</SelectItem>
+                            <SelectItem value="Wellness">Wellness</SelectItem>
+                            <SelectItem value="Beauty">Beauty</SelectItem>
                           </SelectContent>
                         </Select>
                         <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -1156,9 +1030,9 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                               <TableHead>Staff ID</TableHead>
                               <TableHead>Name</TableHead>
                               <TableHead>Email</TableHead>
-                              <TableHead>Role</TableHead>
+                              <TableHead>Category</TableHead>
                               <TableHead>Status</TableHead>
-                              <TableHead>Appointments</TableHead>
+                              <TableHead>Completed Appts</TableHead>
                               <TableHead>Rating</TableHead>
                               <TableHead>Actions</TableHead>
                             </TableRow>
@@ -1183,7 +1057,7 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                                 <TableCell>{staff.email}</TableCell>
                                 <TableCell>
                                   <Badge variant="outline" className="border-purple-200 text-purple-700">
-                                    {staff.role}
+                                    {staff.category || 'N/A'}
                                   </Badge>
                                 </TableCell>
                                 <TableCell>
@@ -1273,14 +1147,18 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                             </div>
                             <div className="grid grid-cols-2 gap-2 text-sm mb-3">
                               <div>
-                                <span className="text-gray-500 block">Role</span>
-                                <span className="font-medium">{staff.role}</span>
+                                <span className="text-gray-500 block">Category</span>
+                                <span className="font-medium">{staff.category || 'N/A'}</span>
                               </div>
                               <div>
                                 <span className="text-gray-500 block">Rating</span>
                                 <span className="font-medium flex items-center gap-1">
                                   <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" /> {staff.rating.toFixed(1)}
                                 </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500 block">Completed</span>
+                                <span className="font-medium">{staff.appointments} Appts</span>
                               </div>
                               <div className="col-span-2">
                                 <span className="text-gray-500 block">Email</span>
@@ -1336,14 +1214,6 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
 
             {activeSection === 'appointments' && (
               <>
-                {/* Appointment Management Header */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Appointment Management</h1>
-                    <p className="text-gray-600 mt-2">Manage all salon appointments and bookings</p>
-                  </div>
-                </div>
-
                 {/* Appointment Stats */}
                 <div className="grid md:grid-cols-4 gap-6">
                   <Card className="border-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl shadow-xl text-white">
@@ -1886,14 +1756,6 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
 
             {activeSection === 'reports' && (
               <>
-                {/* Reports Header */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Reports & Analytics</h1>
-                    <p className="text-gray-600 mt-2">Generate comprehensive business reports and analytics</p>
-                  </div>
-                </div>
-
                 {/* Report Generation */}
                 <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
                   <CardHeader>
@@ -2192,13 +2054,21 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="edit-name">Full Name *</Label>
+                    <Label htmlFor="edit-name" className="flex items-center gap-2">
+                      Full Name
+                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-amber-200 text-amber-600">Locked</Badge>
+                    </Label>
                     <Input 
                       id="edit-name" 
                       placeholder="Enter full name" 
                       value={staffForm.name}
-                      onChange={(e) => setStaffForm(prev => ({ ...prev, name: e.target.value }))}
+                      disabled
+                      title="You are not allowed to edit this field"
+                      className="bg-gray-50 text-gray-400 cursor-not-allowed"
                     />
+                    <p className="text-[10px] text-amber-600 mt-1">
+                      You are not allowed to edit this field. Personal details can only be managed by the user.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="edit-email">Email *</Label>
@@ -2211,13 +2081,18 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="edit-phone">Phone</Label>
+                    <Label htmlFor="edit-phone" className="flex items-center gap-2">
+                      Phone
+                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-amber-200 text-amber-600">Locked</Badge>
+                    </Label>
                     <Input 
                       id="edit-phone" 
                       type="tel" 
                       placeholder="Enter phone number" 
                       value={staffForm.phone}
-                      onChange={(e) => setStaffForm(prev => ({ ...prev, phone: e.target.value }))}
+                      disabled
+                      title="You are not allowed to edit this field"
+                      className="bg-gray-50 text-gray-400 cursor-not-allowed"
                     />
                   </div>
                   <div className="space-y-2">
@@ -2230,20 +2105,18 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="edit-role">Role *</Label>
-                    <Select value={staffForm.role} onValueChange={(value) => setStaffForm(prev => ({ ...prev, role: value }))}>
+                    <Label htmlFor="edit-category">Primary Service Category *</Label>
+                    <Select value={staffForm.category} onValueChange={(value) => setStaffForm(prev => ({ ...prev, category: value }))}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select role" />
+                        <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Senior Stylist">Senior Stylist</SelectItem>
-                        <SelectItem value="Hair Stylist">Hair Stylist</SelectItem>
-                        <SelectItem value="Hair Colorist">Hair Colorist</SelectItem>
-                        <SelectItem value="Nail Technician">Nail Technician</SelectItem>
-                        <SelectItem value="Facial Specialist">Facial Specialist</SelectItem>
-                        <SelectItem value="Massage Therapist">Massage Therapist</SelectItem>
-                        <SelectItem value="Receptionist">Receptionist</SelectItem>
-                        <SelectItem value="Cleaner">Cleaner</SelectItem>
+                        <SelectItem value="Hair">Hair</SelectItem>
+                        <SelectItem value="Facial">Facial</SelectItem>
+                        <SelectItem value="Nails">Nails</SelectItem>
+                        <SelectItem value="Massage">Massage</SelectItem>
+                        <SelectItem value="Wellness">Wellness</SelectItem>
+                        <SelectItem value="Beauty">Beauty</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -2264,8 +2137,19 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                   }}>
                     Cancel
                   </Button>
-                  <Button onClick={handleEditStaff} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
-                    Update Staff Member
+                  <Button 
+                    onClick={handleEditStaff} 
+                    disabled={isLoading}
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 min-w-[140px]"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      'Update Staff Member'
+                    )}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -2316,21 +2200,32 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                       <h4 className="font-semibold text-gray-900">Performance Metrics</h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="bg-purple-50 p-3 rounded-xl text-center">
-                          <div className="text-2xl font-bold text-purple-600">{selectedStaff.totalClients}</div>
-                          <div className="text-xs text-purple-600">Total Clients</div>
+                          <div className="text-2xl font-bold text-purple-600">{selectedStaff.appointments}</div>
+                          <div className="text-xs text-purple-600">Total Completed</div>
                         </div>
                         <div className="bg-pink-50 p-3 rounded-xl text-center">
                           <div className="text-2xl font-bold text-pink-600">{selectedStaff.rating.toFixed(1)}</div>
                           <div className="text-xs text-pink-600">Avg Rating</div>
                         </div>
-                        <div className="bg-blue-50 p-3 rounded-xl text-center">
-                          <div className="text-2xl font-bold text-blue-600">{selectedStaff.appointments}</div>
-                          <div className="text-xs text-blue-600">This Week</div>
-                        </div>
-                        <div className="bg-green-50 p-3 rounded-xl text-center">
-                          <div className="text-2xl font-bold text-green-600">{selectedStaff.hoursWorked}</div>
-                          <div className="text-xs text-green-600">Hours Worked</div>
-                        </div>
+                      </div>
+                    </div>
+
+                    {/* Assigned Services */}
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-gray-900">Assigned Services</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedStaff.assigned_service_ids?.length > 0 ? (
+                          selectedStaff.assigned_service_ids.map((id: number) => {
+                            const service = services.find(s => s.id === id);
+                            return (
+                              <Badge key={id} variant="outline" className="border-purple-200 text-purple-600">
+                                {service ? service.name : `Service #${id}`}
+                              </Badge>
+                            );
+                          })
+                        ) : (
+                          <span className="text-sm text-gray-500 italic">No services assigned</span>
+                        )}
                       </div>
                     </div>
 
@@ -2487,26 +2382,47 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                     <div className="space-y-3">
                       <Label>Available Staff Members</Label>
                       <div className="space-y-2">
-                        {staffMembers.filter(s => s.status === 'active').map(staff => (
-                          <Button
-                            key={staff.id}
-                            variant="outline"
-                            className="w-full justify-start"
-                            onClick={() => assignStaffToAppointment(selectedAppointment.id, staff.id)}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                                <span className="text-white text-sm font-bold">
-                                  {staff.name.split(' ').map(n => n[0]).join('')}
-                                </span>
+                        {(() => {
+                          const eligibleStaff = staffMembers.filter(s => 
+                            s.status === 'active' && 
+                            (!selectedAppointment.service.id || (s.assigned_service_ids && s.assigned_service_ids.includes(selectedAppointment.service.id)))
+                          );
+                          
+                          if (eligibleStaff.length === 0) {
+                            return (
+                              <div className="p-4 border border-dashed border-amber-200 bg-amber-50 rounded-lg text-center">
+                                <AlertCircle className="w-5 h-5 text-amber-500 mx-auto mb-2" />
+                                <p className="text-sm text-amber-700 font-medium">No specialized staff assigned to this service</p>
+                                <p className="text-xs text-amber-600 mt-1">Please assign a staff member to this service in Staff Management first.</p>
                               </div>
-                              <div className="text-left">
-                                <div className="font-medium">{staff.name}</div>
-                                <div className="text-sm text-gray-500">{staff.role}</div>
+                            );
+                          }
+
+                          return eligibleStaff.map(staff => (
+                            <Button
+                              key={staff.id}
+                              variant="outline"
+                              className="w-full justify-start h-auto py-3 border-purple-100 hover:border-purple-300 hover:bg-purple-50 transition-all"
+                              onClick={() => assignStaffToAppointment(selectedAppointment.id, staff.id)}
+                            >
+                              <div className="flex items-center gap-3 w-full">
+                                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
+                                  <span className="text-white text-sm font-bold">
+                                    {staff.name.split(' ').map((n: string) => n[0]).join('')}
+                                  </span>
+                                </div>
+                                <div className="text-left flex-1 min-w-0">
+                                  <div className="font-semibold text-gray-900 truncate">{staff.name}</div>
+                                  <div className="text-xs text-gray-500 truncate">{staff.role}</div>
+                                </div>
+                                <div className="flex items-center gap-1 text-amber-500">
+                                  <Star className="w-3 h-3 fill-current" />
+                                  <span className="text-xs font-bold">{staff.rating.toFixed(1)}</span>
+                                </div>
                               </div>
-                            </div>
-                          </Button>
-                        ))}
+                            </Button>
+                          ));
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -2573,7 +2489,6 @@ export function AdminDashboard({ setCurrentView, setUserRole }: AdminDashboardPr
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </div>
         </div>
       </div>
     </div>

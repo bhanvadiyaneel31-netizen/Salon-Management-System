@@ -1,5 +1,6 @@
 // API configuration
 const API_BASE_URL = 'http://localhost:5001/api';
+export const API_ORIGIN = API_BASE_URL.replace('/api', '');
 
 // Types for API responses
 export interface User {
@@ -7,7 +8,12 @@ export interface User {
   name: string;
   email: string;
   phone?: string;
+  address?: string;
+  profile_image?: string;
   role: 'customer' | 'staff' | 'admin';
+  loyalty_points?: number;
+  rating?: number;
+  review_count?: number;
   created_at: string;
 }
 
@@ -18,6 +24,8 @@ export interface Service {
   duration: number; // in minutes
   price: number;
   category: string;
+  is_active?: boolean;
+  image_url?: string;
 }
 
 export interface Staff {
@@ -72,6 +80,7 @@ export interface Notification {
   message: string;
   type: string;
   is_read: boolean;
+  appointment_id?: number;
   created_at: string;
 }
 
@@ -82,13 +91,18 @@ async function apiRequest<T>(
 ): Promise<T> {
   const token = localStorage.getItem('auth_token');
   
+  const headers: HeadersInit = {
+    ...(token && { Authorization: `Bearer ${token}` }),
+    ...options.headers,
+  };
+
+  if (!(options.body instanceof FormData)) {
+    (headers as any)['Content-Type'] = 'application/json';
+  }
+
   const config: RequestInit = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    },
     ...options,
+    headers,
   };
 
   try {
@@ -158,30 +172,70 @@ export const authAPI = {
 
   isAuthenticated(): boolean {
     return !!localStorage.getItem('auth_token');
+  },
+
+  async updateProfile(profileData: Partial<User>): Promise<User> {
+    return usersAPI.update(null, profileData);
+  },
+
+  async getProfile(): Promise<User & { total_appointments: number }> {
+    // Fetches live data from DB — includes loyalty_points, total_appointments, created_at
+    return apiRequest<User & { total_appointments: number }>('/users/me');
+  }
+};
+
+// Users API
+export const usersAPI = {
+  async update(id: number | null, data: any): Promise<User> {
+    const response = await apiRequest<User>('/users/update', {
+      method: 'PUT',
+      body: JSON.stringify({ id, ...data }),
+    });
+    
+    // If updating self, update stored user info
+    const currentUser = authAPI.getCurrentUser();
+    if (!id || (currentUser && id === currentUser.id)) {
+      localStorage.setItem('user', JSON.stringify(response));
+    }
+    
+    return response;
   }
 };
 
 // Services API
 export const servicesAPI = {
-  async getAll(): Promise<Service[]> {
-    return apiRequest<Service[]>('/services');
+  async getAll(params?: { bookable?: boolean; includeInactive?: boolean }): Promise<Service[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.bookable) queryParams.append('bookable', 'true');
+    if (params?.includeInactive) queryParams.append('include_inactive', 'true');
+    
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return apiRequest<Service[]>(`/services${query}`);
+  },
+
+  async getCategories(): Promise<any[]> {
+    return apiRequest<any[]>('/services/categories');
   },
 
   async getById(id: number): Promise<Service> {
     return apiRequest<Service>(`/services/${id}`);
   },
 
-  async create(service: Omit<Service, 'id'>): Promise<Service> {
+  async getDetails(id: number): Promise<any> {
+    return apiRequest<any>(`/services/${id}/details`);
+  },
+
+  async create(data: FormData | any): Promise<Service> {
     return apiRequest<Service>('/services', {
       method: 'POST',
-      body: JSON.stringify(service),
+      body: data instanceof FormData ? data : JSON.stringify(data),
     });
   },
 
-  async update(id: number, service: Partial<Service>): Promise<Service> {
+  async update(id: number, data: FormData | any): Promise<Service> {
     return apiRequest<Service>(`/services/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(service),
+      body: data instanceof FormData ? data : JSON.stringify(data),
     });
   },
 
@@ -248,6 +302,14 @@ export const staffAPI = {
     service_ids: number[];
   }>> {
     return apiRequest<Array<any>>('/staff-assignments');
+  },
+
+  async getRating(id: number): Promise<{ average: number; count: number }> {
+    return apiRequest<{ average: number; count: number }>(`/staff/${id}/rating`);
+  },
+
+  async updateProfile(data: any): Promise<User> {
+    return authAPI.updateProfile(data);
   }
 };
 
@@ -282,7 +344,7 @@ export const appointmentsAPI = {
 
   async update(id: number, updates: Partial<Appointment>): Promise<Appointment> {
     return apiRequest<Appointment>(`/appointments/${id}`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: JSON.stringify(updates),
     });
   },
@@ -302,13 +364,12 @@ export const appointmentsAPI = {
     await apiRequest(`/appointments/${id}`, { method: 'DELETE' });
   },
 
-  async getAvailableSlots(date: string, serviceId: number, staffId?: number): Promise<string[]> {
+  async getAvailableSlots(date: string, staffId: number): Promise<string[]> {
     const params = new URLSearchParams({
       date,
-      service_id: serviceId.toString(),
-      ...(staffId && { staff_id: staffId.toString() })
+      staff_id: staffId.toString()
     });
-    return apiRequest<string[]>(`/appointments/available-slots?${params}`);
+    return apiRequest<string[]>(`/appointments/slots?${params}`);
   },
 
   // Admin-specific appointment management
@@ -354,7 +415,7 @@ export const appointmentsAPI = {
     staff_id?: number;
     notes?: string;
   }): Promise<void> {
-    await apiRequest(`/appointments/${id}/reschedule`, {
+    await apiRequest(`/appointments/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
     });
@@ -371,6 +432,13 @@ export const appointmentsAPI = {
     await apiRequest(`/appointments/${id}/review`, {
       method: 'POST',
       body: JSON.stringify({ rating, review }),
+    });
+  },
+
+  async reschedule(id: number, date: string, time: string): Promise<void> {
+    await apiRequest(`/appointments/${id}/reschedule`, {
+      method: 'PATCH',
+      body: JSON.stringify({ appointment_date: date, appointment_time: time }),
     });
   }
 };
@@ -447,7 +515,7 @@ export const notificationsAPI = {
   },
   
   async markAsRead(id: number): Promise<void> {
-    await apiRequest(`/notifications/${id}/read`, { method: 'PATCH' });
+    await apiRequest(`/notifications/${id}/read`, { method: 'PUT' });
   },
   
   async markAllRead(): Promise<void> {
@@ -541,6 +609,20 @@ export const mockAPI = {
 
     isAuthenticated(): boolean {
       return !!localStorage.getItem('auth_token');
+    }
+  },
+
+  users: {
+    async update(id: number | null, data: any): Promise<User> {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const user = id ? { id, name: 'Mock User', email: 'mock@example.com', role: 'staff' as const, created_at: '' } : mockAPI.auth.getCurrentUser();
+      if (!user) throw new Error('Not authenticated');
+      
+      const updatedUser = { ...user, ...data };
+      if (!id || id === user.id) {
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+      return updatedUser;
     }
   },
 
@@ -740,5 +822,6 @@ export const api = USE_REAL_API ? {
   staff: staffAPI,
   appointments: appointmentsAPI,
   analytics: analyticsAPI,
-  notifications: notificationsAPI
+  notifications: notificationsAPI,
+  users: usersAPI
 } : mockAPI;

@@ -43,7 +43,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { toast } from 'sonner';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
-import { servicesAPI, analyticsAPI } from '../services/api';
+import { servicesAPI, analyticsAPI, API_ORIGIN } from '../services/api';
 
 interface ServiceCategory {
   id: number;
@@ -95,8 +95,12 @@ interface ServiceStats {
   }>;
 }
 
-export function ManageServicePanel() {
-  const [activeTab, setActiveTab] = useState('services');
+interface ManageServicePanelProps {
+  defaultTab?: string;
+}
+
+export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
+  const [activeTab, setActiveTab] = useState(defaultTab || 'services');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -114,8 +118,10 @@ export function ManageServicePanel() {
   // Dialog states
   const [isServiceDialogOpen, setIsServiceDialogOpen] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [isEditingService, setIsEditingService] = useState<Service | null>(null);
   const [isEditingCategory, setIsEditingCategory] = useState<ServiceCategory | null>(null);
+  const [serviceDetails, setServiceDetails] = useState<any>(null);
   
   // Form states
   const [serviceForm, setServiceForm] = useState({
@@ -139,33 +145,43 @@ export function ManageServicePanel() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
 
-  // Mock data - In real implementation, this would come from API calls
+  const getFullImageUrl = (path?: string) => {
+    if (!path) return '';
+    if (path.startsWith('data:') || path.startsWith('http')) return path;
+    return `${API_ORIGIN}${path}`;
+  };
+
+  // Data fetched from API
   useEffect(() => {
-    loadServices();
+    loadInitialData();
   }, []);
 
-  const mockCategories: ServiceCategory[] = [
-    { id: 1, name: 'Hair', description: 'All hair-related treatments', icon: 'scissors', color: '#8B5CF6', service_count: 4 },
-    { id: 2, name: 'Facial', description: 'Skin care and facial services', icon: 'star', color: '#EC4899', service_count: 2 },
-    { id: 3, name: 'Nails', description: 'Manicure and pedicure services', icon: 'palette', color: '#10B981', service_count: 3 },
-    { id: 4, name: 'Massage', description: 'Relaxation and therapeutic massages', icon: 'activity', color: '#F59E0B', service_count: 2 },
-    { id: 5, name: 'Wellness', description: 'Holistic wellness treatments', icon: 'activity', color: '#10B981', service_count: 0 },
-    { id: 6, name: 'Beauty', description: 'General beauty services', icon: 'star', color: '#EC4899', service_count: 0 }
-  ];
-
-  const loadServices = async () => {
-    setIsLoading(true);
+  const loadInitialData = async () => {
     try {
-      const data = await servicesAPI.getAll();
+      const fetchedCategories = await servicesAPI.getCategories();
+      setCategories(fetchedCategories);
+      await loadServices(fetchedCategories);
+    } catch (err) {
+      toast.error('Failed to load categories');
+    }
+  };
+
+  const loadServices = async (currentCategories?: ServiceCategory[]) => {
+    setIsLoading(true);
+    const cats = currentCategories || categories;
+    const defaultCategory: ServiceCategory = { id: 0, name: 'General', description: 'General service', icon: 'scissors', color: '#9CA3AF', service_count: 0 };
+    
+    try {
+      const data = await servicesAPI.getAll({ includeInactive: true });
       const mappedServices: Service[] = data.map((s: any) => ({
         id: s.id,
         name: s.name,
         description: s.description || '',
         duration: s.duration,
         price: s.price,
-        image_url: '/api/placeholder/300/200', // Mock image
-        // Match string category from backend to pseudo category object for UI
-        category: mockCategories.find(c => c.name === s.category) || mockCategories[0],
+        image_url: s.image_url || '',
+        // Match string category from backend to the pseudo category object for UI
+        category: cats.find(c => c.name === s.category) || defaultCategory,
         is_active: Boolean(s.is_active),
         is_available: Boolean(s.is_active), // Alias for UI
         booking_count: s.booking_count || 0,
@@ -174,7 +190,6 @@ export function ManageServicePanel() {
         updated_at: s.updated_at || new Date().toISOString()
       }));
 
-      setCategories(mockCategories);
       setServices(mappedServices);
 
       // Load true stats if possible, otherwise use a placeholder wrapper
@@ -188,11 +203,11 @@ export function ManageServicePanel() {
           },
           popular_services: [...mappedServices].sort((a, b) => b.booking_count - a.booking_count).slice(0, 5),
           revenue_services: perf.map((p: any) => ({ id: p.service_id, name: p.service_name, total_revenue: p.total_revenue })).slice(0, 5),
-          category_stats: mockCategories.map(c => ({
+          category_stats: cats.map(c => ({
             name: c.name,
             color: c.color,
-            service_count: mappedServices.filter(s => s.category.name === c.name).length,
-            total_bookings: mappedServices.filter(s => s.category.name === c.name).reduce((sum, s) => sum + s.booking_count, 0)
+            service_count: mappedServices.filter(s => s.category?.name === c.name).length,
+            total_bookings: mappedServices.filter(s => s.category?.name === c.name).reduce((sum, s) => sum + s.booking_count, 0)
           }))
         });
       } catch (e) {
@@ -268,13 +283,17 @@ export function ManageServicePanel() {
         return;
       }
 
-      await servicesAPI.create({
-        name: serviceForm.name,
-        description: serviceForm.description,
-        duration: serviceForm.duration,
-        price: serviceForm.price,
-        category: category.name as any
-      });
+      const formData = new FormData();
+      formData.append('name', serviceForm.name);
+      formData.append('description', serviceForm.description);
+      formData.append('duration', serviceForm.duration.toString());
+      formData.append('price', serviceForm.price.toString());
+      formData.append('category', category.name);
+      if (selectedImage) {
+        formData.append('image', selectedImage);
+      }
+
+      await servicesAPI.create(formData);
 
       await loadServices();
       resetServiceForm();
@@ -301,13 +320,18 @@ export function ManageServicePanel() {
         return;
       }
 
-      await servicesAPI.update(isEditingService.id, {
-        name: serviceForm.name,
-        description: serviceForm.description,
-        duration: serviceForm.duration,
-        price: serviceForm.price,
-        category: category.name as any
-      });
+      const formData = new FormData();
+      formData.append('name', serviceForm.name);
+      formData.append('description', serviceForm.description);
+      formData.append('duration', serviceForm.duration.toString());
+      formData.append('price', serviceForm.price.toString());
+      formData.append('category', category.name);
+      formData.append('is_active', serviceForm.is_active ? 'true' : 'false');
+      if (selectedImage) {
+        formData.append('image', selectedImage);
+      }
+
+      await servicesAPI.update(isEditingService.id, formData);
       
       await loadServices();
       resetServiceForm();
@@ -323,12 +347,24 @@ export function ManageServicePanel() {
 
   const handleDeleteService = async (serviceId: number) => {
     const service = services.find(s => s.id === serviceId);
+    if (!service) return;
+
     try {
-      await servicesAPI.delete(serviceId);
+      const response: any = await servicesAPI.delete(serviceId);
+      
+      // Update local state immediately for better UX
+      setServices(prev => prev.filter(s => s.id !== serviceId));
+      
+      // Re-fetch to ensure sync with backend (e.g. if it was only deactivated)
       await loadServices();
-      toast.success(`${service?.name} has been deleted/deactivated`);
+      
+      const message = response?.message || `${service.name} has been processed successfully`;
+      toast.success(message);
     } catch (error: any) {
+      console.error('Delete error:', error);
       toast.error(error?.message || 'Failed to delete service');
+      // Re-fetch on error to ensure UI matches reality
+      await loadServices();
     }
   };
 
@@ -361,55 +397,33 @@ export function ManageServicePanel() {
       is_active: service.is_active,
       is_available: service.is_available
     });
-    setImagePreview(service.image_url || '');
+    setImagePreview(getFullImageUrl(service.image_url));
     setIsServiceDialogOpen(true);
   };
 
-  // Category management functions
-  const handleAddCategory = async () => {
-    if (!categoryForm.name) {
-      toast.error('Category name is required');
-      return;
-    }
-
+  const openViewDetails = async (serviceId: number) => {
+    setIsLoading(true);
     try {
-      const newCategory: ServiceCategory = {
-        id: Math.max(...categories.map(c => c.id)) + 1,
-        ...categoryForm,
-        service_count: 0
-      };
-
-      setCategories(prev => [...prev, newCategory]);
-      resetCategoryForm();
-      setIsCategoryDialogOpen(false);
-      toast.success(`${newCategory.name} category has been created!`);
+      const details = await servicesAPI.getDetails(serviceId);
+      setServiceDetails(details);
+      setIsDetailsDialogOpen(true);
     } catch (error) {
-      toast.error('Failed to create category');
+      toast.error('Failed to load service details');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleEditCategory = async () => {
-    if (!isEditingCategory || !categoryForm.name) {
-      toast.error('Category name is required');
-      return;
-    }
+  // Category management functions (Read-only for now due to database CHECK constraints)
+  const handleAddCategory = async () => {
+    toast.info('Category management is restricted to predefined database categories for stability.');
+    setIsCategoryDialogOpen(false);
+  };
 
-    try {
-      setCategories(prev => 
-        prev.map(category => 
-          category.id === isEditingCategory.id 
-            ? { ...category, ...categoryForm }
-            : category
-        )
-      );
-      
-      resetCategoryForm();
-      setIsEditingCategory(null);
-      setIsCategoryDialogOpen(false);
-      toast.success('Category updated successfully!');
-    } catch (error) {
-      toast.error('Failed to update category');
-    }
+  const handleEditCategory = async () => {
+    toast.info('Category management is restricted to predefined database categories for stability.');
+    setIsCategoryDialogOpen(false);
+    setIsEditingCategory(null);
   };
 
   const openEditCategory = (category: ServiceCategory) => {
@@ -473,7 +487,7 @@ export function ManageServicePanel() {
         <div className="h-48 bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center">
           {service.image_url ? (
             <ImageWithFallback
-              src={service.image_url}
+              src={getFullImageUrl(service.image_url)}
               alt={service.name}
               className="w-full h-full object-cover"
             />
@@ -547,6 +561,15 @@ export function ManageServicePanel() {
             variant="outline"
             size="sm"
             className="flex-1 border-purple-200 text-purple-600 hover:bg-purple-50"
+            onClick={() => openViewDetails(service.id)}
+          >
+            <Eye className="w-4 h-4 mr-2" />
+            Details
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 border-purple-200 text-purple-600 hover:bg-purple-50"
             onClick={() => openEditService(service)}
           >
             <Edit className="w-4 h-4 mr-2" />
@@ -587,13 +610,7 @@ export function ManageServicePanel() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Service Management</h1>
-          <p className="text-gray-600 mt-2">Manage your salon services, categories, and analytics</p>
-        </div>
-      </div>
+
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -913,7 +930,7 @@ export function ManageServicePanel() {
                             <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center">
                               {service.image_url ? (
                                 <ImageWithFallback
-                                  src={service.image_url}
+                                  src={getFullImageUrl(service.image_url)}
                                   alt={service.name}
                                   className="w-full h-full object-cover rounded-lg"
                                 />
@@ -967,6 +984,14 @@ export function ManageServicePanel() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-purple-600 hover:bg-purple-50"
+                              onClick={() => openViewDetails(service.id)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1364,6 +1389,107 @@ export function ManageServicePanel() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Service Details Dialog */}
+      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Service Details: {serviceDetails?.service?.name || 'Loading...'}</DialogTitle>
+          </DialogHeader>
+          
+          {serviceDetails && (
+            <div className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-bold text-gray-900 mb-2">Information</h4>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="text-gray-500">Category:</span> {serviceDetails.service.category}</p>
+                    <p><span className="text-gray-500">Price:</span> ${serviceDetails.service.price}</p>
+                    <p><span className="text-gray-500">Duration:</span> {serviceDetails.service.duration} minutes</p>
+                    <p><span className="text-gray-500">Description:</span> {serviceDetails.service.description || 'No description'}</p>
+                  </div>
+                </div>
+                <div className="h-40 bg-gray-100 rounded-xl overflow-hidden">
+                  {serviceDetails.service.image_url ? (
+                    <img src={getFullImageUrl(serviceDetails.service.image_url)} className="w-full h-full object-cover" alt="" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                      <ImageIcon className="w-12 h-12" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t pt-6">
+                <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-purple-600" />
+                  Assigned Staff ({serviceDetails.assignedStaff.length})
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {serviceDetails.assignedStaff.length > 0 ? (
+                    serviceDetails.assignedStaff.map((staff: any) => (
+                      <div key={staff.id} className="p-3 bg-purple-50 rounded-xl text-center">
+                        <p className="font-medium text-purple-900">{staff.name}</p>
+                        <p className="text-xs text-purple-600">{staff.specialty}</p>
+                        <p className="text-xs text-yellow-600 mt-1">⭐ {staff.rating}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 italic col-span-full">No staff members assigned yet.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t pt-6">
+                <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-purple-600" />
+                  Recent & Upcoming Bookings
+                </h4>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Time</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {serviceDetails.bookings.length > 0 ? (
+                      serviceDetails.bookings.map((booking: any) => (
+                        <TableRow key={booking.id}>
+                          <TableCell className="font-medium">{booking.customer_name}</TableCell>
+                          <TableCell>{booking.appointment_date}</TableCell>
+                          <TableCell>{booking.appointment_time}</TableCell>
+                          <TableCell>
+                            <Badge className={
+                              booking.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                              booking.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                              'bg-yellow-100 text-yellow-700'
+                            }>
+                              {booking.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-4 text-gray-500 italic">
+                          No bookings found for this service.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button onClick={() => setIsDetailsDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

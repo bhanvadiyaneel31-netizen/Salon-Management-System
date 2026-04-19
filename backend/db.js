@@ -70,16 +70,23 @@ async function initDb() {
       price DECIMAL(10, 2) NOT NULL,
       category VARCHAR(50) NOT NULL,
       is_active BOOLEAN DEFAULT 1,
+      image_url VARCHAR(255),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       CHECK (duration > 0),
       CHECK (price >= 0),
       CHECK (category IN ('Hair', 'Facial', 'Nails', 'Massage', 'Wellness', 'Beauty'))
     )`);
 
+    // Ensure image_url column exists for existing databases
+    db.run(`ALTER TABLE services ADD COLUMN image_url VARCHAR(255)`, (err) => {
+      // Ignore error if column already exists
+    });
+
     // 3. staff_profiles
     db.run(`CREATE TABLE IF NOT EXISTS staff_profiles (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER UNIQUE NOT NULL,
+      category VARCHAR(50),
       specialty VARCHAR(100),
       rating DECIMAL(3, 2) DEFAULT 0.00,
       is_available BOOLEAN DEFAULT 1,
@@ -87,6 +94,11 @@ async function initDb() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       CHECK (rating >= 0 AND rating <= 5)
     )`);
+
+    // Ensure category column exists for existing databases
+    db.run(`ALTER TABLE staff_profiles ADD COLUMN category VARCHAR(50)`, (err) => {
+      // Ignore error if column already exists
+    });
 
     // 4. staff_service_assignments
     db.run(`CREATE TABLE IF NOT EXISTS staff_service_assignments (
@@ -117,7 +129,7 @@ async function initDb() {
       FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE SET NULL,
       FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE RESTRICT,
-      CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled')),
+      CHECK (status IN ('pending', 'confirmed', 'in-progress', 'completed', 'cancelled')),
       CHECK (price >= 0),
       CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5))
     )`);
@@ -176,9 +188,9 @@ async function initDb() {
       );
     }
 
-    // Insert Staff Profiles (assuming Emma=4, Lisa=5 from our inserts since auto-increment)
-    await db.runAsync("INSERT INTO staff_profiles (user_id, specialty, rating, is_available) VALUES (4, 'Hair Styling', 4.9, 1)");
-    await db.runAsync("INSERT INTO staff_profiles (user_id, specialty, rating, is_available) VALUES (5, 'Facial Treatments', 4.8, 1)");
+    // Insert Staff Profiles — rating starts at 0.00 and is calculated from real reviews only
+    await db.runAsync("INSERT INTO staff_profiles (user_id, specialty, rating, is_available) VALUES (4, 'Hair Styling', 0.00, 1)");
+    await db.runAsync("INSERT INTO staff_profiles (user_id, specialty, rating, is_available) VALUES (5, 'Facial Treatments', 0.00, 1)");
 
     // Insert Staff Service assignments
     await db.runAsync("INSERT INTO staff_service_assignments (staff_id, service_id) VALUES (4, 1)");
