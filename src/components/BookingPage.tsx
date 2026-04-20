@@ -84,11 +84,44 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
       try {
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         console.log(`[FRONTEND] Loading slots for staff: ${selectedStaff}, service: ${selectedService}, date: ${dateStr}`);
-        const data = await api.appointments.getAvailableSlots(dateStr, parseInt(selectedStaff));
-        setAvailableTimeSlots(data);
-        if (selectedTime && !data.includes(selectedTime)) {
+        const data = await api.appointments.getAvailableSlots(dateStr, parseInt(selectedStaff), parseInt(selectedService));
+        
+        // Additional frontend filtering for today to ensure real-time accuracy
+        const isToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+        let filteredSlots = data;
+        
+        if (isToday) {
+          const now = new Date();
+          const currentMinutes = now.getHours() * 60 + now.getMinutes();
+          filteredSlots = data.filter(slot => {
+            const [h, m] = slot.split(':').map(Number);
+            const slotMinutes = h * 60 + m;
+            return slotMinutes > currentMinutes + 15; // 15 min buffer
+          });
+        }
+        
+        setAvailableTimeSlots(filteredSlots);
+        
+        // Add a timer to re-filter slots every minute if it's today
+        let slotTimer: any;
+        if (isToday) {
+          slotTimer = setInterval(() => {
+            const now = new Date();
+            const curMins = now.getHours() * 60 + now.getMinutes();
+            setAvailableTimeSlots(prev => prev.filter(slot => {
+              const [h, m] = slot.split(':').map(Number);
+              return (h * 60 + m) > curMins + 15;
+            }));
+          }, 60000);
+        }
+        
+        if (selectedTime && !filteredSlots.includes(selectedTime)) {
            setSelectedTime('');
         }
+
+        return () => {
+          if (slotTimer) clearInterval(slotTimer);
+        };
       } catch (error: any) {
         // Only show error if parameters were actually valid
         console.error('Slot loading error:', error);
@@ -98,7 +131,10 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
         setLoadingSlots(false);
       }
     };
-    loadSlots();
+    const cleanup = loadSlots();
+    return () => {
+      cleanup.then(fn => fn && typeof fn === 'function' && fn());
+    };
   }, [selectedDate, selectedService, selectedStaff, currentStep]);
 
   const handleNext = async () => {
@@ -111,6 +147,22 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
         setCurrentView('login');
         return;
       }
+
+      // Final validation of time slot buffer for same-day bookings
+      const isToday = format(selectedDate!, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+      if (isToday && selectedTime) {
+        const [h, m] = selectedTime.split(':').map(Number);
+        const slotMins = h * 60 + m;
+        const now = new Date();
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+        if (slotMins <= nowMins + 15) {
+          toast.error('The selected time slot is no longer available. Please choose a later time.');
+          setSelectedTime('');
+          setCurrentStep(3); // Go back to slot selection
+          return;
+        }
+      }
+
       const selectedServiceData = services.find(s => s.id.toString() === selectedService);
       if (!selectedServiceData || !selectedDate) {
         toast.error('Please complete all booking steps');
@@ -289,13 +341,17 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
                 <div className="flex flex-col">
                   <h3 className="font-bold text-base sm:text-lg mb-4">Select Date</h3>
                   <div className="flex justify-center lg:justify-start">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      className="rounded-2xl border border-purple-200"
-                      disabled={(date) => date < new Date()}
-                    />
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={setSelectedDate}
+                        className="rounded-2xl border border-purple-200"
+                        disabled={(date) => {
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          return date < today;
+                        }}
+                      />
                   </div>
                 </div>
                 <div>

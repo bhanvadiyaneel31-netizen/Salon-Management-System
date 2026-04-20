@@ -37,6 +37,8 @@ router.put('/update', verifyToken, async (req, res) => {
   const updaterRole = req.user.role;
   const targetUserId = id || updaterId;
 
+  console.log(`PUT /api/users/update - Updater: ${updaterId} (${updaterRole}), Target: ${targetUserId}, Request:`, req.body);
+
   try {
     // 1. Fetch current target user data
     const targetUser = await db.getAsync("SELECT * FROM users WHERE id = ?", [targetUserId]);
@@ -123,6 +125,7 @@ router.put('/update', verifyToken, async (req, res) => {
     `, [targetUserId]);
 
     // Format response (reusing logic from auth.js if needed, or simple version here)
+    console.log(`User update successful for ${targetUserId}. Result:`, updatedUser);
     res.status(200).json({
       id: updatedUser.id,
       name: updatedUser.name,

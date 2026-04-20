@@ -54,7 +54,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { toast } from "sonner";
 import { exportToCSV } from "./ui/utils";
-import { api, appointmentsAPI, analyticsAPI, staffAPI, servicesAPI } from "../services/api";
+import { appointmentsAPI, analyticsAPI, staffAPI, servicesAPI, reportsAPI, api } from "../services/api";
 import { ManageServicePanel } from "./ManageServicePanel";
 import { format, addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
@@ -97,6 +97,8 @@ export function AdminDashboard({
   const [isEditAppointmentOpen, setIsEditAppointmentOpen] = useState(false);
   const [isAssignStaffOpen, setIsAssignStaffOpen] = useState(false);
   const [appointmentHistoryTab, setAppointmentHistoryTab] = useState('upcoming');
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
 
   // Reports State
   const [reportType, setReportType] = useState('daily');
@@ -184,6 +186,7 @@ export function AdminDashboard({
     { day: 'Sat', appointments: 0, revenue: 0 },
     { day: 'Sun', appointments: 0, revenue: 0 }
   ]);
+  const [monthlyRevenue, setMonthlyRevenue] = useState<any[]>([]);
   const [serviceDistribution, setServiceDistribution] = useState([
     { name: 'Hair Services', value: 0, color: '#8B5CF6' },
     { name: 'Facial Treatments', value: 0, color: '#EC4899' },
@@ -197,33 +200,54 @@ export function AdminDashboard({
     growthRate: 0
   });
   const [mostBookedServices, setMostBookedServices] = useState<any[]>([]);
+  const [reportResult, setReportResult] = useState<any>(null);
+  const [reportStartDate, setReportStartDate] = useState<string>('');
+  const [reportEndDate, setReportEndDate] = useState<string>('');
+
+  const loadAnalytics = async () => {
+    try {
+      const results = await Promise.allSettled([
+        analyticsAPI.getWeeklyData(),
+        analyticsAPI.getServiceDistribution(),
+        analyticsAPI.getDashboardStats(),
+        analyticsAPI.getServicePerformance(),
+        analyticsAPI.getMonthlyRevenue()
+      ]);
+
+      // Helper to extract value or default
+      const getValue = (index: number, defaultValue: any) => {
+        const res = results[index];
+        if (res.status === 'fulfilled') return res.value;
+        console.error(`Analytics endpoint ${index} failed:`, (res as PromiseRejectedResult).reason);
+        return defaultValue;
+      };
+
+      const weekly = getValue(0, []);
+      const distribution = getValue(1, []);
+      const stats = getValue(2, { todayAppointments: 0, todayRevenue: 0, activeStaff: 0, growthRate: 0 });
+      const servicePerf = getValue(3, []);
+      const monthly = getValue(4, []);
+
+      setDailyAppointments((weekly || []).map((d: any) => ({ day: d.day, appointments: d.appointments, revenue: d.revenue })));
+      setServiceDistribution(distribution);
+      setDashboardStats(stats);
+      setMonthlyRevenue(monthly);
+      
+      // Map backend service performance to match the UI chart format
+      const mappedServices = (servicePerf || []).map((s: any) => ({
+        id: s.service_id.toString(),
+        service: s.service_name,
+        bookings: s.total_bookings,
+        revenue: s.total_revenue
+      })).slice(0, 5); // top 5
+      setMostBookedServices(mappedServices);
+    } catch (err) {
+      console.error('Critical failure in loadAnalytics:', err);
+    }
+  };
 
   // Load analytics on mount
   useEffect(() => {
-    const loadAnalytics = async () => {
-      try {
-        const [weekly, distribution, stats, servicePerf] = await Promise.all([
-          analyticsAPI.getWeeklyData(),
-          analyticsAPI.getServiceDistribution(),
-          analyticsAPI.getDashboardStats(),
-          analyticsAPI.getServicePerformance()
-        ]);
-        setDailyAppointments(weekly.map(d => ({ day: d.day, appointments: d.appointments, revenue: d.revenue })));
-        setServiceDistribution(distribution);
-        setDashboardStats(stats);
-        
-        // Map backend service performance to match the UI chart format
-        const mappedServices = (servicePerf || []).map(s => ({
-          id: s.service_id.toString(),
-          service: s.service_name,
-          bookings: s.total_bookings,
-          revenue: s.total_revenue
-        })).slice(0, 5); // top 5
-        setMostBookedServices(mappedServices);
-      } catch (err) {
-        console.error('Failed to load analytics:', err);
-      }
-    };
     loadAnalytics();
     const interval = setInterval(loadAnalytics, 60000); // Poll every minute
     return () => clearInterval(interval);
@@ -331,28 +355,27 @@ export function AdminDashboard({
       return;
     }
     try {
+      // Admins can only set Name, Email, Password, and Category on creation
       await staffAPI.create({
         name: staffForm.name,
         email: staffForm.email,
-        phone: staffForm.phone,
         password: staffForm.password,
-        specialty: staffForm.specialty,
         category: staffForm.category,
-        is_available: staffForm.status === 'active',
-        rating: 0
+        status: staffForm.status || 'active'
       } as any);
       toast.success(`${staffForm.name} has been added to the team!`);
       resetForm();
       setIsAddStaffOpen(false);
       await loadStaff(); // re-fetch from DB
+      await loadAnalytics(); // refresh dashboard stats
     } catch (err: any) {
       toast.error(err?.message || 'Failed to add staff member');
     }
   };
 
   const handleEditStaff = async () => {
-    if (!editingStaff || !staffForm.name || !staffForm.email || !staffForm.category) {
-      toast.error('Please fill in all required fields');
+    if (!editingStaff || !staffForm.category) {
+      toast.error('Primary category is required');
       return;
     }
 
@@ -360,20 +383,18 @@ export function AdminDashboard({
 
     setIsLoading(true);
     try {
+      // Admins can ONLY update Primary Service Category and Status
       await staffAPI.update(editingStaff.id, {
-        name: staffForm.name,
-        email: staffForm.email,
-        phone: staffForm.phone,
-        specialty: staffForm.specialty,
         category: staffForm.category,
         status: staffForm.status
       });
       
-      toast.success('Staff member system fields updated successfully!');
+      toast.success('Staff category and status updated successfully!');
       resetForm();
       setEditingStaff(null);
       setIsEditStaffOpen(false);
       await loadStaff(); // re-fetch from DB
+      await loadAnalytics(); // refresh dashboard stats
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update staff member');
     } finally {
@@ -387,6 +408,7 @@ export function AdminDashboard({
       await staffAPI.delete(staffId);
       toast.success(`${staff?.name} has been permanently removed from the team`);
       await loadStaff(); // re-fetch from DB
+      await loadAnalytics(); // refresh dashboard stats
     } catch (err: any) {
       toast.error(err?.message || 'Failed to delete staff member');
     }
@@ -416,6 +438,7 @@ export function AdminDashboard({
       await appointmentsAPI.updateStatusAdmin(Number(appointmentId), newStatus);
       toast.success(`Appointment ${appointmentId} status updated to ${newStatus}`);
       await loadAppointments(); // Reload to get consistent state
+      await loadAnalytics(); // Refresh dashboard stats
     } catch (err: any) {
       toast.error(err.message || 'Failed to update status');
     }
@@ -428,6 +451,7 @@ export function AdminDashboard({
       toast.success(`${staff?.name} assigned to appointment ${appointmentId}`);
       setIsAssignStaffOpen(false);
       await loadAppointments();
+      await loadAnalytics();
     } catch (err: any) {
       toast.error(err.message || 'Failed to assign staff');
     }
@@ -442,6 +466,7 @@ export function AdminDashboard({
       toast.success(`Appointment ${appointmentId} rescheduled`);
       setIsEditAppointmentOpen(false);
       await loadAppointments();
+      await loadAnalytics();
     } catch (err: any) {
       toast.error(err.message || 'Failed to reschedule');
     }
@@ -486,7 +511,7 @@ export function AdminDashboard({
       (appointmentStaffFilter === 'unassigned' && !appointment.assignedStaff);
     
     const matchesService = appointmentServiceFilter === 'all' || 
-      appointment.service.name.toLowerCase().includes(appointmentServiceFilter.toLowerCase());
+      (appointment.service.id && appointment.service.id.toString() === appointmentServiceFilter);
     
     const matchesStatus = appointmentStatusFilter === 'all' || 
       appointment.status === appointmentStatusFilter;
@@ -510,41 +535,52 @@ export function AdminDashboard({
   // Report generation functions
   const generateReport = async (type: string) => {
     setIsGeneratingReport(true);
-    
-    // Derived from current state (already fetched from analyticsAPI on mount)
-    const reportData = {
-      totalRevenue: dashboardStats.todayRevenue,
-      totalAppointments: dashboardStats.todayAppointments,
-      completedAppointments: completedAppointments.length,
-      cancelledAppointments: cancelledAppointments.length,
-      generatedAt: new Date().toLocaleString()
-    };
-
-    // Simulate API delay for realism
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    console.log(`Report [${type}] Data:`, reportData);
-    toast.success(`${type} report generated successfully! Check console for data summary.`);
-    setIsGeneratingReport(false);
+    try {
+      const result = await api.reports.generate({
+        reportType: type,
+        staffId: selectedReportStaff,
+        startDate: reportStartDate,
+        endDate: reportEndDate
+      });
+      setReportResult(result);
+      toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} report generated successfully!`);
+    } catch (err) {
+      console.error('Failed to generate report:', err);
+      toast.error('Failed to generate report. Please try again.');
+    } finally {
+      setIsGeneratingReport(false);
+    }
   };
 
-  const exportReport = (format: 'pdf' | 'excel') => {
-    if (format === 'excel') {
-      const exportData = appointments.map(apt => ({
-        ID: apt.id,
-        CustomerName: apt.customer?.name || 'N/A',
-        CustomerEmail: apt.customer?.email || 'N/A',
-        Service: apt.service?.name || 'N/A',
-        Price: apt.service?.price || 0,
-        Staff: apt.assignedStaff?.name || 'Unassigned',
-        Date: apt.date,
-        Time: apt.time,
-        Status: apt.status,
-      }));
-      exportToCSV(exportData, 'salon_appointments_report.csv');
-      toast.success('Report exported as EXCEL (CSV)!');
-    } else {
-      toast.success(`Report exported as PDF format! (Mock)`);
+  const exportReport = async (format: 'pdf' | 'excel') => {
+    if (!reportResult) {
+      toast.error('Please generate a report first before exporting.');
+      return;
+    }
+
+    try {
+      toast.loading(`Exporting as ${format.toUpperCase()}...`, { id: 'export-toast' });
+      const blob = await api.reports.export({
+        format,
+        reportType,
+        staffId: selectedReportStaff,
+        startDate: reportStartDate,
+        endDate: reportEndDate
+      });
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `salon_report_${format}_${new Date().toISOString().split('T')[0]}.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast.success(`Report exported successfully!`, { id: 'export-toast' });
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Failed to export report.', { id: 'export-toast' });
     }
   };
   return (
@@ -653,18 +689,30 @@ export function AdminDashboard({
                           <Pie
                             data={serviceDistribution}
                             cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                            cy="45%"
+                            labelLine={true}
+                            label={({ name, value, percent }) => {
+                              if (value === 0 || percent < 0.05) return null;
+                              return `${name}: ${value}`;
+                            }}
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="value"
                           >
                             {serviceDistribution.map((entry) => (
-                              <Cell key={`cell-${entry.name}`} fill={entry.color} />
+                              <Cell key={`cell-${entry.name}`} fill={entry.color} stroke="none" />
                             ))}
                           </Pie>
                           <Tooltip />
+                          <Legend 
+                            verticalAlign="bottom" 
+                            height={36}
+                            formatter={(value, entry: any) => (
+                              <span className="text-gray-700 text-sm">
+                                {value} ({entry.payload.value})
+                              </span>
+                            )}
+                          />
                         </PieChart>
                       </ResponsiveContainer>
                     </CardContent>
@@ -860,25 +908,6 @@ export function AdminDashboard({
                             placeholder="Enter initial password" 
                             value={staffForm.password}
                             onChange={(e) => setStaffForm(prev => ({ ...prev, password: e.target.value }))}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="phone">Phone</Label>
-                          <Input 
-                            id="phone" 
-                            type="tel" 
-                            placeholder="Enter phone number" 
-                            value={staffForm.phone}
-                            onChange={(e) => setStaffForm(prev => ({ ...prev, phone: e.target.value }))}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="specialty">Specialty</Label>
-                          <Input 
-                            id="specialty" 
-                            placeholder="Enter specialty (e.g., Hair Cutting & Styling)" 
-                            value={staffForm.specialty}
-                            onChange={(e) => setStaffForm(prev => ({ ...prev, specialty: e.target.value }))}
                           />
                         </div>
                         <div className="space-y-2">
@@ -1316,10 +1345,9 @@ export function AdminDashboard({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All Services</SelectItem>
-                          <SelectItem value="hair">Hair Services</SelectItem>
-                          <SelectItem value="facial">Facial</SelectItem>
-                          <SelectItem value="nail">Nail Care</SelectItem>
-                          <SelectItem value="massage">Massage</SelectItem>
+                          {services.map(service => (
+                            <SelectItem key={service.id} value={service.id.toString()}>{service.name}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
 
@@ -1431,6 +1459,8 @@ export function AdminDashboard({
                                         )}
                                         <DropdownMenuItem onClick={() => {
                                           setSelectedAppointment(appointment);
+                                          setRescheduleDate(appointment.date);
+                                          setRescheduleTime(appointment.time);
                                           setIsEditAppointmentOpen(true);
                                         }}>
                                           <Edit className="w-4 h-4 mr-2" />
@@ -1789,6 +1819,23 @@ export function AdminDashboard({
                         </SelectContent>
                       </Select>
 
+                      {reportType === 'custom' && (
+                        <>
+                          <Input
+                            type="date"
+                            value={reportStartDate}
+                            onChange={(e) => setReportStartDate(e.target.value)}
+                            className="border-purple-200 focus:border-purple-400 rounded-xl"
+                          />
+                          <Input
+                            type="date"
+                            value={reportEndDate}
+                            onChange={(e) => setReportEndDate(e.target.value)}
+                            className="border-purple-200 focus:border-purple-400 rounded-xl"
+                          />
+                        </>
+                      )}
+
                       <Button 
                         onClick={() => generateReport(reportType)}
                         disabled={isGeneratingReport}
@@ -1830,79 +1877,156 @@ export function AdminDashboard({
                 </Card>
 
                 {/* Report Statistics */}
-                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <Card className="border-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl shadow-xl text-white">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-blue-100">Total Appointments</p>
-                          <p className="text-3xl font-bold">{appointments.length}</p>
-                          <p className="text-blue-200 text-sm">This month</p>
+                          <p className="text-sm font-medium text-gray-500">Total Appointments</p>
+                          <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                            {reportResult ? reportResult.summary.totalAppointments : '0'}
+                          </h3>
                         </div>
-                        <Calendar className="w-10 h-10 text-blue-200" />
+                        <div className="bg-purple-100 p-3 rounded-2xl group-hover:bg-purple-200 transition-colors">
+                          <Calendar className="w-6 h-6 text-purple-600" />
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
 
-                  <Card className="border-0 bg-gradient-to-r from-green-500 to-green-600 rounded-3xl shadow-xl text-white">
+                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-green-100">Total Revenue</p>
-                          <p className="text-3xl font-bold">${appointments.filter(a => a.status === 'completed').reduce((sum, a) => sum + a.service.price, 0)}</p>
-                          <p className="text-green-200 text-sm">This month</p>
+                          <p className="text-sm font-medium text-gray-500">Total Revenue</p>
+                          <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                            ${reportResult ? reportResult.summary.totalRevenue.toLocaleString() : '0'}
+                          </h3>
                         </div>
-                        <DollarSign className="w-10 h-10 text-green-200" />
+                        <div className="bg-green-100 p-3 rounded-2xl group-hover:bg-green-200 transition-colors">
+                          <DollarSign className="w-6 h-6 text-green-600" />
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
 
-                  <Card className="border-0 bg-gradient-to-r from-purple-500 to-purple-600 rounded-3xl shadow-xl text-white">
+                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-purple-100">Completion Rate</p>
-                          <p className="text-3xl font-bold">{Math.round((appointments.filter(a => a.status === 'completed').length / appointments.length) * 100)}%</p>
-                          <p className="text-purple-200 text-sm">This month</p>
+                          <p className="text-sm font-medium text-gray-500">Completed</p>
+                          <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                            {reportResult ? reportResult.summary.completedAppointments : '0'}
+                          </h3>
                         </div>
-                        <TrendingUp className="w-10 h-10 text-purple-200" />
+                        <div className="bg-blue-100 p-3 rounded-2xl group-hover:bg-blue-200 transition-colors">
+                          <CheckCircle2 className="w-6 h-6 text-blue-600" />
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
 
-                  <Card className="border-0 bg-gradient-to-r from-pink-500 to-pink-600 rounded-3xl shadow-xl text-white">
+                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-pink-100">Avg Service Value</p>
-                          <p className="text-3xl font-bold">${Math.round(appointments.reduce((sum, a) => sum + a.service.price, 0) / appointments.length)}</p>
-                          <p className="text-pink-200 text-sm">Per appointment</p>
+                          <p className="text-sm font-medium text-gray-500">Cancelled</p>
+                          <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                            {reportResult ? reportResult.summary.cancelledAppointments : '0'}
+                          </h3>
                         </div>
-                        <Star className="w-10 h-10 text-pink-200" />
+                        <div className="bg-red-100 p-3 rounded-2xl group-hover:bg-red-200 transition-colors">
+                          <XCircle className="w-6 h-6 text-red-600" />
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
                 </div>
 
-                {/* Service Performance Chart */}
-                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                  <CardHeader>
-                    <CardTitle className="text-xl font-bold text-gray-900">Most Booked Services</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={mostBookedServices}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="service" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="bookings" fill="#8B5CF6" name="Bookings" />
-                        <Bar dataKey="revenue" fill="#EC4899" name="Revenue ($)" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
+                  <Card className="lg:col-span-2 border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                    <CardHeader>
+                      <CardTitle className="text-xl font-bold text-gray-900">Recent Appointments in Report</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Booking ID</TableHead>
+                              <TableHead>Customer</TableHead>
+                              <TableHead>Service</TableHead>
+                              <TableHead>Date & Time</TableHead>
+                              <TableHead>Price</TableHead>
+                              <TableHead>Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {reportResult?.appointments.slice(0, 10).map((apt: any) => (
+                              <TableRow key={apt.id}>
+                                <TableCell className="font-medium">#{apt.id}</TableCell>
+                                <TableCell>{apt.customer_name}</TableCell>
+                                <TableCell>{apt.service_name}</TableCell>
+                                <TableCell>
+                                  <div className="text-sm">
+                                    <div className="font-medium">{apt.appointment_date}</div>
+                                    <div className="text-gray-500">{apt.appointment_time}</div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="font-bold text-purple-600">${apt.price}</TableCell>
+                                <TableCell>
+                                  <Badge className={
+                                    apt.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                    apt.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                    'bg-purple-100 text-purple-700'
+                                  }>
+                                    {apt.status}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            {!reportResult && (
+                              <TableRow>
+                                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                                  Generate a report to see data here
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                    <CardHeader>
+                      <CardTitle className="text-xl font-bold text-gray-900">Most Booked Services</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-6">
+                        {(reportResult ? reportResult.mostBookedServices : []).map((service: any, index: number) => (
+                          <div key={index} className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-sm">
+                                {index + 1}
+                              </div>
+                              <span className="font-medium text-gray-700">{service.name}</span>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold text-gray-900">{service.count}</div>
+                              <div className="text-xs text-gray-500">bookings</div>
+                            </div>
+                          </div>
+                        ))}
+                        {(!reportResult || reportResult.mostBookedServices.length === 0) && (
+                          <div className="text-center py-8 text-gray-500">
+                            No service data available
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
 
                 {/* Staff Performance */}
                 <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
@@ -2021,14 +2145,7 @@ export function AdminDashboard({
                   </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={[
-                        { month: 'Jan', revenue: 15400, appointments: 125 },
-                        { month: 'Feb', revenue: 18200, appointments: 142 },
-                        { month: 'Mar', revenue: 21800, appointments: 168 },
-                        { month: 'Apr', revenue: 19600, appointments: 156 },
-                        { month: 'May', revenue: 23400, appointments: 178 },
-                        { month: 'Jun', revenue: 26800, appointments: 195 }
-                      ]}>
+                      <LineChart data={monthlyRevenue}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis />
@@ -2053,55 +2170,46 @@ export function AdminDashboard({
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
+                  <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                    <p className="text-xs text-blue-700 font-medium">ℹ Admin Note</p>
+                    <p className="text-xs text-blue-600 mt-0.5">Admins can only update Primary Service Category and Status. Personal details are managed by the staff member.</p>
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="edit-name" className="flex items-center gap-2">
                       Full Name
-                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-amber-200 text-amber-600">Locked</Badge>
+                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-gray-200 text-gray-400">Read-only</Badge>
                     </Label>
                     <Input 
                       id="edit-name" 
-                      placeholder="Enter full name" 
                       value={staffForm.name}
                       disabled
-                      title="You are not allowed to edit this field"
                       className="bg-gray-50 text-gray-400 cursor-not-allowed"
                     />
-                    <p className="text-[10px] text-amber-600 mt-1">
-                      You are not allowed to edit this field. Personal details can only be managed by the user.
-                    </p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="edit-email">Email *</Label>
+                    <Label htmlFor="edit-email" className="flex items-center gap-2">
+                      Email
+                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-gray-200 text-gray-400">Read-only</Badge>
+                    </Label>
                     <Input 
                       id="edit-email" 
                       type="email" 
-                      placeholder="Enter email address" 
                       value={staffForm.email}
-                      onChange={(e) => setStaffForm(prev => ({ ...prev, email: e.target.value }))}
+                      disabled
+                      className="bg-gray-50 text-gray-400 cursor-not-allowed"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="edit-phone" className="flex items-center gap-2">
                       Phone
-                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-amber-200 text-amber-600">Locked</Badge>
+                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-gray-200 text-gray-400">Read-only</Badge>
                     </Label>
                     <Input 
                       id="edit-phone" 
                       type="tel" 
-                      placeholder="Enter phone number" 
                       value={staffForm.phone}
                       disabled
-                      title="You are not allowed to edit this field"
                       className="bg-gray-50 text-gray-400 cursor-not-allowed"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-specialty">Specialty</Label>
-                    <Input 
-                      id="edit-specialty" 
-                      placeholder="Enter specialty" 
-                      value={staffForm.specialty}
-                      onChange={(e) => setStaffForm(prev => ({ ...prev, specialty: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
@@ -2456,7 +2564,8 @@ export function AdminDashboard({
                         <Label>New Date</Label>
                         <Input 
                           type="date" 
-                          defaultValue={selectedAppointment.date}
+                          value={rescheduleDate}
+                          onChange={(e) => setRescheduleDate(e.target.value)}
                           className="border-purple-200 focus:border-purple-400 rounded-xl"
                         />
                       </div>
@@ -2464,7 +2573,8 @@ export function AdminDashboard({
                         <Label>New Time</Label>
                         <Input 
                           type="time" 
-                          defaultValue={selectedAppointment.time}
+                          value={rescheduleTime}
+                          onChange={(e) => setRescheduleTime(e.target.value)}
                           className="border-purple-200 focus:border-purple-400 rounded-xl"
                         />
                       </div>
@@ -2477,10 +2587,11 @@ export function AdminDashboard({
                   </Button>
                   <Button 
                     onClick={() => {
-                      // In a real app, get values from form
-                      const newDate = format(addDays(new Date(), 1), 'yyyy-MM-dd');
-                      const newTime = '10:00';
-                      rescheduleAppointment(selectedAppointment?.id, newDate, newTime);
+                      if (rescheduleDate && rescheduleTime) {
+                        rescheduleAppointment(selectedAppointment?.id, rescheduleDate, rescheduleTime);
+                      } else {
+                        toast.error('Please select both date and time');
+                      }
                     }}
                     className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
                   >

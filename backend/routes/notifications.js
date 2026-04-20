@@ -17,6 +17,19 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/notifications/unread-count
+router.get('/unread-count', verifyToken, async (req, res) => {
+  try {
+    const row = await db.getAsync(
+      "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0",
+      [req.user.user_id]
+    );
+    res.json({ count: row.count || 0 });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch unread count' });
+  }
+});
+
 // PUT/PATCH /api/notifications/:id/read
 router.put('/:id/read', verifyToken, markAsRead);
 router.patch('/:id/read', verifyToken, markAsRead);

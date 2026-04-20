@@ -22,9 +22,21 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
     `);
     const activeStaff = staffQuery.cnt;
 
-    // Hardcoded growth rate since last month isn't cleanly queryable in SQLite with basic strf dates without complex window 
-    // This suffices for the requirement constraint.
-    const growthRate = 15.2; 
+    // Compute real month-over-month growth rate
+    const thisMonthQuery = await db.getAsync(
+      "SELECT COUNT(*) as cnt FROM appointments WHERE strftime('%Y-%m', appointment_date) = strftime('%Y-%m', 'now')"
+    );
+    const lastMonthQuery = await db.getAsync(
+      "SELECT COUNT(*) as cnt FROM appointments WHERE strftime('%Y-%m', appointment_date) = strftime('%Y-%m', date('now', '-1 month'))"
+    );
+    const thisMonth = thisMonthQuery.cnt || 0;
+    const lastMonth = lastMonthQuery.cnt || 0;
+    let growthRate = 0;
+    if (lastMonth === 0 && thisMonth > 0) {
+      growthRate = 100; // Cap at 100% when starting from zero
+    } else if (lastMonth > 0) {
+      growthRate = parseFloat((((thisMonth - lastMonth) / lastMonth) * 100).toFixed(1));
+    }
 
     res.json({
       todayAppointments,
@@ -79,30 +91,24 @@ router.get('/weekly-data', requireAdmin, async (req, res) => {
 // GET /api/analytics/service-distribution
 router.get('/service-distribution', requireAdmin, async (req, res) => {
   try {
+    const categories = ['Hair', 'Facial', 'Nails', 'Massage', 'Wellness', 'Beauty'];
+    const colors = ['#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#06b6d4', '#3b82f6'];
+
     const data = await db.allAsync(`
       SELECT category as name, COUNT(*) as value 
-      FROM appointments a 
-      JOIN services s ON a.service_id = s.id 
+      FROM services 
       GROUP BY category
     `);
 
-    const colors = ['#8b5cf6', '#ec4899', '#06b6d4', '#10b981', '#f59e0b', '#3b82f6'];
-    const formatted = data.map((d, index) => ({
-      name: d.name + ' Services',
-      value: d.value,
-      color: colors[index % colors.length]
-    }));
+    const formatted = categories.map((cat, index) => {
+      const match = data.find(d => d.name === cat);
+      return {
+        name: cat,
+        value: match ? match.value : 0,
+        color: colors[index % colors.length]
+      };
+    });
     
-    // Incase data is empty from demo, send backup data
-    if (formatted.length === 0) {
-      return res.json([
-        { "name": "Hair Services", "value": 45, "color": "#8b5cf6" },
-        { "name": "Facial Treatments", "value": 25, "color": "#ec4899" },
-        { "name": "Nail Care", "value": 20, "color": "#06b6d4" },
-        { "name": "Massage", "value": 10, "color": "#10b981" }
-      ]);
-    }
-
     res.json(formatted);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch distribution metrics' });
@@ -163,6 +169,52 @@ router.get('/service-performance', requireAdmin, async (req, res) => {
     res.json(formatted);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch service performance metrics' });
+  }
+});
+
+// GET /api/analytics/monthly-revenue
+// Returns last 6 calendar months of appointment counts + revenue for the Revenue Trends chart
+router.get('/monthly-revenue', requireAdmin, async (req, res) => {
+  try {
+    const data = await db.allAsync(`
+      SELECT 
+        strftime('%Y-%m', appointment_date) as month_key,
+        COUNT(*) as appointments,
+        SUM(CASE WHEN status = 'completed' THEN price ELSE 0 END) as revenue
+      FROM appointments
+      WHERE appointment_date >= date('now', '-5 months', 'start of month')
+      GROUP BY month_key
+      ORDER BY month_key ASC
+    `);
+
+    // Build a full 6-month scaffold so missing months still appear as 0
+    const months = [];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const now = new Date();
+    const currentUTCMonth = now.getUTCMonth();
+    const currentUTCYear = now.getUTCFullYear();
+
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(Date.UTC(currentUTCYear, currentUTCMonth - i, 1));
+      const year = d.getUTCFullYear();
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const key = `${year}-${month}`;
+      months.push({ month: monthNames[d.getUTCMonth()], month_key: key, appointments: 0, revenue: 0 });
+    }
+
+    // Merge real data into scaffold
+    data.forEach(row => {
+      const target = months.find(m => m.month_key === row.month_key);
+      if (target) {
+        target.appointments = row.appointments;
+        target.revenue = row.revenue || 0;
+      }
+    });
+
+    // Strip internal month_key before sending
+    res.json(months.map(({ month, appointments, revenue }) => ({ month, appointments, revenue })));
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch monthly revenue data' });
   }
 });
 

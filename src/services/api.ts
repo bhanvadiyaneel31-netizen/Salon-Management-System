@@ -181,8 +181,13 @@ export const authAPI = {
   async getProfile(): Promise<User & { total_appointments: number }> {
     // Fetches live data from DB — includes loyalty_points, total_appointments, created_at
     return apiRequest<User & { total_appointments: number }>('/users/me');
+  },
+
+  async getMe(): Promise<User> {
+    return apiRequest<User>('/auth/me');
   }
 };
+
 
 // Users API
 export const usersAPI = {
@@ -199,6 +204,39 @@ export const usersAPI = {
     }
     
     return response;
+  }
+};
+
+export const reportsAPI = {
+  async generate(data: {
+    reportType: string;
+    staffId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any> {
+    return apiRequest<any>('/reports/generate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async export(data: {
+    format: 'excel' | 'pdf';
+    reportType: string;
+    staffId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<Blob> {
+    const response = await fetch(`${API_ORIGIN}/api/reports/export`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+      },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Export failed');
+    return response.blob();
   }
 };
 
@@ -243,19 +281,6 @@ export const servicesAPI = {
     await apiRequest(`/services/${id}`, { method: 'DELETE' });
   },
 
-  async assignStaff(serviceId: number, staffId: number): Promise<void> {
-    await apiRequest(`/staff/${staffId}/assign-service`, {
-      method: 'POST',
-      body: JSON.stringify({ service_id: serviceId }),
-    });
-  },
-
-  async removeStaff(serviceId: number, staffId: number): Promise<void> {
-    await apiRequest(`/staff/${staffId}/remove-service`, {
-      method: 'DELETE',
-      body: JSON.stringify({ service_id: serviceId }),
-    });
-  }
 };
 
 // Staff API
@@ -272,6 +297,10 @@ export const staffAPI = {
     return apiRequest<Staff[]>(`/staff/available?date=${date}&service_id=${serviceId}`);
   },
 
+  async getAvailableSlots(date: string, staffId: number, serviceId: number): Promise<string[]> {
+    return apiRequest<string[]>(`/appointments/slots?date=${date}&staff_id=${staffId}&service_id=${serviceId}`);
+  },
+
   async create(staff: Omit<Staff, 'id'>): Promise<Staff> {
     return apiRequest<Staff>('/staff', {
       method: 'POST',
@@ -281,8 +310,15 @@ export const staffAPI = {
 
   async update(id: number, staff: Partial<Staff>): Promise<Staff> {
     return apiRequest<Staff>(`/staff/${id}`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: JSON.stringify(staff),
+    });
+  },
+
+  async updateProfile(data: { name?: string; email?: string; phone?: string; password?: string; address?: string; profile_image?: string }): Promise<Staff> {
+    return apiRequest<Staff>('/staff/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     });
   },
 
@@ -306,10 +342,6 @@ export const staffAPI = {
 
   async getRating(id: number): Promise<{ average: number; count: number }> {
     return apiRequest<{ average: number; count: number }>(`/staff/${id}/rating`);
-  },
-
-  async updateProfile(data: any): Promise<User> {
-    return authAPI.updateProfile(data);
   }
 };
 
@@ -364,13 +396,18 @@ export const appointmentsAPI = {
     await apiRequest(`/appointments/${id}`, { method: 'DELETE' });
   },
 
-  async getAvailableSlots(date: string, staffId: number): Promise<string[]> {
+  async getAvailableSlots(date: string, staffId: number, serviceId: number, excludeAppointmentId?: number): Promise<string[]> {
     const params = new URLSearchParams({
       date,
-      staff_id: staffId.toString()
+      staff_id: staffId.toString(),
+      service_id: serviceId.toString()
     });
+    if (excludeAppointmentId) {
+      params.append('exclude_appointment_id', excludeAppointmentId.toString());
+    }
     return apiRequest<string[]>(`/appointments/slots?${params}`);
   },
+
 
   // Admin-specific appointment management
   async getAllForAdmin(params?: {
@@ -402,7 +439,7 @@ export const appointmentsAPI = {
     return apiRequest<any>(`/appointments/manage?${queryParams}`);
   },
 
-  async updateStatusAdmin(id: number, status: Appointment['status'], notes?: string): Promise<void> {
+  async updateStatusAdmin(id: number, status: string, notes?: string): Promise<void> {
     await apiRequest(`/appointments/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status, notes }),
@@ -438,9 +475,10 @@ export const appointmentsAPI = {
   async reschedule(id: number, date: string, time: string): Promise<void> {
     await apiRequest(`/appointments/${id}/reschedule`, {
       method: 'PATCH',
-      body: JSON.stringify({ appointment_date: date, appointment_time: time }),
+      body: JSON.stringify({ newDate: date, newTime: time }),
     });
   }
+
 };
 
 // Analytics API (for admin dashboard)
@@ -468,6 +506,14 @@ export const analyticsAPI = {
     color: string;
   }>> {
     return apiRequest('/analytics/service-distribution');
+  },
+
+  async getMonthlyRevenue(): Promise<Array<{
+    month: string;
+    appointments: number;
+    revenue: number;
+  }>> {
+    return apiRequest('/analytics/monthly-revenue');
   },
 
   async getStaffPerformance(): Promise<Array<{
@@ -512,6 +558,10 @@ export const analyticsAPI = {
 export const notificationsAPI = {
   async getAll(): Promise<Notification[]> {
     return apiRequest<Notification[]>('/notifications');
+  },
+  
+  async getUnreadCount(): Promise<{ count: number }> {
+    return apiRequest<{ count: number }>('/notifications/unread-count');
   },
   
   async markAsRead(id: number): Promise<void> {
@@ -823,5 +873,6 @@ export const api = USE_REAL_API ? {
   appointments: appointmentsAPI,
   analytics: analyticsAPI,
   notifications: notificationsAPI,
-  users: usersAPI
+  users: usersAPI,
+  reports: reportsAPI
 } : mockAPI;

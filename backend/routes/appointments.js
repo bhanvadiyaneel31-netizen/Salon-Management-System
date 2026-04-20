@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
 const { verifyToken, requireAdmin, requireAdminOrStaff } = require('../middleware/authMiddleware');
+const { sendAppointmentEmail } = require('../services/emailService');
+
 
 const fetchAppointmentWithDetails = async (appointmentId) => {
   return await db.getAsync(`
@@ -107,71 +109,77 @@ router.get('/', verifyToken, async (req, res) => {
 
 // GET /api/appointments/slots
 router.get('/slots', async (req, res) => {
-  const { date, staff_id, service_id } = req.query;
-  console.log(`[BACKEND] Fetching slots for staff_id: ${staff_id}, date: ${date}, service_id: ${service_id}`);
-  if (!date || !staff_id) {
-    console.log('[BACKEND] Missing required parameters');
-    return res.status(400).json({ error: 'date and staff_id are required' });
+  const { date, staff_id, service_id, exclude_appointment_id } = req.query;
+  const sid = parseInt(service_id);
+  const stid = parseInt(staff_id);
+  const skipId = exclude_appointment_id ? parseInt(exclude_appointment_id) : null;
+
+  if (!date || isNaN(stid) || isNaN(sid)) {
+    return res.status(400).json({ error: 'Valid date, staff_id, and service_id are required' });
   }
 
   try {
-    // Check if service is active
-    if (service_id) {
-      const service = await db.getAsync("SELECT is_active, duration FROM services WHERE id = ?", [service_id]);
-      if (!service || !service.is_active) {
-        return res.status(400).json({ error: 'This service is currently inactive' });
-      }
+    // Fetch service for duration
+    const service = await db.getAsync("SELECT is_active, duration FROM services WHERE id = ?", [sid]);
+    if (!service || !service.is_active) {
+      return res.status(400).json({ error: 'This service is currently inactive' });
     }
+    const requestedDuration = service.duration || 30;
 
     // Check if staff is active
-    const staff = await db.getAsync("SELECT is_available FROM staff_profiles WHERE user_id = ?", [staff_id]);
+    const staff = await db.getAsync("SELECT is_available FROM staff_profiles WHERE user_id = ?", [stid]);
     if (!staff || !staff.is_available) {
       return res.status(400).json({ error: 'This staff member is currently inactive' });
     }
 
-    const allSlots = [
-      '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-      '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
-      '15:00', '15:30', '16:00', '16:30', '17:00', '17:30'
-    ];
+    // Generate dynamic slots based on duration
+    const startHour = 10; // 10:00 AM
+    const endHour = 21;   // 09:00 PM
+    const allSlots = [];
+    let currentMin = startHour * 60;
+    const maxMin = endHour * 60;
 
-    // Filter out past time slots when booking for today.
-    // Use local date (not UTC) so the date comparison matches what the client sent.
+    while (currentMin + requestedDuration <= maxMin) {
+      const h = Math.floor(currentMin / 60);
+      const m = currentMin % 60;
+      allSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+      currentMin += requestedDuration;
+    }
+
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
     const isToday = date === todayStr;
 
-    const appointments = await db.allAsync(`
+    let query = `
       SELECT appointment_time, s.duration
       FROM appointments a
       JOIN services s ON a.service_id = s.id
       WHERE a.staff_id = ? AND a.appointment_date = ? AND a.status != 'cancelled'
-    `, [staff_id, date]);
+    `;
+    let params = [stid, date];
 
-    // Build a set of blocked minutes (start time + duration of each booked appointment)
+    if (skipId) {
+      query += " AND a.id != ?";
+      params.push(skipId);
+    }
+
+    const appointments = await db.allAsync(query, params);
+
+
     const blockedMinuteRanges = appointments.map(a => {
       const [h, m] = a.appointment_time.substring(0, 5).split(':').map(Number);
       const start = h * 60 + m;
       return { start, end: start + (a.duration || 30) };
     });
 
-    const slotToMinutes = (slot) => {
-      const [h, m] = slot.split(':').map(Number);
-      return h * 60 + m;
-    };
-
-    // Determine duration of requested service for overlap check
-    let requestedDuration = 30;
-    if (service_id) {
-      const svc = await db.getAsync("SELECT duration FROM services WHERE id = ?", [service_id]);
-      if (svc) requestedDuration = svc.duration;
-    }
-
     const availableSlots = allSlots.filter(slot => {
-      const slotMinutes = slotToMinutes(slot);
-      // Filter past slots for today
-      if (isToday && slotMinutes <= nowMinutes) return false;
+      const [h, m] = slot.split(':').map(Number);
+      const slotMinutes = h * 60 + m;
+      
+      // Filter past slots for today with buffer
+      if (isToday && slotMinutes <= nowMinutes + 15) return false;
+      
       // Filter slots that overlap with any existing booking
       const slotEnd = slotMinutes + requestedDuration;
       for (const range of blockedMinuteRanges) {
@@ -216,9 +224,14 @@ router.post('/', verifyToken, async (req, res) => {
     return res.status(400).json({ error: 'Service ID, date, and time are required' });
   }
 
-  // Prevent past dates
-  const reqDate = new Date(`${appointment_date}T${appointment_time}`);
-  if (reqDate < new Date()) {
+  // Prevent past dates and times with a small buffer for processing time
+  const now = new Date();
+  const [hours, minutes] = appointment_time.split(':').map(Number);
+  const bookingDate = new Date(appointment_date);
+  bookingDate.setHours(hours, minutes, 0, 0);
+  
+  // 5 minute grace period for submission latency
+  if (bookingDate.getTime() < now.getTime() - (5 * 60 * 1000)) {
     return res.status(400).json({ error: 'Cannot book appointment in the past' });
   }
 
@@ -227,6 +240,27 @@ router.post('/', verifyToken, async (req, res) => {
     const service = await db.getAsync("SELECT id, name, price, is_active, duration, category FROM services WHERE id = ?", [service_id]);
     if (!service || !service.is_active) {
       return res.status(404).json({ error: 'Service not found or inactive' });
+    }
+    const requestedDuration = service.duration || 30;
+
+    // Validate that the requested time is a valid dynamic slot starting from 10:00
+    const startHour = 10;
+    const endHour = 21;
+    const reqMinutes = hours * 60 + minutes;
+    
+    // Check if within business hours and doesn't overflow closing time
+    if (reqMinutes < startHour * 60 || reqMinutes + requestedDuration > endHour * 60) {
+      return res.status(400).json({ 
+        error: `Selected time is outside business hours (10:00 - 21:00) or service overflows closing time.` 
+      });
+    }
+
+    // Check if it matches a duration-based slot
+    const offsetFromStart = reqMinutes - (startHour * 60);
+    if (offsetFromStart % requestedDuration !== 0) {
+      return res.status(400).json({ 
+        error: `Invalid time slot for this service. Slots for ${service.name} (${requestedDuration} min) must start at ${requestedDuration} minute intervals from 10:00.` 
+      });
     }
 
     // Validate staff availability and conflicts
@@ -286,17 +320,23 @@ router.post('/', verifyToken, async (req, res) => {
         [staff_id, 'New Appointment', `New booking for ${service.name} on ${appointment_date} at ${appointment_time}`, 'new_appointment', result.lastID]
       );
     }
-    // Notify Admin
-    const admin = await db.getAsync("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
-    if (admin) {
-      await db.runAsync(
-        "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
-        [admin.id, 'New Booking', `A new appointment has been booked for ${service.name}`, 'new_appointment', result.lastID]
-      );
-    }
 
     const newRow = await fetchAppointmentWithDetails(result.lastID);
+    
+    // Send background email notification
+    sendAppointmentEmail({
+      to: newRow.customer_email,
+      customerName: newRow.customer_name,
+      serviceName: newRow.service_name,
+      status: 'pending',
+      date: newRow.appointment_date,
+      time: newRow.appointment_time,
+      staffName: newRow.staff_name,
+      type: 'booked'
+    });
+
     res.status(201).json(mapAppointmentRow(newRow));
+
   } catch (error) {
     console.error("DEBUG APPOINTMENT BOOKING:", error);
     res.status(500).json({ error: "DEBUG: " + (error.message || JSON.stringify(error) || String(error)) });
@@ -370,7 +410,26 @@ router.patch('/:id/status', verifyToken, async (req, res) => {
       await db.runAsync("UPDATE users SET loyalty_points = loyalty_points + ? WHERE id = ?", [Math.floor(row.price), row.customer_id]);
     }
     
+    // Send background email notification if status changed
+    if (row.status !== status) {
+      const emailType = status === 'confirmed' ? 'confirmed' : 
+                        status === 'completed' ? 'completed' : 
+                        status === 'cancelled' ? 'cancelled' : 'update';
+      
+      sendAppointmentEmail({
+        to: updatedRow.customer_email,
+        customerName: updatedRow.customer_name,
+        serviceName: updatedRow.service_name,
+        status: status,
+        date: updatedRow.appointment_date,
+        time: updatedRow.appointment_time,
+        staffName: updatedRow.staff_name,
+        type: emailType
+      });
+    }
+    
     res.json(mapAppointmentRow(updatedRow));
+
   } catch (error) {
     console.error('[STATUS UPDATE ERROR]', error.message);
     res.status(500).json({ error: 'Failed to update appointment status' });
@@ -471,21 +530,34 @@ router.patch('/:id', verifyToken, async (req, res) => {
     // Fetch details to get customer/service info for notification
     const apt = await fetchAppointmentWithDetails(req.params.id);
     
-    // Notify Customer
-    if (apt) {
-      await db.runAsync(
-        "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
-        [apt.customer_id, 'Appointment Updated', `Your appointment has been rescheduled/updated. Check details for changes.`, 'update', req.params.id]
-      );
-      
-      // Notify new Staff if changed or assigned
-      if (staff_id && staff_id !== apt.staff_id) {
-         await db.runAsync(
+      // Notify Customer
+      if (apt) {
+        await db.runAsync(
           "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
-          [staff_id, 'New Assignment', `You have been assigned to a new appointment on ${apt.appointment_date}.`, 'assignment', req.params.id]
+          [apt.customer_id, 'Appointment Updated', `Your appointment has been rescheduled/updated. Check details for changes.`, 'update', req.params.id]
         );
+        
+        // Send background email notification
+        sendAppointmentEmail({
+          to: apt.customer_email,
+          customerName: apt.customer_name,
+          serviceName: apt.service_name,
+          status: apt.status,
+          date: apt.appointment_date,
+          time: apt.appointment_time,
+          staffName: apt.staff_name,
+          type: 'update'
+        });
+
+        // Notify new Staff if changed or assigned
+        if (staff_id && staff_id !== apt.staff_id) {
+           await db.runAsync(
+            "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
+            [staff_id, 'New Assignment', `You have been assigned to a new appointment on ${apt.appointment_date}.`, 'assignment', req.params.id]
+          );
+        }
       }
-    }
+
     const updated = await fetchAppointmentWithDetails(req.params.id);
     res.json(mapAppointmentRow(updated));
   } catch (error) {
@@ -493,8 +565,118 @@ router.patch('/:id', verifyToken, async (req, res) => {
   }
 });
 
+// PATCH /api/appointments/:id/reschedule
+router.patch('/:id/reschedule', verifyToken, async (req, res) => {
+  const { newDate, newTime } = req.body;
+  
+  if (!newDate || !newTime) {
+    return res.status(400).json({ error: 'New date and time are required' });
+  }
+
+  try {
+    // 1. Fetch current appointment details
+    const apt = await fetchAppointmentWithDetails(req.params.id);
+    if (!apt) return res.status(404).json({ error: 'Appointment not found' });
+
+    // 2. RBAC: Customers can only reschedule their own PENDING appointments
+    if (req.user.role === 'customer') {
+      if (apt.customer_id !== req.user.user_id) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      if (apt.status !== 'pending') {
+        return res.status(400).json({ error: 'Only pending appointments can be rescheduled by customers' });
+      }
+    }
+
+    // 3. Prevent past dates/times
+    const now = new Date();
+    const [hours, minutes] = newTime.split(':').map(Number);
+    const bookingDate = new Date(newDate);
+    bookingDate.setHours(hours, minutes, 0, 0);
+    
+    if (bookingDate.getTime() < now.getTime() - (5 * 60 * 1000)) { // 5 min grace
+      return res.status(400).json({ error: 'Cannot reschedule to a past time' });
+    }
+
+    // 4. Validate Business Hours (10 AM - 9 PM)
+    const startHour = 10;
+    const endHour = 21;
+    const reqMinutes = hours * 60 + minutes;
+    const duration = apt.service_duration || 30;
+
+    if (reqMinutes < startHour * 60 || reqMinutes + duration > endHour * 60) {
+      return res.status(400).json({ error: 'Selected time is outside business hours (10:00 - 21:00)' });
+    }
+
+    // 5. Check Staff Availability (excluding THIS appointment's current slot)
+    if (apt.staff_id) {
+      const staff = await db.getAsync("SELECT is_available FROM staff_profiles WHERE user_id = ?", [apt.staff_id]);
+      if (!staff || !staff.is_available) {
+        return res.status(400).json({ error: 'Assigned staff is currently unavailable' });
+      }
+
+      const reqEnd = reqMinutes + duration;
+      const existingBookings = await db.allAsync(`
+        SELECT a.id, a.appointment_time, s.duration
+        FROM appointments a
+        JOIN services s ON a.service_id = s.id
+        WHERE a.staff_id = ? AND a.appointment_date = ? AND a.status != 'cancelled' AND a.id != ?
+      `, [apt.staff_id, newDate, apt.id]);
+
+      for (const booking of existingBookings) {
+        const [h, m] = booking.appointment_time.substring(0, 5).split(':').map(Number);
+        const existStart = h * 60 + m;
+        const existEnd = existStart + (booking.duration || 30);
+        if (reqMinutes < existEnd && reqEnd > existStart) {
+          return res.status(409).json({ error: 'This staff member is already booked during this time' });
+        }
+      }
+    }
+
+    // 6. Update Database
+    await db.runAsync(
+      "UPDATE appointments SET appointment_date = ?, appointment_time = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      [newDate, newTime, req.params.id]
+    );
+
+    // 7. Notify Customer
+    await db.runAsync(
+      "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
+      [apt.customer_id, 'Appointment Rescheduled', `Your appointment for ${apt.service_name} has been rescheduled to ${newDate} at ${newTime}.`, 'reschedule', apt.id]
+    );
+
+    // 8. Notify Staff
+    if (apt.staff_id) {
+      await db.runAsync(
+        "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
+        [apt.staff_id, 'Appointment Rescheduled', `Appointment for ${apt.customer_name} has been rescheduled to ${newDate} at ${newTime}.`, 'reschedule', apt.id]
+      );
+    }
+
+    // 9. Send Email
+    sendAppointmentEmail({
+      to: apt.customer_email,
+      customerName: apt.customer_name,
+      serviceName: apt.service_name,
+      status: apt.status,
+      date: newDate,
+      time: newTime,
+      staffName: apt.staff_name || 'Assigned Staff',
+      type: 'reschedule'
+    });
+
+    const updated = await fetchAppointmentWithDetails(apt.id);
+    res.json(mapAppointmentRow(updated));
+
+  } catch (error) {
+    console.error('[RESCHEDULE ERROR]', error);
+    res.status(500).json({ error: 'Failed to reschedule appointment' });
+  }
+});
+
 // DELETE /api/appointments/:id
 router.delete('/:id', requireAdmin, async (req, res) => {
+
   try {
     const apt = await db.getAsync("SELECT id FROM appointments WHERE id = ?", [req.params.id]);
     if (!apt) return res.status(404).json({ error: 'Appointment not found' });

@@ -131,7 +131,8 @@ export function StaffDashboard({
     email: userData?.email || '',
     phone: userData?.phone || '',
     address: userData?.address || '',
-    profile_image: userData?.profile_image || ''
+    profile_image: userData?.profile_image || '',
+    password: ''
   });
 
   const loadDashboardData = async () => {
@@ -195,9 +196,25 @@ export function StaffDashboard({
 
   useEffect(() => {
     loadNotifications();
-    const interval = setInterval(loadNotifications, 60000);
+    const interval = setInterval(loadNotifications, 10000); // 10s polling
     return () => clearInterval(interval);
   }, []);
+
+  // Mark all as read when entering notifications section
+  useEffect(() => {
+    if (activeSection === 'notifications' && unreadCount > 0) {
+      const markAll = async () => {
+        try {
+          await api.notifications.markAllRead();
+          setUnreadCount(0);
+          setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        } catch (error) {
+          console.error('Failed to mark all as read:', error);
+        }
+      };
+      markAll();
+    }
+  }, [activeSection, unreadCount]);
 
   const markAsRead = async (id: number) => {
     const notification = notifications.find(n => n.id === id);
@@ -262,18 +279,49 @@ export function StaffDashboard({
   const updateProfile = async () => {
     setIsUpdatingProfile(true);
     try {
-      await staffAPI.updateProfile({
+      const updateData: any = {
         name: profileForm.name,
+        email: profileForm.email,
         phone: profileForm.phone,
         address: profileForm.address,
         profile_image: profileForm.profile_image
-      });
-      const updatedUser = { ...userData, ...profileForm };
+      };
+      
+      if (profileForm.password) {
+        updateData.password = profileForm.password;
+      }
+
+      const result = await staffAPI.updateProfile(updateData);
+      
+      // Sync the returned server data to local state & localStorage
+      const updatedUser = {
+        ...userData,
+        name: result.name || profileForm.name,
+        email: result.email || profileForm.email,
+        phone: result.phone || profileForm.phone,
+        address: result.address || profileForm.address,
+        profile_image: result.profile_image || profileForm.profile_image,
+        category: result.category || userData?.category
+      };
       setUserData(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      
+      // Update form with server-confirmed data
+      setProfileForm(prev => ({
+        ...prev,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        phone: updatedUser.phone || '',
+        address: updatedUser.address || '',
+        profile_image: updatedUser.profile_image || '',
+        password: '' // Clear password field after successful update
+      }));
+      
       toast.success('Profile updated successfully');
-    } catch (err) {
+      await loadDashboardData(); // Re-fetch all metrics to ensure UI sync
+    } catch (err: any) {
       console.error('Failed to update profile:', err);
-      toast.error('Failed to update profile');
+      toast.error(err.message || 'Failed to update profile');
     } finally {
       setIsUpdatingProfile(false);
     }
@@ -633,6 +681,7 @@ export function StaffDashboard({
         <Card className="lg:col-span-2 border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg">
           <CardHeader>
             <CardTitle className="text-lg font-bold">Personal Information</CardTitle>
+            <p className="text-xs text-gray-500 mt-1">All changes are saved to the database and reflected in real-time across dashboards.</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -642,16 +691,18 @@ export function StaffDashboard({
                   value={profileForm.name}
                   onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
                   className="rounded-xl border-purple-200"
+                  placeholder="Enter your full name"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Email</Label>
+                <Label>Email Address</Label>
                 <Input 
+                  type="email"
                   value={profileForm.email}
-                  disabled
-                  className="rounded-xl bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed"
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, email: e.target.value }))}
+                  className="rounded-xl border-purple-200"
+                  placeholder="Enter your email"
                 />
-                <p className="text-[10px] text-amber-600 italic px-1">Email can only be changed by administration.</p>
               </div>
               <div className="space-y-2">
                 <Label>Phone Number</Label>
@@ -659,24 +710,31 @@ export function StaffDashboard({
                   value={profileForm.phone}
                   onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))}
                   className="rounded-xl border-purple-200"
+                  placeholder="Enter your phone number"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Role</Label>
+                <Label>New Password</Label>
                 <Input 
-                  value={userData?.role}
-                  disabled
-                  className="rounded-xl bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed capitalize"
+                  type="password"
+                  placeholder="Leave blank to keep current"
+                  value={profileForm.password}
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, password: e.target.value }))}
+                  className="rounded-xl border-purple-200"
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Address</Label>
-              <Input 
-                value={profileForm.address}
-                onChange={(e) => setProfileForm(prev => ({ ...prev, address: e.target.value }))}
-                className="rounded-xl border-purple-200"
-              />
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="flex items-center gap-2">
+                  Primary Service Category
+                  <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">Admin Controlled</span>
+                </Label>
+                <Input 
+                  value={userData?.category || 'Not Assigned'}
+                  disabled
+                  className="rounded-xl bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed"
+                />
+                <p className="text-[10px] text-amber-600 italic px-1">Your service category is set by administration and determines which services you handle.</p>
+              </div>
             </div>
             <Button 
               className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl h-11"

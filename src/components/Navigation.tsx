@@ -31,20 +31,22 @@ export function Navigation({
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    if (isDashboard && userRole) {
+    // Poll for unread notifications whenever the user is logged in (and not an admin)
+    // This ensures the bell icon badge is always up to date
+    if (userRole && userRole !== 'admin') {
       const fetchUnread = async () => {
         try {
-          const notifications = await api.notifications.getAll();
-          setUnreadCount(notifications.filter((n: any) => !n.is_read).length);
+          const { count } = await api.notifications.getUnreadCount();
+          setUnreadCount(count);
         } catch (error) {
           console.error('Failed to fetch unread count for nav:', error);
         }
       };
       fetchUnread();
-      const interval = setInterval(fetchUnread, 60000);
+      const interval = setInterval(fetchUnread, 10000); // 10s for more real-time feel
       return () => clearInterval(interval);
     }
-  }, [isDashboard, userRole]);
+  }, [userRole]);
 
   const handleLogout = async () => {
     try {
@@ -64,7 +66,7 @@ export function Navigation({
   };
 
   return (
-    <nav className={`bg-white/90 backdrop-blur-sm border-b border-purple-100 sticky top-0 z-50 transition-all duration-300 ${isDashboard ? 'lg:ml-64' : ''}`}>
+    <nav className="bg-white/90 backdrop-blur-sm border-b border-purple-100 sticky top-0 z-50 transition-all duration-300 w-full">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center gap-4">
@@ -100,35 +102,48 @@ export function Navigation({
             )}
           </div>
 
-          {/* Desktop Navigation */}
-          {!isDashboard && (
-            <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex items-center space-x-8">
+            <button
+              onClick={() => navigateTo('home')}
+              className={`text-sm font-medium transition-colors ${
+                currentView === 'home' ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
+              }`}
+            >
+              Home
+            </button>
+            
+            {userRole && (
               <button
-                onClick={() => navigateTo('home')}
+                onClick={() => {
+                  const dashboardView = `${userRole}-dashboard`;
+                  navigateTo(dashboardView);
+                  if (setActiveSection) setActiveSection('dashboard');
+                }}
                 className={`text-sm font-medium transition-colors ${
-                  currentView === 'home' ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
+                  currentView.includes('dashboard') ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
                 }`}
               >
-                Home
+                Dashboard
               </button>
-              <button
-                onClick={() => navigateTo('services')}
-                className={`text-sm font-medium transition-colors ${
-                  currentView === 'services' ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
-                }`}
-              >
-                Services
-              </button>
-              <button
-                onClick={() => navigateTo('contact')}
-                className={`text-sm font-medium transition-colors ${
-                  currentView === 'contact' ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
-                }`}
-              >
-                Contact
-              </button>
-            </div>
-          )}
+            )}
+
+            <button
+              onClick={() => navigateTo('services')}
+              className={`text-sm font-medium transition-colors ${
+                currentView === 'services' ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
+              }`}
+            >
+              Services
+            </button>
+            <button
+              onClick={() => navigateTo('contact')}
+              className={`text-sm font-medium transition-colors ${
+                currentView === 'contact' ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
+              }`}
+            >
+              Contact
+            </button>
+          </div>
 
           {/* Right Side Actions */}
           <div className="flex items-center space-x-2 sm:space-x-4">
@@ -142,30 +157,29 @@ export function Navigation({
 
             {userRole && (
               <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="relative p-2 hover:bg-purple-50 rounded-xl"
-                  onClick={() => {
-                    if (userRole === 'admin') {
-                      navigateTo('admin-dashboard');
-                      setActiveSection?.('notifications');
-                    } else if (userRole === 'staff') {
-                      navigateTo('staff-dashboard');
-                      setActiveSection?.('notifications');
-                    } else if (userRole === 'customer') {
-                      navigateTo('customer-dashboard');
-                      setActiveSection?.('notifications');
-                    }
-                  }}
-                >
-                  <Bell className="w-5 h-5 text-gray-600" />
-                  {unreadCount > 0 && (
-                    <Badge className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full p-0 flex items-center justify-center border-2 border-white">
-                      {unreadCount}
-                    </Badge>
-                  )}
-                </Button>
+                {userRole !== 'admin' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="relative p-2 hover:bg-purple-50 rounded-xl"
+                    onClick={() => {
+                      if (userRole === 'staff') {
+                        navigateTo('staff-dashboard');
+                        setActiveSection?.('notifications');
+                      } else if (userRole === 'customer') {
+                        navigateTo('customer-dashboard');
+                        setActiveSection?.('notifications');
+                      }
+                    }}
+                  >
+                    <Bell className="w-5 h-5 text-gray-600" />
+                    {unreadCount > 0 && (
+                      <Badge className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full p-0 flex items-center justify-center border-2 border-white">
+                        {unreadCount}
+                      </Badge>
+                    )}
+                  </Button>
+                )}
                 
                 <div className="hidden sm:flex flex-col items-end mr-2">
                   <span className="text-xs font-bold text-gray-900 leading-none">
@@ -231,6 +245,20 @@ export function Navigation({
             >
               Home
             </button>
+            
+            {userRole && (
+              <button
+                onClick={() => {
+                  const dashboardView = `${userRole}-dashboard`;
+                  navigateTo(dashboardView);
+                  if (setActiveSection) setActiveSection('dashboard');
+                }}
+                className="block w-full text-left px-4 py-3 rounded-xl text-base font-medium text-gray-700 hover:bg-purple-50 hover:text-purple-600"
+              >
+                Dashboard
+              </button>
+            )}
+
             <button
               onClick={() => navigateTo('services')}
               className="block w-full text-left px-4 py-3 rounded-xl text-base font-medium text-gray-700 hover:bg-purple-50 hover:text-purple-600"

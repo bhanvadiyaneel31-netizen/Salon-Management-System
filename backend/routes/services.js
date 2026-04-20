@@ -38,16 +38,30 @@ const upload = multer({
 
 // GET /api/services/categories
 router.get('/categories', async (req, res) => {
-  // Hardcoded based on the database CHECK constraint in db.js
-  const categories = [
-    { id: 1, name: 'Hair', description: 'All hair-related treatments', icon: 'scissors', color: '#8B5CF6' },
-    { id: 2, name: 'Facial', description: 'Skin care and facial services', icon: 'star', color: '#EC4899' },
-    { id: 3, name: 'Nails', description: 'Manicure and pedicure services', icon: 'palette', color: '#10B981' },
-    { id: 4, name: 'Massage', description: 'Relaxation and therapeutic massages', icon: 'activity', color: '#F59E0B' },
-    { id: 5, name: 'Wellness', description: 'Holistic wellness treatments', icon: 'activity', color: '#10B981' },
-    { id: 6, name: 'Beauty', description: 'General beauty services', icon: 'star', color: '#EC4899' }
-  ];
-  res.json(categories);
+  try {
+    // Standard categories defined in the system
+    const categories = [
+      { id: 1, name: 'Hair', description: 'All hair-related treatments', icon: 'scissors', color: '#8B5CF6' },
+      { id: 2, name: 'Facial', description: 'Skin care and facial services', icon: 'star', color: '#EC4899' },
+      { id: 3, name: 'Nails', description: 'Manicure and pedicure services', icon: 'palette', color: '#10B981' },
+      { id: 4, name: 'Massage', description: 'Relaxation and therapeutic massages', icon: 'activity', color: '#F59E0B' },
+      { id: 5, name: 'Wellness', description: 'Holistic wellness treatments', icon: 'activity', color: '#10B981' },
+      { id: 6, name: 'Beauty', description: 'General beauty services', icon: 'star', color: '#EC4899' }
+    ];
+
+    // Fetch real service counts per category
+    const counts = await db.allAsync("SELECT category, COUNT(*) as count FROM services GROUP BY category");
+    
+    const formatted = categories.map(c => ({
+      ...c,
+      service_count: counts.find(row => row.category === c.name)?.count || 0
+    }));
+
+    res.json(formatted);
+  } catch (error) {
+    console.error('Failed to fetch categories:', error);
+    res.status(500).json({ error: 'Failed to fetch categories' });
+  }
 });
 
 // GET /api/services
@@ -58,6 +72,7 @@ router.get('/', async (req, res) => {
       
       let query = `
         SELECT s.*, 
+               (SELECT COUNT(*) FROM appointments WHERE service_id = s.id) as booking_count,
                (SELECT GROUP_CONCAT(name, '|||') FROM (
                   SELECT DISTINCT u.name
                   FROM users u 
@@ -134,6 +149,7 @@ router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
     console.log(`Service created successfully with ID: ${result.lastID}`);
     
     const newService = await db.getAsync("SELECT * FROM services WHERE id = ?", [result.lastID]);
+    console.log(`Service created successfully with ID: ${result.lastID}. Result:`, newService);
     res.status(201).json(newService);
   } catch (error) {
     console.error('Error in POST /api/services:', error);
@@ -181,6 +197,7 @@ router.put('/:id', requireAdmin, upload.single('image'), async (req, res) => {
     console.log(`Service ID ${req.params.id} updated successfully`);
 
     const updated = await db.getAsync("SELECT * FROM services WHERE id = ?", [req.params.id]);
+    console.log(`Service ID ${req.params.id} updated successfully. Result:`, updated);
     res.json(updated);
   } catch (error) {
     console.error('Error in PUT /api/services/:id:', error);

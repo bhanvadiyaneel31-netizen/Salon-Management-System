@@ -10,6 +10,12 @@ const appointmentsRoutes = require('./routes/appointments');
 const analyticsRoutes = require('./routes/analytics');
 const notificationsRoutes = require('./routes/notifications');
 const usersRoutes = require('./routes/users');
+const reportsRoutes = require('./routes/reports');
+const googleAuthRoutes = require('./routes/googleAuth');
+const passport = require('./config/passportConfig');
+
+
+
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -17,7 +23,9 @@ const PORT = process.env.PORT || 5001;
 // Middleware
 app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'] }));
 app.use(express.json({ limit: '10mb' }));
+app.use(passport.initialize());
 app.use('/uploads', express.static('uploads'));
+
 
 // Main API Routes
 app.use('/api/auth', authRoutes);
@@ -27,6 +35,11 @@ app.use('/api/appointments', appointmentsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/auth', googleAuthRoutes); // Google Auth routes
+
+
+
 
 // Healthcheck
 app.get('/api/health', (req, res) => {

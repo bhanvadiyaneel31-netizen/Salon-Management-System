@@ -27,6 +27,33 @@ export default function App() {
   // Check for existing authentication on app load
   useEffect(() => {
     initializeSampleAppointments();
+
+    // Check for Google Auth success redirect
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    const path = window.location.pathname;
+
+    if (path === '/auth-success' && token) {
+      // Store token and clean URL
+      localStorage.setItem('auth_token', token);
+      window.history.replaceState({}, document.title, "/");
+      
+      // Fetch user data with the new token
+      api.auth.getMe().then(user => {
+        localStorage.setItem('user', JSON.stringify(user));
+        setUserRole(user.role);
+
+        // Set view based on role
+        if (user.role === 'customer') setCurrentView('customer-dashboard');
+        else if (user.role === 'admin') setCurrentView('admin-dashboard');
+        else if (user.role === 'staff') setCurrentView('staff-dashboard');
+      }).catch(err => {
+        console.error('Failed to fetch user after Google Auth:', err);
+        setCurrentView('login');
+      });
+      return;
+    }
+
     const currentUser = api.auth.getCurrentUser();
     if (currentUser) {
       setUserRole(currentUser.role);
@@ -39,6 +66,7 @@ export default function App() {
       }
     }
   }, []);
+
 
   useEffect(() => {
     const html = document.documentElement;

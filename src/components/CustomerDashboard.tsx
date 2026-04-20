@@ -95,6 +95,9 @@ export function CustomerDashboard({
   const [rescheduleTime, setRescheduleTime] = useState('');
   const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false);
   const [appointmentToReschedule, setAppointmentToReschedule] = useState<any>(null);
+  const [rescheduleSlots, setRescheduleSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+
 
   // Review state
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
@@ -118,6 +121,7 @@ export function CustomerDashboard({
       const transformed = data.map((apt: any) => ({
         id: String(apt.id),
         service: {
+          id: apt.service_id || apt.service?.id,
           name: apt.service?.name || apt.service_name || '',
           price: apt.price || apt.service?.price || 0,
           duration: apt.service?.duration || apt.service_duration || 0
@@ -125,10 +129,12 @@ export function CustomerDashboard({
         date: apt.appointment_date,
         time: apt.appointment_time,
         staff: {
+          id: apt.staff_id || apt.staff?.id,
           name: apt.staff?.name || apt.staff_name || 'Unassigned',
           speciality: ''
         },
         status: apt.status,
+
         bookingId: String(apt.id),
         createdAt: apt.created_at,
         notes: apt.notes || '',
@@ -210,9 +216,25 @@ export function CustomerDashboard({
       loadNotifications();
       loadAppointments();
       loadProfile(); // keep loyalty points & visit count in sync
-    }, 60000);
+    }, 10000); // 10s polling for real-time feel
     return () => clearInterval(interval);
   }, [activeSection]);
+
+  // Mark all as read when entering notifications section
+  useEffect(() => {
+    const unreadCount = notifications.filter(n => !n.read).length;
+    if (activeSection === 'notifications' && unreadCount > 0) {
+      const markAll = async () => {
+        try {
+          await api.notifications.markAllRead();
+          setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        } catch (error) {
+          console.error('Failed to mark all as read:', error);
+        }
+      };
+      markAll();
+    }
+  }, [activeSection, notifications]);
 
   const markAsRead = async (id: number) => {
     try {
@@ -293,6 +315,32 @@ export function CustomerDashboard({
     setRescheduleTime(appointment.time);
     setIsRescheduleDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (isRescheduleDialogOpen && appointmentToReschedule && rescheduleDate) {
+      const fetchSlots = async () => {
+        setLoadingSlots(true);
+        try {
+          const dateStr = format(rescheduleDate, 'yyyy-MM-dd');
+          const slots = await appointmentsAPI.getAvailableSlots(
+            dateStr,
+            Number(appointmentToReschedule.staff.id),
+            Number(appointmentToReschedule.service.id),
+            Number(appointmentToReschedule.id)
+          );
+
+          setRescheduleSlots(slots);
+        } catch (error) {
+          console.error('Failed to fetch reschedule slots:', error);
+          toast.error("Failed to load available slots");
+        } finally {
+          setLoadingSlots(false);
+        }
+      };
+      fetchSlots();
+    }
+  }, [isRescheduleDialogOpen, rescheduleDate, appointmentToReschedule]);
+
 
   const submitReschedule = async () => {
     if (!rescheduleTime) {
@@ -841,24 +889,33 @@ export function CustomerDashboard({
              </div>
              <div className="space-y-2">
                 <Label>Select Time Slot</Label>
-                <div className="grid grid-cols-3 gap-2">
-                   {['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00'].map((t) => (
-                     <Button 
-                       key={t}
-                       variant={rescheduleTime === t ? 'default' : 'outline'}
-                       className={`rounded-lg text-xs h-9 ${rescheduleTime === t ? 'bg-purple-600' : 'border-purple-50'}`}
-                       onClick={() => setRescheduleTime(t)}
-                     >{t}</Button>
-                   ))}
-                </div>
+                {loadingSlots ? (
+                  <div className="flex justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500"></div>
+                  </div>
+                ) : rescheduleSlots.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2">
+                     {rescheduleSlots.map((t) => (
+                       <Button 
+                         key={t}
+                         variant={rescheduleTime === t ? 'default' : 'outline'}
+                         className={`rounded-lg text-xs h-9 ${rescheduleTime === t ? 'bg-purple-600' : 'border-purple-50'}`}
+                         onClick={() => setRescheduleTime(t)}
+                       >{t}</Button>
+                     ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-xs text-red-500 py-2">No available slots for this date.</p>
+                )}
              </div>
           </div>
           <DialogFooter>
              <Button variant="outline" className="rounded-xl" onClick={() => setIsRescheduleDialogOpen(false)}>Cancel</Button>
-             <Button className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl" onClick={submitReschedule}>Confirm New Time</Button>
+             <Button className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl" onClick={submitReschedule} disabled={loadingSlots || !rescheduleTime}>Confirm New Time</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
 
       {/* Review Dialog */}
       <Dialog open={isReviewDialogOpen} onOpenChange={setIsReviewDialogOpen}>

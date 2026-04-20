@@ -42,7 +42,7 @@ import {
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { toast } from 'sonner';
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
+import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
 import { servicesAPI, analyticsAPI, API_ORIGIN } from '../services/api';
 
 interface ServiceCategory {
@@ -169,40 +169,61 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
   const loadServices = async (currentCategories?: ServiceCategory[]) => {
     setIsLoading(true);
     const cats = currentCategories || categories;
-    const defaultCategory: ServiceCategory = { id: 0, name: 'General', description: 'General service', icon: 'scissors', color: '#9CA3AF', service_count: 0 };
+    const defaultCategory: ServiceCategory = { id: 0, name: 'Other', description: 'General service', icon: 'scissors', color: '#9CA3AF', service_count: 0 };
     
     try {
       const data = await servicesAPI.getAll({ includeInactive: true });
-      const mappedServices: Service[] = data.map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        description: s.description || '',
-        duration: s.duration,
-        price: s.price,
-        image_url: s.image_url || '',
-        // Match string category from backend to the pseudo category object for UI
-        category: cats.find(c => c.name === s.category) || defaultCategory,
-        is_active: Boolean(s.is_active),
-        is_available: Boolean(s.is_active), // Alias for UI
-        booking_count: s.booking_count || 0,
-        average_rating: s.average_rating || 0,
-        created_at: s.created_at || new Date().toISOString(),
-        updated_at: s.updated_at || new Date().toISOString()
-      }));
+      const mappedServices: Service[] = data.map((s: any) => {
+        // Find matching category object
+        const catMatch = cats.find(c => c.name.toLowerCase() === (s.category || '').toLowerCase());
+        
+        return {
+          id: s.id,
+          name: s.name,
+          description: s.description || '',
+          duration: s.duration,
+          price: s.price,
+          image_url: s.image_url || '',
+          category: catMatch || { ...defaultCategory, name: s.category || 'Other' },
+          is_active: Boolean(s.is_active),
+          is_available: Boolean(s.assigned_staff),
+          booking_count: parseInt(s.booking_count) || 0,
+          average_rating: parseFloat(s.average_rating) || 0,
+          created_at: s.created_at || new Date().toISOString(),
+          updated_at: s.updated_at || new Date().toISOString()
+        };
+      });
 
       setServices(mappedServices);
 
-      // Load true stats if possible, otherwise use a placeholder wrapper
+      // Fetch performance data for revenue metrics
       try {
         const perf = await analyticsAPI.getServicePerformance();
+        
         setStats({
           overview: {
             total_services: mappedServices.length,
             active_services: mappedServices.filter(s => s.is_active).length,
             inactive_services: mappedServices.filter(s => !s.is_active).length
           },
-          popular_services: [...mappedServices].sort((a, b) => b.booking_count - a.booking_count).slice(0, 5),
-          revenue_services: perf.map((p: any) => ({ id: p.service_id, name: p.service_name, total_revenue: p.total_revenue })).slice(0, 5),
+          // Real popular services based on booking count
+          popular_services: [...mappedServices]
+            .sort((a, b) => b.booking_count - a.booking_count)
+            .slice(0, 5)
+            .map(s => ({
+              id: s.id,
+              name: s.name,
+              booking_count: s.booking_count,
+              price: s.price
+            })),
+          revenue_services: perf
+            .map((p: any) => ({ 
+              id: p.service_id, 
+              name: p.service_name, 
+              total_revenue: p.total_revenue || 0 
+            }))
+            .sort((a: any, b: any) => b.total_revenue - a.total_revenue)
+            .slice(0, 5),
           category_stats: cats.map(c => ({
             name: c.name,
             color: c.color,
@@ -211,16 +232,30 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
           }))
         });
       } catch (e) {
-        // Fallback stats without real analytics
+        console.error('Performance data fetch failed:', e);
+        // Fallback using just the services data
         setStats({
           overview: {
             total_services: mappedServices.length,
             active_services: mappedServices.filter(s => s.is_active).length,
             inactive_services: mappedServices.filter(s => !s.is_active).length
           },
-          popular_services: [],
+          popular_services: [...mappedServices]
+            .sort((a, b) => b.booking_count - a.booking_count)
+            .slice(0, 5)
+            .map(s => ({
+              id: s.id,
+              name: s.name,
+              booking_count: s.booking_count,
+              price: s.price
+            })),
           revenue_services: [],
-          category_stats: []
+          category_stats: cats.map(c => ({
+            name: c.name,
+            color: c.color,
+            service_count: mappedServices.filter(s => s.category?.name === c.name).length,
+            total_bookings: mappedServices.filter(s => s.category?.name === c.name).reduce((sum, s) => sum + s.booking_count, 0)
+          }))
         });
       }
     } catch (error) {
@@ -229,6 +264,16 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
       setIsLoading(false);
     }
   };
+
+  // Add polling for real-time analytics sync
+  useEffect(() => {
+    if (activeTab === 'analytics') {
+      const interval = setInterval(() => {
+        loadServices();
+      }, 30000); // 30s polling for analytics
+      return () => clearInterval(interval);
+    }
+  }, [activeTab]);
 
   // Utility functions
   const resetServiceForm = () => {
@@ -1339,17 +1384,30 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                         <Pie
                           data={stats.category_stats}
                           cx="50%"
-                          cy="50%"
-                          outerRadius={100}
+                          cy="45%"
+                          labelLine={true}
+                          outerRadius={80}
                           fill="#8884d8"
                           dataKey="service_count"
-                          label={({ name, value }) => `${name}: ${value}`}
+                          label={({ name, value, percent }) => {
+                            if (value === 0 || percent < 0.05) return null;
+                            return `${name}: ${value}`;
+                          }}
                         >
                           {stats.category_stats.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
+                            <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                           ))}
                         </Pie>
                         <Tooltip />
+                        <Legend 
+                          verticalAlign="bottom" 
+                          height={36}
+                          formatter={(value, entry: any) => (
+                            <span className="text-gray-700 text-sm">
+                              {value} ({entry.payload.service_count})
+                            </span>
+                          )}
+                        />
                       </PieChart>
                     </ResponsiveContainer>
                   </CardContent>

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
-const { requireAdmin } = require('../middleware/authMiddleware');
+const { requireAdmin, verifyToken } = require('../middleware/authMiddleware');
 
 // GET /api/staff
 router.get('/', async (req, res) => {
@@ -102,49 +102,84 @@ router.get('/:id/services', async (req, res) => {
   }
 });
 
-// POST /api/staff/:id/assign-service
-router.post('/:id/assign-service', requireAdmin, async (req, res) => {
-  const { service_id } = req.body;
-  if (!service_id) return res.status(400).json({ error: 'service_id is required' });
-
-  try {
-    await db.runAsync(
-      "INSERT INTO staff_service_assignments (staff_id, service_id) VALUES (?, ?)", 
-      [req.params.id, service_id]
-    );
-    res.status(201).json({
-      message: 'Service assigned successfully',
-      staff_id: parseInt(req.params.id),
-      service_id
-    });
-  } catch (error) {
-    if (error.message.includes('UNIQUE constraint failed')) {
-      return res.status(409).json({ error: 'Service already assigned to this staff member' });
-    }
-    res.status(500).json({ error: 'Failed to assign service' });
+// PATCH /api/staff/profile — staff updates their own personal details
+router.patch('/profile', verifyToken, async (req, res) => {
+  if (req.user.role !== 'staff') {
+    return res.status(403).json({ error: 'Only staff members can update their profile here' });
   }
-});
 
-// DELETE /api/staff/:id/remove-service
-router.delete('/:id/remove-service', requireAdmin, async (req, res) => {
-  const { service_id } = req.body;
-  if (!service_id) return res.status(400).json({ error: 'service_id is required' });
+  const { name, email, phone, password, category, address, profile_image } = req.body;
+  const staffId = req.user.user_id;
+
+  console.log(`PATCH /api/staff/profile - User: ${staffId}, Request:`, req.body);
+
+  // Block category update by staff — controlled by admin only
+  if (category !== undefined) {
+    return res.status(403).json({ error: 'Primary category can only be updated by an admin' });
+  }
 
   try {
-    await db.runAsync(
-      "DELETE FROM staff_service_assignments WHERE staff_id = ? AND service_id = ?",
-      [req.params.id, service_id]
-    );
-    res.json({ message: 'Service removed successfully' });
+    const bcrypt = require('bcrypt');
+    let updates = [];
+    let params = [];
+
+    if (name) {
+      updates.push("name = ?");
+      params.push(name.trim());
+    }
+    if (email) {
+      // Ensure email is not already taken by another user
+      const existing = await db.getAsync("SELECT id FROM users WHERE email = ? AND id != ?", [email.trim(), staffId]);
+      if (existing) {
+        return res.status(409).json({ error: 'Email is already in use by another account' });
+      }
+      updates.push("email = ?");
+      params.push(email.trim());
+    }
+    if (phone !== undefined) {
+      updates.push("phone = ?");
+      params.push(phone.trim() || null);
+    }
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      const password_hash = await bcrypt.hash(password, salt);
+      updates.push("password_hash = ?");
+      params.push(password_hash);
+    }
+
+    if (address !== undefined) {
+      updates.push("address = ?");
+      params.push(address.trim() || null);
+    }
+    if (profile_image !== undefined) {
+      updates.push("profile_image = ?");
+      params.push(profile_image || null);
+    }
+
+    if (updates.length > 0) {
+      params.push(staffId);
+      await db.runAsync(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
+    }
+
+    const updatedProfile = await db.getAsync(`
+      SELECT u.id, u.name, u.email, u.phone, u.address, u.profile_image, sp.category, sp.specialty, sp.is_available
+      FROM users u
+      JOIN staff_profiles sp ON u.id = sp.user_id
+      WHERE u.id = ?
+    `, [staffId]);
+
+    console.log(`Profile update successful for staff ${staffId}. Updates:`, updates);
+    res.json(updatedProfile);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to remove service' });
+    console.error('Profile update error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 
 // POST /api/staff — create a new staff member (admin only)
 router.post('/', requireAdmin, async (req, res) => {
   const bcrypt = require('bcrypt');
-  const { name, email, phone, category, specialty, password } = req.body;
+  const { name, email, category, password } = req.body;
   if (!name || !email || !password || !category) {
     return res.status(400).json({ error: 'name, email, password, and category are required' });
   }
@@ -152,25 +187,23 @@ router.post('/', requireAdmin, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
     const result = await db.runAsync(
-      "INSERT INTO users (name, email, password_hash, phone, role) VALUES (?, ?, ?, ?, 'staff')",
-      [name, email, password_hash, phone || null]
+      "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'staff')",
+      [name, email, password_hash]
     );
     const userId = result.lastID;
     await db.runAsync(
-      "INSERT INTO staff_profiles (user_id, category, specialty, rating, is_available) VALUES (?, ?, ?, 0, 1)",
-      [userId, category, specialty || '']
+      "INSERT INTO staff_profiles (user_id, category, specialty, rating, is_available) VALUES (?, ?, '', 0, 1)",
+      [userId, category]
     );
     
     const newStaff = await db.getAsync(
-      `SELECT u.id, u.name, u.email, u.phone, sp.category, sp.specialty, sp.rating, sp.is_available,
-       (SELECT GROUP_CONCAT(service_id) FROM staff_service_assignments WHERE staff_id = u.id) as assigned_service_ids
+      `SELECT u.id, u.name, u.email, u.phone, sp.category, sp.specialty, sp.rating, sp.is_available
        FROM users u JOIN staff_profiles sp ON u.id = sp.user_id WHERE u.id = ?`,
       [userId]
     );
     res.status(201).json({ 
       ...newStaff, 
-      is_available: Boolean(newStaff.is_available),
-      assigned_service_ids: newStaff.assigned_service_ids ? newStaff.assigned_service_ids.split(',').map(Number) : []
+      is_available: Boolean(newStaff.is_available)
     });
   } catch (error) {
     if (error.message && error.message.includes('UNIQUE constraint failed')) {
@@ -180,40 +213,45 @@ router.post('/', requireAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/staff/:id — update staff member details (admin only)
-router.put('/:id', requireAdmin, async (req, res) => {
+// PATCH /api/staff/:id — admin updates staff category or status
+router.patch('/:id', requireAdmin, async (req, res) => {
   const staffId = req.params.id;
-  const { name, email, phone, category, specialty, is_available, status } = req.body;
+  const { category, status, is_available } = req.body;
   
+  console.log(`PATCH /api/staff/${staffId} - Admin update:`, req.body);
+  
+  // RBAC: Admin can ONLY update category and status/is_available
+  const restrictedFields = ['name', 'email', 'phone', 'password'];
+  for (const field of restrictedFields) {
+    if (req.body[field] !== undefined) {
+      return res.status(403).json({ error: `Admins are not allowed to update staff ${field}` });
+    }
+  }
+
   try {
     const user = await db.getAsync("SELECT id FROM users WHERE id = ? AND role = 'staff'", [staffId]);
     if (!user) {
       return res.status(404).json({ error: 'Staff member not found' });
     }
 
-    // Update users table
-    await db.runAsync(`
-      UPDATE users SET 
-        name = COALESCE(?, name),
-        email = COALESCE(?, email),
-        phone = COALESCE(?, phone)
-      WHERE id = ?
-    `, [name, email, phone, staffId]);
+    let profileUpdates = [];
+    let params = [];
 
-    // Update staff_profiles table
-    // Note: status can be used to set is_available. Only update if status or is_available is supplied.
-    const availabilitySupplied = status !== undefined || is_available !== undefined;
-    const availabilityValue = availabilitySupplied 
-      ? (status === 'active' || is_available === true || is_available === 1 ? 1 : 0)
-      : null;
-    
-    await db.runAsync(`
-      UPDATE staff_profiles SET
-        category = COALESCE(?, category),
-        specialty = COALESCE(?, specialty),
-        is_available = CASE WHEN ? = 1 THEN ? ELSE is_available END
-      WHERE user_id = ?
-    `, [category, specialty, availabilitySupplied ? 1 : 0, availabilityValue, staffId]);
+    if (category) {
+      profileUpdates.push("category = ?");
+      params.push(category);
+    }
+
+    if (status !== undefined || is_available !== undefined) {
+      const availabilityValue = (status === 'active' || is_available === true || is_available === 1) ? 1 : 0;
+      profileUpdates.push("is_available = ?");
+      params.push(availabilityValue);
+    }
+
+    if (profileUpdates.length > 0) {
+      params.push(staffId);
+      await db.runAsync(`UPDATE staff_profiles SET ${profileUpdates.join(', ')} WHERE user_id = ?`, params);
+    }
 
     const updatedStaff = await db.getAsync(`
       SELECT u.id, u.name, u.email, u.phone, sp.category, sp.specialty, sp.rating, sp.is_available
@@ -222,11 +260,9 @@ router.put('/:id', requireAdmin, async (req, res) => {
       WHERE u.id = ?
     `, [staffId]);
 
+    console.log(`Staff ${staffId} updated by admin. Result:`, updatedStaff);
     res.json({ ...updatedStaff, is_available: Boolean(updatedStaff.is_available) });
   } catch (error) {
-    if (error.message && error.message.includes('UNIQUE constraint failed')) {
-      return res.status(409).json({ error: 'A user with this email already exists' });
-    }
     res.status(500).json({ error: 'Failed to update staff member' });
   }
 });

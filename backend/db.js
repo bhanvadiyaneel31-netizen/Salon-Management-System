@@ -50,9 +50,11 @@ async function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name VARCHAR(100) NOT NULL,
       email VARCHAR(120) UNIQUE NOT NULL,
-      password_hash VARCHAR(255) NOT NULL,
+      password_hash VARCHAR(255),
       phone VARCHAR(20),
       role VARCHAR(20) NOT NULL DEFAULT 'customer',
+      googleId VARCHAR(255),
+      authProvider VARCHAR(20) NOT NULL DEFAULT 'local',
       loyalty_points INTEGER DEFAULT 0,
       reminder_email BOOLEAN DEFAULT 1,
       reminder_sms BOOLEAN DEFAULT 1,
@@ -60,6 +62,15 @@ async function initDb() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       CHECK (role IN ('customer', 'staff', 'admin'))
     )`);
+
+    // Add new columns for Google Auth if they don't exist
+    db.run(`ALTER TABLE users ADD COLUMN googleId VARCHAR(255)`, (err) => {});
+    db.run(`ALTER TABLE users ADD COLUMN authProvider VARCHAR(20) DEFAULT 'local'`, (err) => {});
+
+
+    // Ensure address and profile_image columns exist for personal profiles
+    db.run(`ALTER TABLE users ADD COLUMN address TEXT`, (err) => {});
+    db.run(`ALTER TABLE users ADD COLUMN profile_image VARCHAR(255)`, (err) => {});
 
     // 2. services
     db.run(`CREATE TABLE IF NOT EXISTS services (
@@ -189,8 +200,8 @@ async function initDb() {
     }
 
     // Insert Staff Profiles — rating starts at 0.00 and is calculated from real reviews only
-    await db.runAsync("INSERT INTO staff_profiles (user_id, specialty, rating, is_available) VALUES (4, 'Hair Styling', 0.00, 1)");
-    await db.runAsync("INSERT INTO staff_profiles (user_id, specialty, rating, is_available) VALUES (5, 'Facial Treatments', 0.00, 1)");
+    await db.runAsync("INSERT INTO staff_profiles (user_id, category, specialty, rating, is_available) VALUES (4, 'Hair', 'Hair Styling', 0.00, 1)");
+    await db.runAsync("INSERT INTO staff_profiles (user_id, category, specialty, rating, is_available) VALUES (5, 'Facial', 'Facial Treatments', 0.00, 1)");
 
     // Insert Staff Service assignments
     await db.runAsync("INSERT INTO staff_service_assignments (staff_id, service_id) VALUES (4, 1)");
@@ -199,6 +210,23 @@ async function initDb() {
 
     console.log("Initial demo data seeded!");
   }
+
+  // Migration: Ensure all existing staff have a category based on their specialty if NULL
+  await db.runAsync(`
+    UPDATE staff_profiles 
+    SET category = 'Hair' 
+    WHERE category IS NULL AND specialty LIKE '%Hair%'
+  `);
+  await db.runAsync(`
+    UPDATE staff_profiles 
+    SET category = 'Facial' 
+    WHERE category IS NULL AND specialty LIKE '%Facial%'
+  `);
+  await db.runAsync(`
+    UPDATE staff_profiles 
+    SET category = 'Beauty' 
+    WHERE category IS NULL
+  `);
 }
 
 module.exports = { db, initDb };
