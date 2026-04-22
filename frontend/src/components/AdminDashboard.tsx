@@ -408,7 +408,7 @@ export function AdminDashboard({
         // Financial tracking fields
         original_amount: apt.original_amount ?? apt.price ?? 0,
         discount_amount: apt.discount_amount ?? 0,
-        final_amount: apt.final_amount ?? (apt.price - (apt.discount_amount ?? 0)) ?? 0,
+        final_amount: apt.final_amount ?? ((apt.price ?? 0) - (apt.discount_amount ?? 0)) ?? 0,
         discount_type: apt.discount_type,
         points_redeemed: apt.points_redeemed
       }));
