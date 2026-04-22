@@ -1,316 +1,303 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
+const bcrypt = require('bcrypt');
+const mongoose = require('mongoose');
+const { User, StaffProfile, Appointment, Service } = require('../db');
 const { requireAdmin, verifyToken } = require('../middleware/authMiddleware');
 
-// GET /api/staff
+// ---------- GET /api/staff ----------
 router.get('/', async (req, res) => {
   try {
-    const staff = await db.allAsync(`
-      SELECT u.id, u.name, u.email, u.phone, 
-             sp.category, sp.specialty, sp.rating, sp.is_available, sp.created_at,
-             (SELECT COUNT(*) FROM appointments WHERE staff_id = u.id AND status = 'completed') as completed_appointments,
-             (SELECT GROUP_CONCAT(service_id) FROM staff_service_assignments WHERE staff_id = u.id) as assigned_service_ids
-      FROM users u
-      LEFT JOIN staff_profiles sp ON u.id = sp.user_id
-      WHERE u.role = 'staff'
-    `);
-    
-    // Process integer boolean and comma-separated IDs
-    const formatted = staff.map(s => ({
-      ...s,
-      is_available: Boolean(s.is_available),
-      assigned_service_ids: s.assigned_service_ids ? s.assigned_service_ids.split(',').map(Number) : []
-    }));
-    
+    const staffUsers = await User.find({ role: 'staff' });
+    const profiles   = await StaffProfile.find({ userId: { $in: staffUsers.map(u => u._id) } });
+
+    const profileMap = {};
+    profiles.forEach(p => { profileMap[p.userId.toString()] = p; });
+
+    const completedCounts = await Appointment.aggregate([
+      { $match: { staffId: { $in: staffUsers.map(u => u._id) }, status: 'completed' } },
+      { $group: { _id: '$staffId', count: { $sum: 1 } } },
+    ]);
+    const countMap = {};
+    completedCounts.forEach(c => { countMap[c._id.toString()] = c.count; });
+
+    const formatted = staffUsers.map(u => {
+      const p = profileMap[u._id.toString()];
+      return {
+        id:                    u._id.toString(),
+        name:                  u.name,
+        email:                 u.email,
+        phone:                 u.phone || '',
+        category:              p?.category || '',
+        specialty:             p?.specialty || '',
+        rating:                p?.rating || 0,
+        is_available:          p?.isAvailable ?? true,
+        created_at:            p?.createdAt || u.createdAt,
+        completed_appointments: countMap[u._id.toString()] || 0,
+        services:              (p?.services || []).map(id => id.toString()),
+      };
+    });
+
     res.json(formatted);
   } catch (error) {
-    console.error('Failed to fetch staff:', error);
+    console.error('[STAFF] Failed to fetch staff:', error.message);
     res.status(500).json({ error: 'Failed to fetch staff' });
   }
 });
 
-// GET /api/staff/available
+// ---------- GET /api/staff/available ----------
 router.get('/available', async (req, res) => {
-  const { date, service_id } = req.query;
-  
+  const { service_id } = req.query;
+  console.log(`[STAFF] Fetching available staff for service_id: ${service_id}`);
+
   try {
-    let query = `
-      SELECT DISTINCT u.id, u.name, u.email, sp.category, sp.specialty, sp.rating, sp.is_available,
-             (SELECT GROUP_CONCAT(service_id) FROM staff_service_assignments WHERE staff_id = u.id) as assigned_service_ids
-      FROM users u
-      JOIN staff_profiles sp ON u.id = sp.user_id
-      WHERE u.role = 'staff' 
-        AND sp.is_available = 1
-    `;
-    const params = [];
+    const profileQuery = { isAvailable: true };
 
     if (service_id) {
-      query += ` AND sp.category = (SELECT category FROM services WHERE id = ?)`;
-      params.push(service_id);
+      if (!mongoose.Types.ObjectId.isValid(service_id)) {
+        console.warn(`[STAFF] Invalid service_id provided: ${service_id}`);
+        return res.status(400).json({ error: 'Invalid service_id format' });
+      }
+      // Query staff who have this specific service in their services array
+      profileQuery.services = new mongoose.Types.ObjectId(service_id);
     }
 
-    if (date) {
-      // Requirements suggest checking for conflicts, but usually getAvailable is for initial filtering
-      // Real conflict check happens during slot selection.
+    console.log(`[STAFF] Querying StaffProfile with:`, profileQuery);
+    const profiles = await StaffProfile.find(profileQuery).sort({ rating: -1 });
+    console.log(`[STAFF] Found ${profiles.length} profiles`);
+
+    if (profiles.length === 0) {
+      return res.json([]);
     }
 
-    query += ` ORDER BY sp.rating DESC`;
-    
-    const availableStaff = await db.allAsync(query, params);
+    const staffUserIds = profiles.map(p => p.userId);
+    const staffUsers = await User.find({ _id: { $in: staffUserIds }, role: 'staff' });
+    const userMap = {};
+    staffUsers.forEach(u => { userMap[u._id.toString()] = u; });
 
-    const formatted = availableStaff.map(s => ({
-      ...s,
-      is_available: Boolean(s.is_available),
-      assigned_service_ids: s.assigned_service_ids ? s.assigned_service_ids.split(',').map(Number) : []
-    }));
+    const formatted = profiles.map(p => {
+      const u = userMap[p.userId.toString()];
+      if (!u) return null;
+      return {
+        id:           u._id.toString(),
+        name:         u.name,
+        email:        u.email,
+        category:     p.category || '',
+        specialty:    p.specialty || '',
+        rating:       p.rating || 0,
+        is_available: p.isAvailable,
+        services:     p.services.map(id => id.toString()),
+      };
+    }).filter(Boolean);
 
+    console.log(`[STAFF] Returning ${formatted.length} formatted staff members`);
     res.json(formatted);
   } catch (error) {
-    console.error('Failed to fetch available staff:', error);
+    console.error('[STAFF] Failed to fetch available staff:', error.message);
     res.status(500).json({ error: 'Failed to fetch available staff' });
   }
 });
 
-// GET /api/staff/:id/services
+// ---------- GET /api/staff/:id/services ----------
 router.get('/:id/services', async (req, res) => {
   try {
-    const staffUser = await db.getAsync(`
-      SELECT u.id, u.name, sp.category, sp.specialty 
-      FROM users u 
-      LEFT JOIN staff_profiles sp ON u.id = sp.user_id
-      WHERE u.id = ? AND u.role = 'staff'
-    `, [req.params.id]);
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid staff ID' });
+    const staffUser = await User.findOne({ _id: req.params.id, role: 'staff' });
+    if (!staffUser) return res.status(404).json({ error: 'Staff not found' });
 
-    if (!staffUser) {
-      return res.status(404).json({ error: 'Staff not found' });
-    }
-
-    const services = await db.allAsync(`
-      SELECT s.id, s.name, s.category 
-      FROM services s
-      JOIN staff_service_assignments ssa ON s.id = ssa.service_id
-      WHERE ssa.staff_id = ?
-    `, [req.params.id]);
+    const profile  = await StaffProfile.findOne({ userId: req.params.id }).populate('services', 'id name category');
+    const services = profile ? profile.services : [];
 
     res.json({
-      staff: staffUser,
-      services
+      staff: { id: staffUser._id.toString(), name: staffUser.name, category: profile?.category || '', specialty: profile?.specialty || '' },
+      services: services.map(s => ({ id: s._id.toString(), name: s.name, category: s.category })),
     });
   } catch (error) {
+    console.error('[STAFF] Failed to fetch staff services:', error.message);
     res.status(500).json({ error: 'Failed to fetch staff services' });
   }
 });
 
-// PATCH /api/staff/profile — staff updates their own personal details
+// ---------- PATCH /api/staff/profile (staff updates own profile) ----------
 router.patch('/profile', verifyToken, async (req, res) => {
-  if (req.user.role !== 'staff') {
-    return res.status(403).json({ error: 'Only staff members can update their profile here' });
-  }
+  if (req.user.role !== 'staff') return res.status(403).json({ error: 'Only staff members can update their profile here' });
 
-  const { name, email, phone, password, category, address, profile_image } = req.body;
   const staffId = req.user.user_id;
-
-  console.log(`PATCH /api/staff/profile - User: ${staffId}, Request:`, req.body);
-
-  // Block category update by staff — controlled by admin only
-  if (category !== undefined) {
-    return res.status(403).json({ error: 'Primary category can only be updated by an admin' });
+  
+  // Rule: Staff cannot update role or primary category
+  const restrictedFields = ['role', 'category'];
+  for (const field of restrictedFields) {
+    if (req.body[field] !== undefined) {
+      return res.status(403).json({ error: `Staff are not allowed to update their own ${field === 'category' ? 'primary category' : field}` });
+    }
   }
+
+  const { name, email, phone, password, currentPassword, address, profile_image } = req.body;
 
   try {
-    const bcrypt = require('bcrypt');
-    let updates = [];
-    let params = [];
+    const updates = {};
 
-    if (name) {
-      updates.push("name = ?");
-      params.push(name.trim());
-    }
+    if (name)  updates.name  = name.trim();
+    if (phone !== undefined) updates.phone = phone.trim() || null;
+    if (address !== undefined) updates.address = address.trim() || null;
+    if (profile_image !== undefined) updates.profileImage = profile_image || null;
+
     if (email) {
-      // Ensure email is not already taken by another user
-      const existing = await db.getAsync("SELECT id FROM users WHERE email = ? AND id != ?", [email.trim(), staffId]);
-      if (existing) {
-        return res.status(409).json({ error: 'Email is already in use by another account' });
-      }
-      updates.push("email = ?");
-      params.push(email.trim());
+      const existing = await User.findOne({ email: email.trim(), _id: { $ne: staffId } });
+      if (existing) return res.status(409).json({ error: 'Email is already in use by another account' });
+      updates.email = email.trim();
     }
-    if (phone !== undefined) {
-      updates.push("phone = ?");
-      params.push(phone.trim() || null);
-    }
+
     if (password) {
+      if (!currentPassword) return res.status(400).json({ error: 'Current password is required to set a new password' });
+      const user = await User.findById(staffId).select('+passwordHash');
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      
+      const rawUser = await User.findById(staffId).lean().select('+passwordHash');
+      const isMatch = await bcrypt.compare(currentPassword, rawUser.passwordHash);
+      if (!isMatch) return res.status(401).json({ error: 'Incorrect current password' });
+      
       const salt = await bcrypt.genSalt(10);
-      const password_hash = await bcrypt.hash(password, salt);
-      updates.push("password_hash = ?");
-      params.push(password_hash);
+      updates.passwordHash = await bcrypt.hash(password, salt);
     }
 
-    if (address !== undefined) {
-      updates.push("address = ?");
-      params.push(address.trim() || null);
-    }
-    if (profile_image !== undefined) {
-      updates.push("profile_image = ?");
-      params.push(profile_image || null);
+    if (Object.keys(updates).length > 0) {
+      await User.findByIdAndUpdate(staffId, updates);
     }
 
-    if (updates.length > 0) {
-      params.push(staffId);
-      await db.runAsync(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
-    }
+    const updatedUser = await User.findById(staffId);
+    const profile     = await StaffProfile.findOne({ userId: staffId });
 
-    const updatedProfile = await db.getAsync(`
-      SELECT u.id, u.name, u.email, u.phone, u.address, u.profile_image, sp.category, sp.specialty, sp.is_available
-      FROM users u
-      JOIN staff_profiles sp ON u.id = sp.user_id
-      WHERE u.id = ?
-    `, [staffId]);
-
-    console.log(`Profile update successful for staff ${staffId}. Updates:`, updates);
-    res.json(updatedProfile);
+    res.json({
+      id:           updatedUser._id.toString(),
+      name:         updatedUser.name,
+      email:        updatedUser.email,
+      phone:        updatedUser.phone || '',
+      address:      updatedUser.address || '',
+      profile_image: updatedUser.profileImage || '',
+      category:     profile?.category || '',
+      specialty:    profile?.specialty || '',
+      is_available: profile?.isAvailable ?? true,
+    });
   } catch (error) {
     console.error('Profile update error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 
-// POST /api/staff — create a new staff member (admin only)
+// ---------- POST /api/staff (admin creates staff) ----------
 router.post('/', requireAdmin, async (req, res) => {
-  const bcrypt = require('bcrypt');
   const { name, email, category, password } = req.body;
-  if (!name || !email || !password || !category) {
+  if (!name || !email || !password || !category)
     return res.status(400).json({ error: 'name, email, password, and category are required' });
-  }
+
   try {
     const salt = await bcrypt.genSalt(10);
-    const password_hash = await bcrypt.hash(password, salt);
-    const result = await db.runAsync(
-      "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'staff')",
-      [name, email, password_hash]
-    );
-    const userId = result.lastID;
-    await db.runAsync(
-      "INSERT INTO staff_profiles (user_id, category, specialty, rating, is_available) VALUES (?, ?, '', 0, 1)",
-      [userId, category]
-    );
-    
-    const newStaff = await db.getAsync(
-      `SELECT u.id, u.name, u.email, u.phone, sp.category, sp.specialty, sp.rating, sp.is_available
-       FROM users u JOIN staff_profiles sp ON u.id = sp.user_id WHERE u.id = ?`,
-      [userId]
-    );
-    res.status(201).json({ 
-      ...newStaff, 
-      is_available: Boolean(newStaff.is_available)
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const newUser = await User.create({ name, email, passwordHash, role: 'staff' });
+    const profile = await StaffProfile.create({ userId: newUser._id, category, specialty: '', rating: 0, isAvailable: true });
+
+    res.status(201).json({
+      id:           newUser._id.toString(),
+      name:         newUser.name,
+      email:        newUser.email,
+      phone:        newUser.phone || '',
+      category:     profile.category,
+      specialty:    profile.specialty,
+      rating:       profile.rating,
+      is_available: profile.isAvailable,
     });
   } catch (error) {
-    if (error.message && error.message.includes('UNIQUE constraint failed')) {
-      return res.status(409).json({ error: 'A user with this email already exists' });
-    }
+    console.error('[STAFF CREATE ERROR]', { email, error: error.message, stack: error.stack });
+    if (error.code === 11000) return res.status(409).json({ error: 'A user with this email already exists' });
     res.status(500).json({ error: 'Failed to create staff member' });
   }
 });
 
-// PATCH /api/staff/:id — admin updates staff category or status
+// ---------- PATCH /api/staff/:id (admin updates staff category/status/role) ----------
 router.patch('/:id', requireAdmin, async (req, res) => {
   const staffId = req.params.id;
-  const { category, status, is_available } = req.body;
   
-  console.log(`PATCH /api/staff/${staffId} - Admin update:`, req.body);
-  
-  // RBAC: Admin can ONLY update category and status/is_available
-  const restrictedFields = ['name', 'email', 'phone', 'password'];
+  // Rule: Admins cannot update personal details
+  const restrictedFields = ['name', 'email', 'phone', 'password', 'address', 'profile_image'];
   for (const field of restrictedFields) {
-    if (req.body[field] !== undefined) {
-      return res.status(403).json({ error: `Admins are not allowed to update staff ${field}` });
-    }
+    if (req.body[field] !== undefined)
+      return res.status(403).json({ error: `Admins are not allowed to update staff ${field.replace('_', ' ')}` });
   }
 
+  const { category, role, status, is_available } = req.body;
+
   try {
-    const user = await db.getAsync("SELECT id FROM users WHERE id = ? AND role = 'staff'", [staffId]);
-    if (!user) {
-      return res.status(404).json({ error: 'Staff member not found' });
+    const user = await User.findOne({ _id: staffId, role: 'staff' });
+    if (!user) return res.status(404).json({ error: 'Staff member not found' });
+
+    // Handle User model updates (e.g., role)
+    if (role) {
+      const SUPPORTED_ROLES = ['customer', 'staff', 'admin'];
+      if (!SUPPORTED_ROLES.includes(role)) {
+        return res.status(400).json({ error: 'Invalid role' });
+      }
+      await User.findByIdAndUpdate(staffId, { role });
     }
 
-    let profileUpdates = [];
-    let params = [];
-
-    if (category) {
-      profileUpdates.push("category = ?");
-      params.push(category);
-    }
-
+    // Handle StaffProfile model updates
+    const profileUpdates = {};
+    if (category) profileUpdates.category = category;
     if (status !== undefined || is_available !== undefined) {
-      const availabilityValue = (status === 'active' || is_available === true || is_available === 1) ? 1 : 0;
-      profileUpdates.push("is_available = ?");
-      params.push(availabilityValue);
+      profileUpdates.isAvailable = (status === 'active' || is_available === true || is_available === 1);
     }
 
-    if (profileUpdates.length > 0) {
-      params.push(staffId);
-      await db.runAsync(`UPDATE staff_profiles SET ${profileUpdates.join(', ')} WHERE user_id = ?`, params);
+    if (Object.keys(profileUpdates).length > 0) {
+      await StaffProfile.findOneAndUpdate({ userId: staffId }, profileUpdates);
     }
 
-    const updatedStaff = await db.getAsync(`
-      SELECT u.id, u.name, u.email, u.phone, sp.category, sp.specialty, sp.rating, sp.is_available
-      FROM users u
-      JOIN staff_profiles sp ON u.id = sp.user_id
-      WHERE u.id = ?
-    `, [staffId]);
-
-    console.log(`Staff ${staffId} updated by admin. Result:`, updatedStaff);
-    res.json({ ...updatedStaff, is_available: Boolean(updatedStaff.is_available) });
+    const profile = await StaffProfile.findOne({ userId: staffId });
+    res.json({
+      id:           user._id.toString(),
+      name:         user.name,
+      email:        user.email,
+      phone:        user.phone || '',
+      category:     profile?.category || '',
+      specialty:    profile?.specialty || '',
+      rating:       profile?.rating || 0,
+      is_available: profile?.isAvailable ?? true,
+    });
   } catch (error) {
+    console.error('[STAFF UPDATE ERROR]', { id: staffId, error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to update staff member' });
   }
 });
 
-// DELETE /api/staff/:id — permanently delete a staff member (admin only)
+// ---------- DELETE /api/staff/:id ----------
 router.delete('/:id', requireAdmin, async (req, res) => {
   const staffId = req.params.id;
   try {
-    // Verify the user exists and is a staff member
-    const user = await db.getAsync(
-      "SELECT id, name FROM users WHERE id = ? AND role = 'staff'",
-      [staffId]
-    );
-    if (!user) {
-      return res.status(404).json({ error: 'Staff member not found' });
-    }
-    // Deleting from users cascades to staff_profiles and staff_service_assignments
-    await db.runAsync("DELETE FROM users WHERE id = ?", [staffId]);
+    const user = await User.findOne({ _id: staffId, role: 'staff' });
+    if (!user) return res.status(404).json({ error: 'Staff member not found' });
+
+    await StaffProfile.findOneAndDelete({ userId: staffId });
+    await User.findByIdAndDelete(staffId);
+
     res.json({ message: `Staff member '${user.name}' deleted successfully` });
   } catch (error) {
+    console.error('[STAFF DELETE ERROR]', { id: staffId, error: error.message });
     res.status(500).json({ error: 'Failed to delete staff member' });
   }
 });
 
-// GET /api/staff/:id/rating - get staff rating metrics
+// ---------- GET /api/staff/:id/rating ----------
 router.get('/:id/rating', async (req, res) => {
   const staffId = req.params.id;
   try {
-    const row = await db.getAsync(
-      'SELECT rating FROM staff_profiles WHERE user_id = ?',
-      [staffId]
-    );
+    if (!mongoose.Types.ObjectId.isValid(staffId)) return res.status(400).json({ error: 'Invalid staff ID' });
+    const profile = await StaffProfile.findOne({ userId: new mongoose.Types.ObjectId(staffId) });
+    if (!profile) return res.status(404).json({ error: 'Staff member not found' });
 
-    if (!row) {
-      return res.status(404).json({ error: 'Staff member not found' });
-    }
-
-    // Count real completed appointments as the review count
-    const countRow = await db.getAsync(
-      "SELECT COUNT(*) AS count FROM appointments WHERE staff_id = ? AND status = 'completed'",
-      [staffId]
-    );
-
-    res.json({
-      average: row.rating || 0,
-      count: countRow?.count || 0
-    });
+    const count = await Appointment.countDocuments({ staffId: new mongoose.Types.ObjectId(staffId), status: 'completed' });
+    res.json({ average: profile.rating || 0, count });
   } catch (error) {
+    console.error('[STAFF RATING ERROR]', { id: staffId, error: error.message });
     res.status(500).json({ error: 'Failed to fetch rating' });
   }
 });

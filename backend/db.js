@@ -1,232 +1,124 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+require('dotenv').config();
+const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
-const dbPath = path.resolve(__dirname, 'salon.db');
+const User              = require('./models/User');
+const Service           = require('./models/Service');
+const StaffProfile      = require('./models/StaffProfile');
+const Appointment       = require('./models/Appointment');
+const Notification      = require('./models/Notification');
+const LoyaltySetting    = require('./models/LoyaltySetting');
+const LoyaltyPointsHistory = require('./models/LoyaltyPointsHistory');
+const LoyaltyReward     = require('./models/LoyaltyReward');
+const Review            = require('./models/Review');
 
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening database ' + err.message);
-  } else {
-    console.log('Connected to the SQLite database.');
-  }
-});
+async function seedDemoData() {
+  const salt = await bcrypt.genSalt(10);
+  const passwordHash = await bcrypt.hash('password123', salt);
 
-// Helper for promises since sqlite3 doesn't support them out of the box
-db.runAsync = function (sql, params = []) {
-  return new Promise((resolve, reject) => {
-    this.run(sql, params, function (err) {
-      if (err) return reject(err);
-      resolve(this);
-    });
-  });
-};
+  const [customer, sarah, admin, emma, lisa] = await User.insertMany([
+    { name: 'John Customer', email: 'customer@example.com', passwordHash, phone: '+1 (555) 123-4567', role: 'customer', loyaltyPoints: 100 },
+    { name: 'Sarah Staff',   email: 'staff@example.com',   passwordHash, phone: '+1 (555) 234-5678', role: 'staff' },
+    { name: 'Admin User',    email: 'admin@example.com',   passwordHash, phone: '+1 (555) 345-6789', role: 'admin' },
+    { name: 'Emma Wilson',   email: 'emma@salon.com',      passwordHash, phone: '+1 (555) 456-7890', role: 'staff' },
+    { name: 'Lisa Davis',    email: 'lisa@salon.com',      passwordHash, phone: '+1 (555) 567-8901', role: 'staff' },
+  ]);
 
-db.getAsync = function (sql, params = []) {
-  return new Promise((resolve, reject) => {
-    this.get(sql, params, (err, row) => {
-      if (err) return reject(err);
-      resolve(row);
-    });
-  });
-};
+  const [hairCut, hairColor, facial, gelManicure, spaPedicure, massage] = await Service.insertMany([
+    { name: 'Hair Cut & Style', description: 'Professional cuts, coloring, and styling',        duration: 60,  price: 85.00,  category: 'Hair' },
+    { name: 'Hair Coloring',    description: 'Professional hair coloring service',               duration: 120, price: 150.00, category: 'Hair' },
+    { name: 'Signature Facial', description: 'Rejuvenating facial care and treatments',          duration: 75,  price: 120.00, category: 'Facial' },
+    { name: 'Gel Manicure',     description: 'Professional manicure with gel polish',            duration: 45,  price: 65.00,  category: 'Nails' },
+    { name: 'Spa Pedicure',     description: 'Relaxing pedicure treatment',                      duration: 60,  price: 75.00,  category: 'Nails' },
+    { name: 'Relaxing Massage', description: 'Full body relaxation massage',                     duration: 90,  price: 180.00, category: 'Massage' },
+  ]);
 
-db.allAsync = function (sql, params = []) {
-  return new Promise((resolve, reject) => {
-    this.all(sql, params, (err, rows) => {
-      if (err) return reject(err);
-      resolve(rows);
-    });
-  });
-};
+  await StaffProfile.insertMany([
+    { userId: sarah._id, category: 'Hair',   specialty: 'Hair Styling',       rating: 0, isAvailable: true, services: [hairCut._id] },
+    { userId: emma._id,  category: 'Hair',   specialty: 'Hair Styling',       rating: 0, isAvailable: true, services: [hairCut._id, hairColor._id] },
+    { userId: lisa._id,  category: 'Facial', specialty: 'Facial Treatments',  rating: 4.8, isAvailable: true, services: [facial._id] },
+  ]);
 
-async function initDb() {
-  db.serialize(async () => {
-    // Enable foreign keys
-    db.run("PRAGMA foreign_keys = ON");
-    
-    // 1. users
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name VARCHAR(100) NOT NULL,
-      email VARCHAR(120) UNIQUE NOT NULL,
-      password_hash VARCHAR(255),
-      phone VARCHAR(20),
-      role VARCHAR(20) NOT NULL DEFAULT 'customer',
-      googleId VARCHAR(255),
-      authProvider VARCHAR(20) NOT NULL DEFAULT 'local',
-      loyalty_points INTEGER DEFAULT 0,
-      reminder_email BOOLEAN DEFAULT 1,
-      reminder_sms BOOLEAN DEFAULT 1,
-      reminder_timing VARCHAR(10) DEFAULT '24h',
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      CHECK (role IN ('customer', 'staff', 'admin'))
-    )`);
+  await Review.insertMany([
+    { userId: customer._id, staffId: sarah._id, serviceId: hairCut._id, rating: 5, comment: 'Excellent service! Sarah is the best.' },
+    { userId: customer._id, staffId: emma._id,  serviceId: hairColor._id, rating: 4, comment: 'Great color, took a bit longer than expected.' },
+  ]);
 
-    // Add new columns for Google Auth if they don't exist
-    db.run(`ALTER TABLE users ADD COLUMN googleId VARCHAR(255)`, (err) => {});
-    db.run(`ALTER TABLE users ADD COLUMN authProvider VARCHAR(20) DEFAULT 'local'`, (err) => {});
-
-
-    // Ensure address and profile_image columns exist for personal profiles
-    db.run(`ALTER TABLE users ADD COLUMN address TEXT`, (err) => {});
-    db.run(`ALTER TABLE users ADD COLUMN profile_image VARCHAR(255)`, (err) => {});
-
-    // 2. services
-    db.run(`CREATE TABLE IF NOT EXISTS services (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name VARCHAR(100) NOT NULL,
-      description TEXT,
-      duration INTEGER NOT NULL,
-      price DECIMAL(10, 2) NOT NULL,
-      category VARCHAR(50) NOT NULL,
-      is_active BOOLEAN DEFAULT 1,
-      image_url VARCHAR(255),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      CHECK (duration > 0),
-      CHECK (price >= 0),
-      CHECK (category IN ('Hair', 'Facial', 'Nails', 'Massage', 'Wellness', 'Beauty'))
-    )`);
-
-    // Ensure image_url column exists for existing databases
-    db.run(`ALTER TABLE services ADD COLUMN image_url VARCHAR(255)`, (err) => {
-      // Ignore error if column already exists
-    });
-
-    // 3. staff_profiles
-    db.run(`CREATE TABLE IF NOT EXISTS staff_profiles (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER UNIQUE NOT NULL,
-      category VARCHAR(50),
-      specialty VARCHAR(100),
-      rating DECIMAL(3, 2) DEFAULT 0.00,
-      is_available BOOLEAN DEFAULT 1,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      CHECK (rating >= 0 AND rating <= 5)
-    )`);
-
-    // Ensure category column exists for existing databases
-    db.run(`ALTER TABLE staff_profiles ADD COLUMN category VARCHAR(50)`, (err) => {
-      // Ignore error if column already exists
-    });
-
-    // 4. staff_service_assignments
-    db.run(`CREATE TABLE IF NOT EXISTS staff_service_assignments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      staff_id INTEGER NOT NULL,
-      service_id INTEGER NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE,
-      UNIQUE(staff_id, service_id)
-    )`);
-
-    // 5. appointments
-    db.run(`CREATE TABLE IF NOT EXISTS appointments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      customer_id INTEGER NOT NULL,
-      staff_id INTEGER,
-      service_id INTEGER NOT NULL,
-      appointment_date DATE NOT NULL,
-      appointment_time TIME NOT NULL,
-      status VARCHAR(20) DEFAULT 'pending',
-      notes TEXT,
-      price DECIMAL(10, 2) NOT NULL,
-      rating INTEGER,
-      review TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE SET NULL,
-      FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE RESTRICT,
-      CHECK (status IN ('pending', 'confirmed', 'in-progress', 'completed', 'cancelled')),
-      CHECK (price >= 0),
-      CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5))
-    )`);
-
-    // 6. notifications
-    db.run(`CREATE TABLE IF NOT EXISTS notifications (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      title VARCHAR(100) NOT NULL,
-      message TEXT NOT NULL,
-      type VARCHAR(20) NOT NULL,
-      is_read BOOLEAN DEFAULT 0,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )`);
-  });
-
-  // Check if we need to insert dummy data
-  const row = await db.getAsync("SELECT COUNT(*) as count FROM users");
-  if (row.count === 0) {
-    console.log("Empty database detected. Populating with initial dummy data...");
-    
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash("password123", salt);
-
-    // Insert Users
-    const users = [
-      ['John Customer', 'customer@example.com', passwordHash, '+1 (555) 123-4567', 'customer', 100],
-      ['Sarah Staff', 'staff@example.com', passwordHash, '+1 (555) 234-5678', 'staff', 0],
-      ['Admin User', 'admin@example.com', passwordHash, '+1 (555) 345-6789', 'admin', 0],
-      ['Emma Wilson', 'emma@salon.com', passwordHash, '+1 (555) 456-7890', 'staff', 0],
-      ['Lisa Davis', 'lisa@salon.com', passwordHash, '+1 (555) 567-8901', 'staff', 0]
-    ];
-
-    for (const u of users) {
-      await db.runAsync(
-        "INSERT INTO users (name, email, password_hash, phone, role, loyalty_points) VALUES (?, ?, ?, ?, ?, ?)",
-        u
-      );
-    }
-    
-    const services = [
-      ['Hair Cut & Style', 'Professional cuts, coloring, and styling', 60, 85.00, 'Hair'],
-      ['Hair Coloring', 'Professional hair coloring service', 120, 150.00, 'Hair'],
-      ['Signature Facial', 'Rejuvenating facial care and treatments', 75, 120.00, 'Facial'],
-      ['Gel Manicure', 'Professional manicure with gel polish', 45, 65.00, 'Nails'],
-      ['Spa Pedicure', 'Relaxing pedicure treatment', 60, 75.00, 'Nails'],
-      ['Relaxing Massage', 'Full body relaxation massage', 90, 180.00, 'Massage']
-    ];
-
-    for (const s of services) {
-      await db.runAsync(
-        "INSERT INTO services (name, description, duration, price, category) VALUES (?, ?, ?, ?, ?)",
-        s
-      );
-    }
-
-    // Insert Staff Profiles — rating starts at 0.00 and is calculated from real reviews only
-    await db.runAsync("INSERT INTO staff_profiles (user_id, category, specialty, rating, is_available) VALUES (4, 'Hair', 'Hair Styling', 0.00, 1)");
-    await db.runAsync("INSERT INTO staff_profiles (user_id, category, specialty, rating, is_available) VALUES (5, 'Facial', 'Facial Treatments', 0.00, 1)");
-
-    // Insert Staff Service assignments
-    await db.runAsync("INSERT INTO staff_service_assignments (staff_id, service_id) VALUES (4, 1)");
-    await db.runAsync("INSERT INTO staff_service_assignments (staff_id, service_id) VALUES (4, 2)");
-    await db.runAsync("INSERT INTO staff_service_assignments (staff_id, service_id) VALUES (5, 3)");
-
-    console.log("Initial demo data seeded!");
-  }
-
-  // Migration: Ensure all existing staff have a category based on their specialty if NULL
-  await db.runAsync(`
-    UPDATE staff_profiles 
-    SET category = 'Hair' 
-    WHERE category IS NULL AND specialty LIKE '%Hair%'
-  `);
-  await db.runAsync(`
-    UPDATE staff_profiles 
-    SET category = 'Facial' 
-    WHERE category IS NULL AND specialty LIKE '%Facial%'
-  `);
-  await db.runAsync(`
-    UPDATE staff_profiles 
-    SET category = 'Beauty' 
-    WHERE category IS NULL
-  `);
+  console.log('✅ Demo data seeded — users, services, staff profiles, and reviews created.');
 }
 
-module.exports = { db, initDb };
+async function initDb() {
+  const uri = process.env.MONGO_URI;
+  if (!uri) {
+    throw new Error('❌ MONGO_URI is not set in .env. Add your MongoDB Atlas connection string.');
+  }
+
+  const options = {
+    serverSelectionTimeoutMS: 10000,
+    socketTimeoutMS: 45000,
+  };
+
+  let retryCount = 0;
+  const maxRetries = 5;
+
+  while (retryCount < maxRetries) {
+    try {
+      await mongoose.connect(uri, options);
+      console.log('✅ Connected to MongoDB Atlas');
+      break;
+    } catch (err) {
+      retryCount++;
+      console.error(`❌ MongoDB connection attempt ${retryCount} failed:`, err.message);
+      if (retryCount === maxRetries) throw err;
+      console.log(`Retrying in 5 seconds...`);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+  }
+
+  // Seed data only if userCount is 0 AND we are NOT in production
+  // or if SEED_DATA is explicitly set to true
+  const userCount = await User.countDocuments();
+  if (userCount === 0 && (process.env.NODE_ENV !== 'production' || process.env.SEED_DATA === 'true')) {
+    console.log('📦 Database empty — seeding demo data...');
+    await seedDemoData();
+  }
+
+  // Ensure singleton loyalty settings exist
+  const settingsCount = await LoyaltySetting.countDocuments();
+  if (settingsCount === 0) {
+    await new LoyaltySetting({}).save();
+    console.log('✅ Default loyalty settings created.');
+  }
+
+  // Seed rewards catalog
+  const rewardsCount = await LoyaltyReward.countDocuments();
+  if (rewardsCount === 0) {
+    await LoyaltyReward.insertMany([
+      { title: 'Bronze Reward', description: 'Redeem 100 points for a discount on your next booking.', pointsRequired: 100 },
+      { title: 'Silver Reward', description: 'Get a free Head Massage or Scalp Treatment.',            pointsRequired: 500 },
+      { title: 'Gold Reward',   description: 'Get a free Basic Haircut or Signature Facial.',          pointsRequired: 1000 },
+    ]);
+    console.log('✅ Default rewards seeded.');
+  }
+}
+
+// Handle connection errors after initial connect
+mongoose.connection.on('error', (err) => {
+  console.error('❌ MongoDB connection error:', err);
+});
+mongoose.connection.on('disconnected', () => {
+  console.warn('⚠️  MongoDB disconnected. Attempting to reconnect...');
+});
+
+module.exports = {
+  initDb,
+  User,
+  Service,
+  StaffProfile,
+  Appointment,
+  Notification,
+  LoyaltySetting,
+  LoyaltyPointsHistory,
+  LoyaltyReward,
+  Review,
+};

@@ -1,196 +1,154 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
-const { verifyToken, requireAdmin, requireAdminOrStaff } = require('../middleware/authMiddleware');
+const mongoose = require('mongoose');
+const { Appointment, Service, StaffProfile, User, Notification, LoyaltySetting, LoyaltyPointsHistory, LoyaltyReward, Review } = require('../db');
+const { verifyToken, requireAdmin } = require('../middleware/authMiddleware');
 const { sendAppointmentEmail } = require('../services/emailService');
 
+// ---------- Helpers ----------
 
-const fetchAppointmentWithDetails = async (appointmentId) => {
-  return await db.getAsync(`
-    SELECT 
-      a.id, a.appointment_date, a.appointment_time, a.status, a.notes, a.price, a.rating, a.review, a.created_at, a.updated_at,
-      cu.id as customer_id, cu.name as customer_name, cu.email as customer_email, cu.phone as customer_phone,
-      su.id as staff_id, su.name as staff_name, su.email as staff_email,
-      s.id as service_id, s.name as service_name, s.duration as service_duration, s.category as service_category
-    FROM appointments a
-    JOIN users cu ON a.customer_id = cu.id
-    LEFT JOIN users su ON a.staff_id = su.id
-    JOIN services s ON a.service_id = s.id
-    WHERE a.id = ?
-  `, [appointmentId]);
+const populateAppointment = (query) =>
+  query
+    .populate('customerId', 'name email phone loyaltyPoints')
+    .populate('staffId',    'name email')
+    .populate('serviceId',  'name duration category');
+
+const fetchAppointment = (id) =>
+  populateAppointment(Appointment.findById(id));
+
+const mapAppointment = (doc) => {
+  if (!doc) return null;
+  const cu = doc.customerId;
+  const st = doc.staffId;
+  const sv = doc.serviceId;
+  return {
+    id: doc._id.toString(),
+    customer: cu ? { id: cu._id.toString(), name: cu.name, email: cu.email, phone: cu.phone, loyalty_points: cu.loyaltyPoints || 0 } : null,
+    staff:    st ? { id: st._id.toString(), name: st.name, email: st.email } : null,
+    service:  sv ? { id: sv._id.toString(), name: sv.name, duration: sv.duration, category: sv.category } : null,
+    appointment_date: doc.appointmentDate,
+    appointment_time: doc.appointmentTime,
+    status:           doc.status,
+    notes:            doc.notes,
+    price:            doc.price,
+    points_redeemed:  doc.pointsRedeemed  || 0,
+    discount_amount:  doc.discountAmount  || 0,
+    original_amount:  doc.originalAmount  || doc.price || 0,
+    final_amount:     doc.finalAmount     || doc.price || 0,
+    discount_type:    doc.discountType    || null,
+    reward_id:        doc.rewardId?.toString() || null,
+    rating:           doc.rating,
+    review:           doc.review,
+    created_at:       doc.createdAt,
+    updated_at:       doc.updatedAt,
+  };
 };
 
-const mapAppointmentRow = (row) => ({
-  id: row.id,
-  customer: {
-    id: row.customer_id,
-    name: row.customer_name,
-    email: row.customer_email,
-    phone: row.customer_phone
-  },
-  staff: row.staff_id ? {
-    id: row.staff_id,
-    name: row.staff_name,
-    email: row.staff_email
-  } : null,
-  service: {
-    id: row.service_id,
-    name: row.service_name,
-    duration: row.service_duration,
-    category: row.service_category
-  },
-  appointment_date: row.appointment_date,
-  appointment_time: row.appointment_time,
-  status: row.status,
-  notes: row.notes,
-  price: row.price,
-  rating: row.rating,
-  review: row.review,
-  created_at: row.created_at,
-  updated_at: row.updated_at
-});
+const notify = (userId, title, message, type, appointmentId = null) =>
+  new Notification({ userId, title, message, type, appointmentId }).save().catch(() => {});
 
+// ---------- Routes ----------
 
 // GET /api/appointments
 router.get('/', verifyToken, async (req, res) => {
   const { status, date, date_from, date_to } = req.query;
   const user = req.user;
-
+  
   try {
-    let query = `
-      SELECT 
-        a.id, a.appointment_date, a.appointment_time, a.status, a.notes, a.price, a.rating, a.review, a.created_at, a.updated_at,
-        cu.id as customer_id, cu.name as customer_name, cu.email as customer_email, cu.phone as customer_phone,
-        su.id as staff_id, su.name as staff_name, su.email as staff_email,
-        s.id as service_id, s.name as service_name, s.duration as service_duration, s.category as service_category
-      FROM appointments a
-      JOIN users cu ON a.customer_id = cu.id
-      LEFT JOIN users su ON a.staff_id = su.id
-      JOIN services s ON a.service_id = s.id
-      WHERE 1=1
-    `;
-    const params = [];
-
-    // RBAC scopes
-    if (user.role === 'customer') {
-      query += " AND a.customer_id = ?";
-      params.push(user.user_id);
-    } else if (user.role === 'staff') {
-      query += " AND a.staff_id = ?";
-      params.push(user.user_id);
-    }
-
-    // Query filters
-    if (status) {
-      query += " AND a.status = ?";
-      params.push(status);
-    }
-    if (date) {
-      query += " AND a.appointment_date = ?";
-      params.push(date);
-    }
-    if (date_from) {
-      query += " AND a.appointment_date >= ?";
-      params.push(date_from);
-    }
-    if (date_to) {
-      query += " AND a.appointment_date <= ?";
-      params.push(date_to);
-    }
+    const filter = {};
+    const userObjectId = new mongoose.Types.ObjectId(user.user_id);
     
-    query += " ORDER BY a.appointment_date DESC, a.appointment_time DESC";
+    // Role-based filtering
+    if (user.role === 'customer') {
+      filter.customerId = userObjectId;
+    } else if (user.role === 'staff') {
+      filter.staffId = userObjectId;
+    }
+    // Admin sees everything (no role filter added)
 
-    const rows = await db.allAsync(query, params);
-    res.json(rows.map(mapAppointmentRow));
+    if (status) filter.status = status;
+    if (date)   filter.appointmentDate = date;
+    
+    if (date_from || date_to) {
+      filter.appointmentDate = {};
+      if (date_from) filter.appointmentDate.$gte = date_from;
+      if (date_to)   filter.appointmentDate.$lte = date_to;
+    }
+
+    console.log(`[API] Fetching appointments for ${user.role} (ID: ${user.user_id}) with filter:`, JSON.stringify(filter));
+
+    const docs = await populateAppointment(
+      Appointment.find(filter).sort({ appointmentDate: -1, appointmentTime: -1 })
+    );
+    
+    console.log(`[API] Found ${docs.length} appointments for ${user.role}.`);
+    res.json(docs.map(mapAppointment));
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch appointments' });
+    console.error('[FETCH APPOINTMENTS ERROR]', {
+      role: user.role,
+      userId: user.user_id,
+      query: req.query,
+      error: error.message
+    });
+    res.status(500).json({ error: 'Failed to fetch appointments: ' + error.message });
   }
 });
 
 // GET /api/appointments/slots
 router.get('/slots', async (req, res) => {
   const { date, staff_id, service_id, exclude_appointment_id } = req.query;
-  const sid = parseInt(service_id);
-  const stid = parseInt(staff_id);
-  const skipId = exclude_appointment_id ? parseInt(exclude_appointment_id) : null;
-
-  if (!date || isNaN(stid) || isNaN(sid)) {
+  if (!date || !staff_id || !service_id)
     return res.status(400).json({ error: 'Valid date, staff_id, and service_id are required' });
-  }
 
   try {
-    // Fetch service for duration
-    const service = await db.getAsync("SELECT is_active, duration FROM services WHERE id = ?", [sid]);
-    if (!service || !service.is_active) {
+    const service = await Service.findById(service_id);
+    if (!service || !service.isActive)
       return res.status(400).json({ error: 'This service is currently inactive' });
-    }
-    const requestedDuration = service.duration || 30;
 
-    // Check if staff is active
-    const staff = await db.getAsync("SELECT is_available FROM staff_profiles WHERE user_id = ?", [stid]);
-    if (!staff || !staff.is_available) {
+    const staffProfile = await StaffProfile.findOne({ userId: new mongoose.Types.ObjectId(staff_id) });
+    if (!staffProfile || !staffProfile.isAvailable)
       return res.status(400).json({ error: 'This staff member is currently inactive' });
-    }
 
-    // Generate dynamic slots based on duration
-    const startHour = 10; // 10:00 AM
-    const endHour = 21;   // 09:00 PM
+    const requestedDuration = service.duration || 30;
+    const startHour = 10, endHour = 21;
     const allSlots = [];
-    let currentMin = startHour * 60;
-    const maxMin = endHour * 60;
-
-    while (currentMin + requestedDuration <= maxMin) {
-      const h = Math.floor(currentMin / 60);
-      const m = currentMin % 60;
-      allSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-      currentMin += requestedDuration;
+    let cur = startHour * 60;
+    while (cur + requestedDuration <= endHour * 60) {
+      const h = Math.floor(cur / 60), m = cur % 60;
+      allSlots.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+      cur += requestedDuration;
     }
 
     const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const isToday = date === todayStr;
+    const todayStr    = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const nowMinutes  = now.getHours() * 60 + now.getMinutes();
+    const isToday     = date === todayStr;
 
-    let query = `
-      SELECT appointment_time, s.duration
-      FROM appointments a
-      JOIN services s ON a.service_id = s.id
-      WHERE a.staff_id = ? AND a.appointment_date = ? AND a.status != 'cancelled'
-    `;
-    let params = [stid, date];
+    const existingFilter = { 
+      staffId: new mongoose.Types.ObjectId(staff_id), 
+      appointmentDate: date, 
+      status: { $ne: 'cancelled' } 
+    };
+    if (exclude_appointment_id) existingFilter._id = { $ne: new mongoose.Types.ObjectId(exclude_appointment_id) };
 
-    if (skipId) {
-      query += " AND a.id != ?";
-      params.push(skipId);
-    }
-
-    const appointments = await db.allAsync(query, params);
-
-
-    const blockedMinuteRanges = appointments.map(a => {
-      const [h, m] = a.appointment_time.substring(0, 5).split(':').map(Number);
-      const start = h * 60 + m;
-      return { start, end: start + (a.duration || 30) };
+    const existing = await Appointment.find(existingFilter).populate('serviceId', 'duration');
+    const blocked  = existing.map(a => {
+      const [h, m] = a.appointmentTime.substring(0,5).split(':').map(Number);
+      const start  = h * 60 + m;
+      return { start, end: start + (a.serviceId?.duration || 30) };
     });
 
-    const availableSlots = allSlots.filter(slot => {
+    const available = allSlots.filter(slot => {
       const [h, m] = slot.split(':').map(Number);
-      const slotMinutes = h * 60 + m;
-      
-      // Filter past slots for today with buffer
-      if (isToday && slotMinutes <= nowMinutes + 15) return false;
-      
-      // Filter slots that overlap with any existing booking
-      const slotEnd = slotMinutes + requestedDuration;
-      for (const range of blockedMinuteRanges) {
-        if (slotMinutes < range.end && slotEnd > range.start) return false;
-      }
-      return true;
+      const sm = h * 60 + m;
+      if (isToday && sm <= nowMinutes + 15) return false;
+      const se = sm + requestedDuration;
+      return !blocked.some(b => sm < b.end && se > b.start);
     });
-    
-    res.json(availableSlots);
+
+    res.json(available);
   } catch (error) {
-    console.error(error);
+    console.error('[SLOTS ERROR]', { staff_id, service_id, date, error: error.message });
     res.status(500).json({ error: 'Failed to fetch available slots' });
   }
 });
@@ -198,21 +156,18 @@ router.get('/slots', async (req, res) => {
 // GET /api/appointments/:id
 router.get('/:id', verifyToken, async (req, res) => {
   try {
-    const row = await fetchAppointmentWithDetails(req.params.id);
-    if (!row) {
-      return res.status(404).json({ error: 'Appointment not found' });
-    }
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid appointment ID' });
+    const doc = await fetchAppointment(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Appointment not found' });
 
-    // RBAC validation
-    if (req.user.role === 'customer' && row.customer_id !== req.user.user_id) {
-      return res.status(403).json({ error: 'Not authorized to view this appointment' });
-    }
-    if (req.user.role === 'staff' && row.staff_id !== req.user.user_id) {
-      return res.status(403).json({ error: 'Not authorized to view this appointment' });
-    }
+    const custId  = doc.customerId?._id.toString();
+    const staffId = doc.staffId?._id?.toString();
+    if (req.user.role === 'customer' && custId  !== req.user.user_id) return res.status(403).json({ error: 'Not authorized to view this appointment' });
+    if (req.user.role === 'staff'    && staffId !== req.user.user_id) return res.status(403).json({ error: 'Not authorized to view this appointment' });
 
-    res.json(mapAppointmentRow(row));
+    res.json(mapAppointment(doc));
   } catch (error) {
+    console.error('[FETCH APPOINTMENT ERROR]', { id: req.params.id, error: error.message });
     res.status(500).json({ error: 'Failed to fetch appointment' });
   }
 });
@@ -220,218 +175,218 @@ router.get('/:id', verifyToken, async (req, res) => {
 // POST /api/appointments
 router.post('/', verifyToken, async (req, res) => {
   const { service_id, staff_id, appointment_date, appointment_time, notes } = req.body;
-  if (!service_id || !appointment_date || !appointment_time) {
+  if (!service_id || !appointment_date || !appointment_time)
     return res.status(400).json({ error: 'Service ID, date, and time are required' });
-  }
 
-  // Prevent past dates and times with a small buffer for processing time
   const now = new Date();
   const [hours, minutes] = appointment_time.split(':').map(Number);
   const bookingDate = new Date(appointment_date);
   bookingDate.setHours(hours, minutes, 0, 0);
-  
-  // 5 minute grace period for submission latency
-  if (bookingDate.getTime() < now.getTime() - (5 * 60 * 1000)) {
+  if (bookingDate.getTime() < now.getTime() - 5 * 60 * 1000)
     return res.status(400).json({ error: 'Cannot book appointment in the past' });
-  }
 
   try {
-    // Validate service — fetch category too for category-based staff matching
-    const service = await db.getAsync("SELECT id, name, price, is_active, duration, category FROM services WHERE id = ?", [service_id]);
-    if (!service || !service.is_active) {
+    const service = await Service.findById(service_id);
+    if (!service || !service.isActive)
       return res.status(404).json({ error: 'Service not found or inactive' });
-    }
+
     const requestedDuration = service.duration || 30;
-
-    // Validate that the requested time is a valid dynamic slot starting from 10:00
-    const startHour = 10;
-    const endHour = 21;
+    const startHour = 10, endHour = 21;
     const reqMinutes = hours * 60 + minutes;
-    
-    // Check if within business hours and doesn't overflow closing time
-    if (reqMinutes < startHour * 60 || reqMinutes + requestedDuration > endHour * 60) {
-      return res.status(400).json({ 
-        error: `Selected time is outside business hours (10:00 - 21:00) or service overflows closing time.` 
-      });
-    }
 
-    // Check if it matches a duration-based slot
-    const offsetFromStart = reqMinutes - (startHour * 60);
-    if (offsetFromStart % requestedDuration !== 0) {
-      return res.status(400).json({ 
-        error: `Invalid time slot for this service. Slots for ${service.name} (${requestedDuration} min) must start at ${requestedDuration} minute intervals from 10:00.` 
-      });
-    }
+    if (reqMinutes < startHour * 60 || reqMinutes + requestedDuration > endHour * 60)
+      return res.status(400).json({ error: 'Selected time is outside business hours (10:00 - 21:00) or service overflows closing time.' });
 
-    // Validate staff availability and conflicts
+    if ((reqMinutes - startHour * 60) % requestedDuration !== 0)
+      return res.status(400).json({ error: `Invalid time slot for this service. Slots for ${service.name} (${requestedDuration} min) must start at ${requestedDuration} minute intervals from 10:00.` });
+
     if (staff_id) {
-      const staffProfile = await db.getAsync(`
-        SELECT sp.is_available, sp.category
-        FROM staff_profiles sp
-        WHERE sp.user_id = ?
-      `, [staff_id]);
-      if (!staffProfile || !staffProfile.is_available) {
+      const staffProfile = await StaffProfile.findOne({ userId: staff_id });
+      if (!staffProfile || !staffProfile.isAvailable)
         return res.status(400).json({ error: 'This staff member is currently inactive' });
-      }
 
-      // Category-based validation: staff.category must match service.category
-      // Only enforce if both sides have category data (guard against legacy NULL rows)
-      if (service.category && staffProfile.category && staffProfile.category !== service.category) {
-        return res.status(400).json({
-          error: `This staff member handles ${staffProfile.category} services, not ${service.category}`
-        });
-      }
+      if (service.category && staffProfile.category && staffProfile.category !== service.category)
+        return res.status(400).json({ error: `This staff member handles ${staffProfile.category} services, not ${service.category}` });
 
-      // Duration-aware overlap check — block if any existing booking overlaps the requested slot
-      const reqMinutes = (() => {
-        const [h, m] = appointment_time.split(':').map(Number);
-        return h * 60 + m;
-      })();
       const reqEnd = reqMinutes + service.duration;
-
-      const existingBookings = await db.allAsync(`
-        SELECT a.appointment_time, s.duration
-        FROM appointments a
-        JOIN services s ON a.service_id = s.id
-        WHERE a.staff_id = ? AND a.appointment_date = ? AND a.status != 'cancelled'
-      `, [staff_id, appointment_date]);
-
-      for (const booking of existingBookings) {
-        const [h, m] = booking.appointment_time.substring(0, 5).split(':').map(Number);
-        const existStart = h * 60 + m;
-        const existEnd = existStart + (booking.duration || 30);
-        if (reqMinutes < existEnd && reqEnd > existStart) {
-          return res.status(409).json({ error: 'This staff is already booked during this time slot' });
-        }
+      const existing = await Appointment.find({ staffId: staff_id, appointmentDate: appointment_date, status: { $ne: 'cancelled' } }).populate('serviceId', 'duration');
+      for (const b of existing) {
+        const [h, m] = b.appointmentTime.substring(0,5).split(':').map(Number);
+        const es = h*60+m, ee = es + (b.serviceId?.duration || 30);
+        if (reqMinutes < ee && reqEnd > es) return res.status(409).json({ error: 'This staff is already booked during this time slot' });
       }
     }
 
-    const customer_id = req.user.role === 'customer' ? req.user.user_id : req.body.customer_id; // Support admins booking for clients later
+    const customer_id = req.user.role === 'customer' ? req.user.user_id : req.body.customer_id;
 
-    const result = await db.runAsync(`
-      INSERT INTO appointments (customer_id, staff_id, service_id, appointment_date, appointment_time, notes, price, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
-    `, [customer_id, staff_id || null, service_id, appointment_date, appointment_time, notes, service.price]);
+    // Loyalty point redemption
+    let discountAmount = 0;
+    let pointsToRedeem = 0;
+    const { reward_id, points_redeemed, use_all_points } = req.body;
 
-    // Notify Staff if assigned
-    if (staff_id) {
-      await db.runAsync(
-        "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
-        [staff_id, 'New Appointment', `New booking for ${service.name} on ${appointment_date} at ${appointment_time}`, 'new_appointment', result.lastID]
-      );
+    const customer = await User.findById(customer_id);
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+    
+    const settings = await LoyaltySetting.findOne().sort({ _id: -1 });
+
+    // Ensure exclusive selection
+    if (reward_id && (points_redeemed || use_all_points)) {
+      return res.status(400).json({ error: 'Cannot use both a fixed reward and custom points at the same time' });
     }
 
-    const newRow = await fetchAppointmentWithDetails(result.lastID);
-    
-    // Send background email notification
-    sendAppointmentEmail({
-      to: newRow.customer_email,
-      customerName: newRow.customer_name,
-      serviceName: newRow.service_name,
-      status: 'pending',
-      date: newRow.appointment_date,
-      time: newRow.appointment_time,
-      staffName: newRow.staff_name,
-      type: 'booked'
+    // Determine points to redeem based on selection
+    if (reward_id) {
+      const reward = await LoyaltyReward.findById(reward_id);
+      if (!reward || !reward.isActive) return res.status(400).json({ error: 'Invalid or inactive reward selected' });
+      pointsToRedeem = reward.pointsRequired;
+    } else if (use_all_points) {
+      pointsToRedeem = customer.loyaltyPoints || 0;
+    } else if (points_redeemed) {
+      pointsToRedeem = parseInt(points_redeemed) || 0;
+    }
+
+    if (pointsToRedeem > 0) {
+      if (customer.loyaltyPoints < pointsToRedeem)
+        return res.status(400).json({ error: `Insufficient loyalty points. Available: ${customer.loyaltyPoints}, Required: ${pointsToRedeem}` });
+      
+      if (service.price < (settings?.minBookingAmount || 0))
+        return res.status(400).json({ error: `Minimum booking amount for point redemption is $${settings.minBookingAmount}` });
+
+      const redemptionRate = settings?.redemptionRate || 0.1;
+      discountAmount = pointsToRedeem * redemptionRate;
+      
+      const maxDiscountPercent = settings?.maxDiscountPercent || 30;
+      const maxAllowed = service.price * (maxDiscountPercent / 100);
+      
+      if (discountAmount > maxAllowed) {
+        discountAmount = maxAllowed;
+        // Recalculate points to match the capped discount exactly
+        pointsToRedeem = Math.ceil(discountAmount / redemptionRate);
+      }
+
+      // FIFO deduction
+      let remaining = pointsToRedeem;
+      const earnHistory = await LoyaltyPointsHistory.find({ userId: customer_id, type: 'earn', pointsRemaining: { $gt: 0 } }).sort({ createdAt: 1 });
+      for (const entry of earnHistory) {
+        if (remaining <= 0) break;
+        const deduct = Math.min(entry.pointsRemaining, remaining);
+        await LoyaltyPointsHistory.findByIdAndUpdate(entry._id, { $inc: { pointsRemaining: -deduct } });
+        remaining -= deduct;
+      }
+
+      await User.findByIdAndUpdate(customer_id, { $inc: { loyaltyPoints: -pointsToRedeem } });
+      await LoyaltyPointsHistory.create({ userId: customer_id, points: pointsToRedeem, pointsRemaining: 0, type: 'redeem', reason: 'Redeemed for appointment booking' });
+    }
+
+    const originalAmount = service.price;
+    const finalAmount    = originalAmount - discountAmount;
+    const discountType   = (pointsToRedeem > 0 || req.body.reward_id) ? 'loyalty' : null;
+
+    const apt = await Appointment.create({
+      customerId:      new mongoose.Types.ObjectId(customer_id),
+      staffId:         staff_id ? new mongoose.Types.ObjectId(staff_id) : null,
+      serviceId:       new mongoose.Types.ObjectId(service_id),
+      appointmentDate: appointment_date,
+      appointmentTime: appointment_time,
+      notes,
+      price:           finalAmount,
+      status:          'pending',
+      pointsRedeemed:  pointsToRedeem,
+      discountAmount,
+      originalAmount,
+      finalAmount,
+      discountType,
+      rewardId:        req.body.reward_id ? new mongoose.Types.ObjectId(req.body.reward_id) : null,
     });
 
-    res.status(201).json(mapAppointmentRow(newRow));
+    if (staff_id) await notify(staff_id, 'New Appointment', `New booking for ${service.name} on ${appointment_date} at ${appointment_time}`, 'new_appointment', apt._id);
 
+    const populated = await fetchAppointment(apt._id);
+    const mapped    = mapAppointment(populated);
+
+    sendAppointmentEmail({
+      to: mapped.customer?.email, customerName: mapped.customer?.name,
+      serviceName: mapped.service?.name, status: 'pending',
+      date: apt.appointmentDate, time: apt.appointmentTime,
+      staffName: mapped.staff?.name, type: 'booked',
+    }).catch(err => console.error('[EMAIL ERROR]', err.message));
+
+    res.status(201).json(mapped);
   } catch (error) {
-    console.error("DEBUG APPOINTMENT BOOKING:", error);
-    res.status(500).json({ error: "DEBUG: " + (error.message || JSON.stringify(error) || String(error)) });
+    console.error('[APPOINTMENT BOOKING ERROR]', { body: req.body, user: req.user, error: error.message });
+    res.status(500).json({ error: 'Failed to book appointment: ' + (error.message || String(error)) });
   }
 });
 
 // PATCH /api/appointments/:id/status
 router.patch('/:id/status', verifyToken, async (req, res) => {
   const { status, notes } = req.body;
-  
   try {
-    const row = await db.getAsync("SELECT * FROM appointments WHERE id = ?", [req.params.id]);
-    if (!row) return res.status(404).json({ error: 'Appointment not found' });
-    
-    // RBAC & Ownership
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid appointment ID' });
+    const apt = await Appointment.findById(req.params.id);
+    if (!apt) return res.status(404).json({ error: 'Appointment not found' });
+
+    const custId    = apt.customerId.toString();
+    const staffId   = apt.staffId?.toString();
+    const prevStatus = apt.status;
+
     if (req.user.role === 'customer') {
-      if (row.customer_id !== req.user.user_id) {
-        return res.status(403).json({ error: 'Not authorized to access this appointment' });
-      }
-      if (status !== 'cancelled') {
-        return res.status(403).json({ error: 'Customers can only cancel their own appointments' });
-      }
-      if (row.status !== 'pending') {
-        return res.status(400).json({ error: 'Only pending appointments can be cancelled by customers' });
-      }
+      if (custId !== req.user.user_id) return res.status(403).json({ error: 'Not authorized to access this appointment' });
+      if (status !== 'cancelled')      return res.status(403).json({ error: 'Customers can only cancel their own appointments' });
+      if (prevStatus !== 'pending')    return res.status(400).json({ error: 'Only pending appointments can be cancelled by customers' });
     } else if (req.user.role === 'staff') {
-      if (row.staff_id !== req.user.user_id) {
-        return res.status(403).json({ error: 'Not authorized to manage this appointment' });
+      if (staffId !== req.user.user_id)                                          return res.status(403).json({ error: 'Not authorized to manage this appointment' });
+      if (!['confirmed','in-progress','completed','cancelled'].includes(status)) return res.status(403).json({ error: 'Unauthorized status transition for staff' });
+    }
+
+    const transitions = { pending: ['confirmed','cancelled'], confirmed: ['in-progress','cancelled'], 'in-progress': ['completed','cancelled'] };
+    if (req.user.role !== 'admin' && (!transitions[prevStatus] || !transitions[prevStatus].includes(status)))
+      return res.status(400).json({ error: `Cannot change status from ${prevStatus} to ${status}` });
+
+    apt.status = status;
+    if (notes) apt.notes = notes;
+    apt.updatedAt = new Date();
+    await apt.save();
+
+    const populated = await fetchAppointment(apt._id);
+    const mapped    = mapAppointment(populated);
+
+    await notify(custId, `Appointment ${status.charAt(0).toUpperCase()+status.slice(1)}`, `Your appointment for ${mapped.service?.name} has been ${status}.`, 'update', apt._id);
+    if (staffId) await notify(staffId, 'Status Update', `Appointment for ${mapped.customer?.name} is now ${status}.`, 'update', apt._id);
+
+    // Award loyalty points on completion
+    if (status === 'completed' && prevStatus !== 'completed') {
+      const settings = await LoyaltySetting.findOne().sort({ _id: -1 });
+      const multiplier  = settings?.pointsPerDollar || 1;
+      const finalPrice  = apt.price - (apt.discountAmount || 0);
+      const pointsEarned = Math.floor(finalPrice * multiplier);
+
+      if (pointsEarned > 0) {
+        const expiryDays = settings?.pointsExpiryDays || 365;
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + expiryDays);
+
+        await User.findByIdAndUpdate(custId, { $inc: { loyaltyPoints: pointsEarned } });
+        await LoyaltyPointsHistory.create({
+          userId: custId, points: pointsEarned, pointsRemaining: pointsEarned,
+          type: 'earn', reason: `Earned from appointment #${apt._id}`, expiryDate,
+        });
       }
-      const allowedStatuses = ['confirmed', 'in-progress', 'completed', 'cancelled'];
-      if (!allowedStatuses.includes(status)) {
-        return res.status(403).json({ error: 'Unauthorized status transition for staff' });
-      }
     }
 
-    // State machine transitions
-    const transitions = {
-      'pending': ['confirmed', 'cancelled'],
-      'confirmed': ['in-progress', 'cancelled'],
-      'in-progress': ['completed', 'cancelled']
-    };
-
-    if (req.user.role !== 'admin' && (!transitions[row.status] || !transitions[row.status].includes(status))) {
-      return res.status(400).json({ error: `Cannot change status from ${row.status} to ${status}` });
-    }
-
-    await db.runAsync(
-      "UPDATE appointments SET status = ?, notes = COALESCE(?, notes), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      [status, notes, req.params.id]
-    );
-
-    const updatedRow = await fetchAppointmentWithDetails(req.params.id);
-    if (!updatedRow) return res.status(404).json({ error: 'Appointment not found after update' });
-
-    // Notify Customer — use flat column names from the raw DB row
-    await db.runAsync(
-      "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
-      [updatedRow.customer_id, `Appointment ${status.charAt(0).toUpperCase() + status.slice(1)}`, `Your appointment for ${updatedRow.service_name} has been ${status}.`, 'update', updatedRow.id]
-    );
-
-    // Notify Staff
-    if (updatedRow.staff_id) {
-      await db.runAsync(
-        "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
-        [updatedRow.staff_id, 'Status Update', `Appointment for ${updatedRow.customer_name} is now ${status}.`, 'update', updatedRow.id]
-      );
-    }
-    
-    // If completing the appointment, award customer loyalty points
-    if (status === 'completed' && row.status !== 'completed') {
-      await db.runAsync("UPDATE users SET loyalty_points = loyalty_points + ? WHERE id = ?", [Math.floor(row.price), row.customer_id]);
-    }
-    
-    // Send background email notification if status changed
-    if (row.status !== status) {
-      const emailType = status === 'confirmed' ? 'confirmed' : 
-                        status === 'completed' ? 'completed' : 
-                        status === 'cancelled' ? 'cancelled' : 'update';
-      
+    if (apt.status !== status) {
+      const emailType = status === 'confirmed' ? 'confirmed' : status === 'completed' ? 'completed' : status === 'cancelled' ? 'cancelled' : 'update';
       sendAppointmentEmail({
-        to: updatedRow.customer_email,
-        customerName: updatedRow.customer_name,
-        serviceName: updatedRow.service_name,
-        status: status,
-        date: updatedRow.appointment_date,
-        time: updatedRow.appointment_time,
-        staffName: updatedRow.staff_name,
-        type: emailType
-      });
+        to: mapped.customer?.email, customerName: mapped.customer?.name,
+        serviceName: mapped.service?.name, status,
+        date: apt.appointmentDate, time: apt.appointmentTime,
+        staffName: mapped.staff?.name, type: emailType,
+      }).catch(err => console.error('[EMAIL ERROR]', err.message));
     }
-    
-    res.json(mapAppointmentRow(updatedRow));
 
+    res.json(mapped);
   } catch (error) {
-    console.error('[STATUS UPDATE ERROR]', error.message);
+    console.error('[STATUS UPDATE ERROR]', { id: req.params.id, status, error: error.message });
     res.status(500).json({ error: 'Failed to update appointment status' });
   }
 });
@@ -439,128 +394,90 @@ router.patch('/:id/status', verifyToken, async (req, res) => {
 // POST /api/appointments/:id/review
 router.post('/:id/review', verifyToken, async (req, res) => {
   const { rating, review } = req.body;
+  if (req.user.role !== 'customer') return res.status(403).json({ error: 'Only customers can leave reviews' });
 
-  if (req.user.role !== 'customer') {
-    return res.status(403).json({ error: 'Only customers can leave reviews' });
-  }
-
-  // Coerce to number first — this catches strings like "abc" (→ NaN) and rejects them
   const ratingNum = Number(rating);
-  if (!Number.isFinite(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+  if (!Number.isFinite(ratingNum) || ratingNum < 1 || ratingNum > 5)
     return res.status(400).json({ error: 'Rating must be a number between 1 and 5' });
-  }
-  // Round to nearest integer (1–5 are whole stars; reject e.g. 3.7 by rounding to integer)
   const ratingInt = Math.round(ratingNum);
 
   try {
-    const apt = await db.getAsync("SELECT * FROM appointments WHERE id = ?", [req.params.id]);
-    if (!apt) return res.status(404).json({ error: "Appointment not found" });
-    if (apt.customer_id !== req.user.user_id) return res.status(403).json({ error: "Not authorized" });
-    if (apt.status !== 'completed') return res.status(400).json({ error: "Can only review completed appointments" });
+    const apt = await Appointment.findById(req.params.id);
+    if (!apt) return res.status(404).json({ error: 'Appointment not found' });
+    if (apt.customerId.toString() !== req.user.user_id) return res.status(403).json({ error: 'Not authorized' });
+    if (apt.status !== 'completed') return res.status(400).json({ error: 'Can only review completed appointments' });
 
-    // Save the review on the appointment — use ratingInt (number, not raw string)
-    await db.runAsync(
-      "UPDATE appointments SET rating = ?, review = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      [ratingInt, review, req.params.id]
-    );
+    apt.rating = ratingInt;
+    apt.review = review;
+    await apt.save();
 
-    // Recalculate and persist the staff member's average rating if staff was assigned
+    // Also create a standalone Review document for the staff feedback feature
+    await Review.create({
+      userId: new mongoose.Types.ObjectId(req.user.user_id),
+      staffId: apt.staffId,
+      serviceId: apt.serviceId,
+      rating: ratingInt,
+      comment: review
+    });
+
     let newAvgRating = null;
-    if (apt.staff_id) {
-      const avgRow = await db.getAsync(`
-        SELECT ROUND(AVG(CAST(rating AS REAL)), 2) AS avg_rating,
-               COUNT(*) AS review_count
-        FROM appointments
-        WHERE staff_id = ? AND rating IS NOT NULL AND status = 'completed'
-      `, [apt.staff_id]);
-
-      if (avgRow && avgRow.avg_rating !== null) {
-        newAvgRating = avgRow.avg_rating;
-        await db.runAsync(
-          "UPDATE staff_profiles SET rating = ? WHERE user_id = ?",
-          [newAvgRating, apt.staff_id]
-        );
+    if (apt.staffId) {
+      const agg = await Appointment.aggregate([
+        { $match: { staffId: apt.staffId, rating: { $ne: null }, status: 'completed' } },
+        { $group: { _id: null, avg: { $avg: '$rating' } } },
+      ]);
+      if (agg.length > 0 && agg[0].avg != null) {
+        newAvgRating = parseFloat(agg[0].avg.toFixed(2));
+        await StaffProfile.findOneAndUpdate({ userId: apt.staffId }, { rating: newAvgRating });
       }
     }
 
-    res.json({
-      message: "Review submitted successfully",
-      staff_rating: newAvgRating
-    });
+    res.json({ message: 'Review submitted successfully', staff_rating: newAvgRating });
   } catch (error) {
     console.error('[REVIEW ERROR]', error.message);
-    res.status(500).json({ error: "Failed to submit review" });
+    res.status(500).json({ error: 'Failed to submit review' });
   }
 });
 
-// PATCH /api/appointments/:id
+// PATCH /api/appointments/:id  (general update / reschedule by admin/staff)
 router.patch('/:id', verifyToken, async (req, res) => {
   try {
-    const row = await db.getAsync("SELECT * FROM appointments WHERE id = ?", [req.params.id]);
-    if (!row) return res.status(404).json({ error: 'Appointment not found' });
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid appointment ID' });
+    const apt = await Appointment.findById(req.params.id);
+    if (!apt) return res.status(404).json({ error: 'Appointment not found' });
 
-    // RBAC: Admin can do anything. Staff can update their own. Customers can reschedule their own IF pending.
-    if (req.user.role === 'staff' && row.staff_id !== req.user.user_id) {
-      return res.status(403).json({ error: 'Not authorized to manage this appointment' });
-    }
+    const custId  = apt.customerId.toString();
+    const staffId = apt.staffId?.toString();
+
+    if (req.user.role === 'staff' && staffId !== req.user.user_id) return res.status(403).json({ error: 'Not authorized to manage this appointment' });
     if (req.user.role === 'customer') {
-      if (row.customer_id !== req.user.user_id) {
-        return res.status(403).json({ error: 'Not authorized' });
-      }
-      if (row.status !== 'pending') {
-        return res.status(400).json({ error: 'Only pending appointments can be rescheduled' });
-      }
-    }
-    if (req.user.role !== 'admin' && req.user.role !== 'staff' && req.user.role !== 'customer') {
-       return res.status(403).json({ error: 'Unauthorized' });
+      if (custId !== req.user.user_id) return res.status(403).json({ error: 'Not authorized' });
+      if (apt.status !== 'pending')    return res.status(400).json({ error: 'Only pending appointments can be rescheduled' });
     }
 
     const { appointment_date, appointment_time, staff_id, notes } = req.body;
-    await db.runAsync(
-      `UPDATE appointments SET
-        appointment_date = COALESCE(?, appointment_date),
-        appointment_time = COALESCE(?, appointment_time),
-        staff_id = COALESCE(?, staff_id),
-        notes = COALESCE(?, notes),
-        updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      [appointment_date, appointment_time, staff_id, notes, req.params.id]
-    );
+    if (appointment_date) apt.appointmentDate = appointment_date;
+    if (appointment_time) apt.appointmentTime = appointment_time;
+    if (staff_id)         apt.staffId         = new mongoose.Types.ObjectId(staff_id);
+    if (notes)            apt.notes           = notes;
+    await apt.save();
 
-    // Fetch details to get customer/service info for notification
-    const apt = await fetchAppointmentWithDetails(req.params.id);
-    
-      // Notify Customer
-      if (apt) {
-        await db.runAsync(
-          "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
-          [apt.customer_id, 'Appointment Updated', `Your appointment has been rescheduled/updated. Check details for changes.`, 'update', req.params.id]
-        );
-        
-        // Send background email notification
-        sendAppointmentEmail({
-          to: apt.customer_email,
-          customerName: apt.customer_name,
-          serviceName: apt.service_name,
-          status: apt.status,
-          date: apt.appointment_date,
-          time: apt.appointment_time,
-          staffName: apt.staff_name,
-          type: 'update'
-        });
+    const populated = await fetchAppointment(apt._id);
+    const mapped    = mapAppointment(populated);
 
-        // Notify new Staff if changed or assigned
-        if (staff_id && staff_id !== apt.staff_id) {
-           await db.runAsync(
-            "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
-            [staff_id, 'New Assignment', `You have been assigned to a new appointment on ${apt.appointment_date}.`, 'assignment', req.params.id]
-          );
-        }
-      }
+    await notify(custId, 'Appointment Updated', 'Your appointment has been rescheduled/updated. Check details for changes.', 'update', apt._id);
+    if (staff_id && staff_id !== staffId) await notify(staff_id, 'New Assignment', `You have been assigned to a new appointment on ${apt.appointmentDate}.`, 'assignment', apt._id);
 
-    const updated = await fetchAppointmentWithDetails(req.params.id);
-    res.json(mapAppointmentRow(updated));
+    sendAppointmentEmail({
+      to: mapped.customer?.email, customerName: mapped.customer?.name,
+      serviceName: mapped.service?.name, status: apt.status,
+      date: apt.appointmentDate, time: apt.appointmentTime,
+      staffName: mapped.staff?.name, type: 'update',
+    }).catch(err => console.error('[EMAIL ERROR]', err.message));
+
+    res.json(mapped);
   } catch (error) {
+    console.error('[APPOINTMENT UPDATE ERROR]', { id: req.params.id, error: error.message });
     res.status(500).json({ error: 'Failed to update appointment details' });
   }
 });
@@ -568,119 +485,78 @@ router.patch('/:id', verifyToken, async (req, res) => {
 // PATCH /api/appointments/:id/reschedule
 router.patch('/:id/reschedule', verifyToken, async (req, res) => {
   const { newDate, newTime } = req.body;
-  
-  if (!newDate || !newTime) {
-    return res.status(400).json({ error: 'New date and time are required' });
-  }
+  if (!newDate || !newTime) return res.status(400).json({ error: 'New date and time are required' });
 
   try {
-    // 1. Fetch current appointment details
-    const apt = await fetchAppointmentWithDetails(req.params.id);
-    if (!apt) return res.status(404).json({ error: 'Appointment not found' });
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid appointment ID' });
+    const populated = await fetchAppointment(req.params.id);
+    if (!populated) return res.status(404).json({ error: 'Appointment not found' });
 
-    // 2. RBAC: Customers can only reschedule their own PENDING appointments
+    const custId  = populated.customerId._id.toString();
+    const staffId = populated.staffId?._id?.toString();
+
     if (req.user.role === 'customer') {
-      if (apt.customer_id !== req.user.user_id) {
-        return res.status(403).json({ error: 'Not authorized' });
-      }
-      if (apt.status !== 'pending') {
-        return res.status(400).json({ error: 'Only pending appointments can be rescheduled by customers' });
-      }
+      if (custId !== req.user.user_id)        return res.status(403).json({ error: 'Not authorized' });
+      if (populated.status !== 'pending')     return res.status(400).json({ error: 'Only pending appointments can be rescheduled by customers' });
+    } else if (req.user.role !== 'admin' && req.user.role !== 'staff') {
+      return res.status(403).json({ error: 'Not authorized to reschedule appointments' });
     }
 
-    // 3. Prevent past dates/times
     const now = new Date();
     const [hours, minutes] = newTime.split(':').map(Number);
     const bookingDate = new Date(newDate);
     bookingDate.setHours(hours, minutes, 0, 0);
-    
-    if (bookingDate.getTime() < now.getTime() - (5 * 60 * 1000)) { // 5 min grace
+    if (bookingDate.getTime() < now.getTime() - 5 * 60 * 1000)
       return res.status(400).json({ error: 'Cannot reschedule to a past time' });
-    }
 
-    // 4. Validate Business Hours (10 AM - 9 PM)
-    const startHour = 10;
-    const endHour = 21;
+    const startHour = 10, endHour = 21;
     const reqMinutes = hours * 60 + minutes;
-    const duration = apt.service_duration || 30;
-
-    if (reqMinutes < startHour * 60 || reqMinutes + duration > endHour * 60) {
+    const duration   = populated.serviceId.duration || 30;
+    if (reqMinutes < startHour * 60 || reqMinutes + duration > endHour * 60)
       return res.status(400).json({ error: 'Selected time is outside business hours (10:00 - 21:00)' });
-    }
+    if ((reqMinutes - startHour * 60) % duration !== 0)
+      return res.status(400).json({ error: `Invalid time slot. For this service, slots must start at ${duration} minute intervals from 10:00.` });
 
-    // 5. Check Staff Availability (excluding THIS appointment's current slot)
-    if (apt.staff_id) {
-      const staff = await db.getAsync("SELECT is_available FROM staff_profiles WHERE user_id = ?", [apt.staff_id]);
-      if (!staff || !staff.is_available) {
+    if (staffId) {
+      const staffProf = await StaffProfile.findOne({ userId: new mongoose.Types.ObjectId(staffId) });
+      if (!staffProf || !staffProf.isAvailable)
         return res.status(400).json({ error: 'Assigned staff is currently unavailable' });
-      }
 
       const reqEnd = reqMinutes + duration;
-      const existingBookings = await db.allAsync(`
-        SELECT a.id, a.appointment_time, s.duration
-        FROM appointments a
-        JOIN services s ON a.service_id = s.id
-        WHERE a.staff_id = ? AND a.appointment_date = ? AND a.status != 'cancelled' AND a.id != ?
-      `, [apt.staff_id, newDate, apt.id]);
-
-      for (const booking of existingBookings) {
-        const [h, m] = booking.appointment_time.substring(0, 5).split(':').map(Number);
-        const existStart = h * 60 + m;
-        const existEnd = existStart + (booking.duration || 30);
-        if (reqMinutes < existEnd && reqEnd > existStart) {
-          return res.status(409).json({ error: 'This staff member is already booked during this time' });
-        }
+      const existing = await Appointment.find({ staffId: new mongoose.Types.ObjectId(staffId), appointmentDate: newDate, status: { $ne: 'cancelled' }, _id: { $ne: populated._id } }).populate('serviceId', 'duration');
+      for (const b of existing) {
+        const [h, m] = b.appointmentTime.substring(0,5).split(':').map(Number);
+        const es = h*60+m, ee = es + (b.serviceId?.duration || 30);
+        if (reqMinutes < ee && reqEnd > es) return res.status(409).json({ error: 'This staff member is already booked during this time' });
       }
     }
 
-    // 6. Update Database
-    await db.runAsync(
-      "UPDATE appointments SET appointment_date = ?, appointment_time = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      [newDate, newTime, req.params.id]
-    );
+    await Appointment.findByIdAndUpdate(populated._id, { appointmentDate: newDate, appointmentTime: newTime });
 
-    // 7. Notify Customer
-    await db.runAsync(
-      "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
-      [apt.customer_id, 'Appointment Rescheduled', `Your appointment for ${apt.service_name} has been rescheduled to ${newDate} at ${newTime}.`, 'reschedule', apt.id]
-    );
+    await notify(custId,  'Appointment Rescheduled', `Your appointment for ${populated.serviceId.name} has been rescheduled to ${newDate} at ${newTime}.`, 'reschedule', populated._id);
+    if (staffId) await notify(staffId, 'Appointment Rescheduled', `Appointment for ${populated.customerId.name} has been rescheduled to ${newDate} at ${newTime}.`, 'reschedule', populated._id);
 
-    // 8. Notify Staff
-    if (apt.staff_id) {
-      await db.runAsync(
-        "INSERT INTO notifications (user_id, title, message, type, appointment_id) VALUES (?, ?, ?, ?, ?)",
-        [apt.staff_id, 'Appointment Rescheduled', `Appointment for ${apt.customer_name} has been rescheduled to ${newDate} at ${newTime}.`, 'reschedule', apt.id]
-      );
-    }
-
-    // 9. Send Email
     sendAppointmentEmail({
-      to: apt.customer_email,
-      customerName: apt.customer_name,
-      serviceName: apt.service_name,
-      status: apt.status,
-      date: newDate,
-      time: newTime,
-      staffName: apt.staff_name || 'Assigned Staff',
-      type: 'reschedule'
-    });
+      to: populated.customerId.email, customerName: populated.customerId.name,
+      serviceName: populated.serviceId.name, status: populated.status,
+      date: newDate, time: newTime,
+      staffName: populated.staffId?.name || 'Assigned Staff', type: 'reschedule',
+    }).catch(err => console.error('[EMAIL ERROR]', err.message));
 
-    const updated = await fetchAppointmentWithDetails(apt.id);
-    res.json(mapAppointmentRow(updated));
-
+    const updated = await fetchAppointment(populated._id);
+    res.json(mapAppointment(updated));
   } catch (error) {
-    console.error('[RESCHEDULE ERROR]', error);
+    console.error('[RESCHEDULE ERROR]', { id: req.params.id, error: error.message });
     res.status(500).json({ error: 'Failed to reschedule appointment' });
   }
 });
 
 // DELETE /api/appointments/:id
 router.delete('/:id', requireAdmin, async (req, res) => {
-
   try {
-    const apt = await db.getAsync("SELECT id FROM appointments WHERE id = ?", [req.params.id]);
+    const apt = await Appointment.findById(req.params.id);
     if (!apt) return res.status(404).json({ error: 'Appointment not found' });
-    await db.runAsync("DELETE FROM appointments WHERE id = ?", [req.params.id]);
+    await Appointment.findByIdAndDelete(req.params.id);
     res.json({ message: 'Appointment deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete' });
