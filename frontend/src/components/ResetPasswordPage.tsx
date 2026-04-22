@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -17,6 +17,15 @@ export function ResetPasswordPage({ token, setCurrentView }: ResetPasswordPagePr
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const isLengthValid = password.length >= 8;
   const hasNumber = /\d/.test(password);
@@ -34,7 +43,7 @@ export function ResetPasswordPage({ token, setCurrentView }: ResetPasswordPagePr
       await api.auth.resetPassword(token, password);
       setSuccess(true);
       toast.success('Password reset successfully!');
-      setTimeout(() => setCurrentView('login'), 3000);
+      redirectTimeoutRef.current = setTimeout(() => setCurrentView('login'), 3000);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to reset password');
     } finally {

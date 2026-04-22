@@ -21,8 +21,13 @@ notificationSchema.set('toJSON', {
     ret.is_read        = ret.isRead;
     ret.appointment_id = ret.appointmentId?.toString() || null;
     ret.created_at     = ret.createdAt;
+    
     delete ret._id;
     delete ret.__v;
+    delete ret.userId;
+    delete ret.isRead;
+    delete ret.appointmentId;
+    delete ret.createdAt;
     return ret;
   }
 });

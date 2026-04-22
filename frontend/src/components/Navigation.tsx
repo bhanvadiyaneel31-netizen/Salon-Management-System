@@ -66,7 +66,7 @@ export function Navigation({
   };
 
   return (
-    <nav className="bg-white/90 backdrop-blur-sm border-b border-purple-100 sticky top-0 z-50 transition-all duration-300 w-full">
+    <nav className="bg-white/90 dark:bg-gray-950/90 backdrop-blur-sm border-b border-purple-100 dark:border-gray-800 sticky top-0 z-50 transition-all duration-300 w-full">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center gap-4">
@@ -74,7 +74,7 @@ export function Navigation({
               <Button
                 variant="ghost"
                 size="sm"
-                className="lg:hidden p-2 rounded-xl text-gray-600 hover:bg-purple-50 hover:text-purple-600"
+                className="lg:hidden p-2 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-purple-50 dark:hover:bg-gray-900 hover:text-purple-600 dark:hover:text-purple-400"
                 onClick={onToggleMobileSidebar}
               >
                 <Menu className="w-5 h-5" />
@@ -94,7 +94,7 @@ export function Navigation({
             </button>
             
             {isDashboard && (
-              <div className="hidden lg:flex items-center ml-4 px-3 py-1 bg-purple-50 rounded-full">
+              <div className="hidden lg:flex items-center ml-4 px-3 py-1 bg-purple-50 dark:bg-purple-900/20 rounded-full">
                 <span className="text-xs font-semibold text-purple-600 uppercase tracking-wider">
                   {userRole} Portal
                 </span>
@@ -106,7 +106,7 @@ export function Navigation({
             <button
               onClick={() => navigateTo('home')}
               className={`text-sm font-medium transition-colors ${
-                currentView === 'home' ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
+                currentView === 'home' ? 'text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400'
               }`}
             >
               Home
@@ -120,7 +120,7 @@ export function Navigation({
                   if (setActiveSection) setActiveSection('dashboard');
                 }}
                 className={`text-sm font-medium transition-colors ${
-                  currentView.includes('dashboard') ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
+                  currentView.includes('dashboard') ? 'text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400'
                 }`}
               >
                 Dashboard
@@ -130,7 +130,7 @@ export function Navigation({
             <button
               onClick={() => navigateTo('services')}
               className={`text-sm font-medium transition-colors ${
-                currentView === 'services' ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
+                currentView === 'services' ? 'text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400'
               }`}
             >
               Services
@@ -138,7 +138,7 @@ export function Navigation({
             <button
               onClick={() => navigateTo('contact')}
               className={`text-sm font-medium transition-colors ${
-                currentView === 'contact' ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
+                currentView === 'contact' ? 'text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400'
               }`}
             >
               Contact
@@ -149,7 +149,7 @@ export function Navigation({
           <div className="flex items-center space-x-2 sm:space-x-4">
             <button
               onClick={toggleDark}
-              className="p-2 rounded-xl text-gray-500 hover:text-purple-600 hover:bg-purple-50 transition-all duration-200"
+              className="p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-gray-900 transition-all duration-200"
               title={isDark ? 'Light Mode' : 'Dark Mode'}
             >
               {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -161,7 +161,7 @@ export function Navigation({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="relative p-2 hover:bg-purple-50 rounded-xl"
+                    className="relative p-2 hover:bg-purple-50 dark:hover:bg-gray-900 rounded-xl"
                     onClick={() => {
                       if (userRole === 'staff') {
                         navigateTo('staff-dashboard');
@@ -172,7 +172,7 @@ export function Navigation({
                       }
                     }}
                   >
-                    <Bell className="w-5 h-5 text-gray-600" />
+                    <Bell className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     {unreadCount > 0 && (
                       <Badge className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full p-0 flex items-center justify-center border-2 border-white">
                         {unreadCount}
@@ -182,7 +182,7 @@ export function Navigation({
                 )}
                 
                 <div className="hidden sm:flex flex-col items-end mr-2">
-                  <span className="text-xs font-bold text-gray-900 leading-none">
+                  <span className="text-xs font-bold text-gray-900 dark:text-white leading-none">
                     {api.auth.getCurrentUser()?.name}
                   </span>
                   <span className="text-[10px] text-gray-500 capitalize">{userRole}</span>
@@ -196,7 +196,7 @@ export function Navigation({
                   variant="ghost"
                   size="sm"
                   onClick={() => navigateTo('login')}
-                  className="text-purple-600 hover:bg-purple-50 rounded-xl"
+                  className="text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-gray-900 rounded-xl"
                 >
                   Login
                 </Button>
@@ -213,7 +213,7 @@ export function Navigation({
                 variant="outline"
                 size="sm"
                 onClick={handleLogout}
-                className="flex border-red-100 text-red-600 hover:bg-red-50 hover:border-red-200 rounded-xl"
+                className="flex border-red-100 dark:border-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 rounded-xl"
               >
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
@@ -225,7 +225,7 @@ export function Navigation({
               <Button
                 variant="ghost"
                 size="sm"
-                className="md:hidden p-2 text-gray-600 hover:bg-purple-50"
+                className="md:hidden p-2 text-gray-600 dark:text-gray-400 hover:bg-purple-50 dark:hover:bg-gray-900"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               >
                 {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -237,11 +237,11 @@ export function Navigation({
 
       {/* Mobile Navigation Menu (Non-dashboard) */}
       {!isDashboard && isMobileMenuOpen && (
-        <div className="md:hidden border-t border-purple-100 bg-white/95 backdrop-blur-md">
+        <div className="md:hidden border-t border-purple-100 dark:border-gray-800 bg-white/95 dark:bg-gray-950/95 backdrop-blur-md">
           <div className="px-4 pt-2 pb-6 space-y-2">
             <button
               onClick={() => navigateTo('home')}
-              className="block w-full text-left px-4 py-3 rounded-xl text-base font-medium text-gray-700 hover:bg-purple-50 hover:text-purple-600"
+              className="block w-full text-left px-4 py-3 rounded-xl text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-gray-900 hover:text-purple-600 dark:hover:text-purple-400"
             >
               Home
             </button>
@@ -253,7 +253,7 @@ export function Navigation({
                   navigateTo(dashboardView);
                   if (setActiveSection) setActiveSection('dashboard');
                 }}
-                className="block w-full text-left px-4 py-3 rounded-xl text-base font-medium text-gray-700 hover:bg-purple-50 hover:text-purple-600"
+                className="block w-full text-left px-4 py-3 rounded-xl text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-gray-900 hover:text-purple-600 dark:hover:text-purple-400"
               >
                 Dashboard
               </button>
@@ -261,13 +261,13 @@ export function Navigation({
 
             <button
               onClick={() => navigateTo('services')}
-              className="block w-full text-left px-4 py-3 rounded-xl text-base font-medium text-gray-700 hover:bg-purple-50 hover:text-purple-600"
+              className="block w-full text-left px-4 py-3 rounded-xl text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-gray-900 hover:text-purple-600 dark:hover:text-purple-400"
             >
               Services
             </button>
             <button
               onClick={() => navigateTo('contact')}
-              className="block w-full text-left px-4 py-3 rounded-xl text-base font-medium text-gray-700 hover:bg-purple-50 hover:text-purple-600"
+              className="block w-full text-left px-4 py-3 rounded-xl text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-gray-900 hover:text-purple-600 dark:hover:text-purple-400"
             >
               Contact
             </button>

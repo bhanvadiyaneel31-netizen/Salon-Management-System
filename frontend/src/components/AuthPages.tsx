@@ -6,7 +6,7 @@ import { Label } from "./ui/label";
 import { User, Mail, Lock, Phone, UserCheck, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { api, LoginRequest, RegisterRequest } from "../services/api";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 
 interface AuthPagesProps {
   view: 'login' | 'register';

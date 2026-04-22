@@ -17,13 +17,18 @@ staffProfileSchema.index({ category: 1 });
 staffProfileSchema.set('toJSON', {
   virtuals: true,
   transform: (doc, ret) => {
+    const { isAvailable, services, createdAt } = ret;
+    
     ret.id                   = ret._id.toString();
-    ret.is_available         = ret.isAvailable;
-    ret.services             = (ret.services || []).map(s => s._id?.toString() || s.toString());
+    ret.is_available         = isAvailable;
+    ret.services             = (services || []).map(s => s._id?.toString() || s.toString());
     ret.assigned_service_ids = ret.services;
-    ret.created_at           = ret.createdAt;
+    ret.created_at           = createdAt;
+    
     delete ret._id;
     delete ret.__v;
+    delete ret.isAvailable;
+    delete ret.createdAt;
     return ret;
   }
 });

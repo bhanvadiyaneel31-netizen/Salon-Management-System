@@ -11,6 +11,7 @@ router.get('/staff', verifyToken, async (req, res) => {
     let query = {};
 
     if (req.user.role === 'staff') {
+      if (!mongoose.Types.ObjectId.isValid(req.user.user_id)) return res.status(403).json({ error: 'Invalid user session' });
       query.staffId = new mongoose.Types.ObjectId(req.user.user_id);
     } else if (req.user.role === 'admin') {
       // Admin sees all, or can filter by staff_id query param
@@ -20,6 +21,7 @@ router.get('/staff', verifyToken, async (req, res) => {
       }
     } else if (req.user.role === 'customer') {
        // Customer sees only reviews they wrote
+       if (!mongoose.Types.ObjectId.isValid(req.user.user_id)) return res.status(403).json({ error: 'Invalid user session' });
        query.userId = new mongoose.Types.ObjectId(req.user.user_id);
     } else {
       return res.status(403).json({ error: 'Not authorized' });

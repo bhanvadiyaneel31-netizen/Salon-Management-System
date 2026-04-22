@@ -350,6 +350,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
     try {
       const category = categories.find(c => c.id === serviceForm.category_id);
       if (!category) {
+        setIsLoading(false);
         toast.error('Invalid category selected');
         return;
       }
@@ -387,6 +388,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
     try {
       const category = categories.find(c => c.id === serviceForm.category_id);
       if (!category) {
+        setIsLoading(false);
         toast.error('Invalid category selected');
         return;
       }

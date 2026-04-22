@@ -94,12 +94,15 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
       return;
     }
     const loadSlots = async () => {
+      let cancelled = false;
       setLoadingSlots(true);
       try {
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         console.log(`[FRONTEND] Loading slots for staff: ${selectedStaff}, service: ${selectedService}, date: ${dateStr}`);
         const data = await api.appointments.getAvailableSlots(dateStr, selectedStaff, selectedService);
         
+        if (cancelled) return;
+
         // Additional frontend filtering for today to ensure real-time accuracy
         const isToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
         let filteredSlots = data;
@@ -114,12 +117,14 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
           });
         }
         
+        if (cancelled) return;
         setAvailableTimeSlots(filteredSlots);
         
         // Add a timer to re-filter slots every minute if it's today
         let slotTimer: any;
         if (isToday) {
           slotTimer = setInterval(() => {
+            if (cancelled) return;
             const now = new Date();
             const curMins = now.getHours() * 60 + now.getMinutes();
             setAvailableTimeSlots(prev => prev.filter(slot => {
@@ -134,20 +139,22 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
         }
 
         return () => {
+          cancelled = true;
           if (slotTimer) clearInterval(slotTimer);
         };
       } catch (error: any) {
+        if (cancelled) return;
         // Only show error if parameters were actually valid
         console.error('Slot loading error:', error);
         toast.error(`Failed to load slots: ${error.message}`);
         setAvailableTimeSlots([]);
       } finally {
-        setLoadingSlots(false);
+        if (!cancelled) setLoadingSlots(false);
       }
     };
-    const cleanup = loadSlots();
+    const cleanupPromise = loadSlots();
     return () => {
-      cleanup.then(fn => fn && typeof fn === 'function' && fn());
+      cleanupPromise.then(fn => fn && typeof fn === 'function' && fn());
     };
   }, [selectedDate, selectedService, selectedStaff, currentStep]);
 

@@ -14,8 +14,12 @@ loyaltyRewardSchema.set('toJSON', {
     ret.points_required = ret.pointsRequired;
     ret.is_active       = ret.isActive;
     ret.created_at      = ret.createdAt;
+    
     delete ret._id;
     delete ret.__v;
+    delete ret.pointsRequired;
+    delete ret.isActive;
+    delete ret.createdAt;
     return ret;
   }
 });

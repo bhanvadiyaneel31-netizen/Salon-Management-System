@@ -406,9 +406,9 @@ export function AdminDashboard({
         createdAt: apt.created_at,
         bookedBy: 'customer',
         // Financial tracking fields
-        original_amount: apt.original_amount || apt.price || 0,
-        discount_amount: apt.discount_amount || 0,
-        final_amount: apt.final_amount || (apt.price - (apt.discount_amount || 0)) || 0,
+        original_amount: apt.original_amount ?? apt.price ?? 0,
+        discount_amount: apt.discount_amount ?? 0,
+        final_amount: apt.final_amount ?? (apt.price - (apt.discount_amount ?? 0)) ?? 0,
         discount_type: apt.discount_type,
         points_redeemed: apt.points_redeemed
       }));
@@ -606,6 +606,22 @@ export function AdminDashboard({
 
   const cancelAppointment = (appointmentId: string) => {
     updateAppointmentStatus(appointmentId, 'cancelled');
+  };
+
+  const handleViewAppointmentDetails = (appointmentId: string) => {
+    const apt = appointments.find(a => a.id === appointmentId);
+    if (apt) {
+      setSelectedAppointment(apt);
+      setIsAppointmentDetailsOpen(true);
+    }
+  };
+
+  const handleEditAppointment = (appointmentId: string) => {
+    const apt = appointments.find(a => a.id === appointmentId);
+    if (apt) {
+      setSelectedAppointment(apt);
+      setIsEditAppointmentOpen(true);
+    }
   };
 
   // Filter appointments based on search and filters
@@ -931,9 +947,15 @@ export function AdminDashboard({
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
-                                    <DropdownMenuItem>View Details</DropdownMenuItem>
-                                    <DropdownMenuItem>Edit</DropdownMenuItem>
-                                    <DropdownMenuItem className="text-red-600">Cancel</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => handleViewAppointmentDetails(appointment.id)}>
+                                      <Eye className="w-4 h-4 mr-2" /> View Details
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => handleEditAppointment(appointment.id)}>
+                                      <Calendar className="w-4 h-4 mr-2" /> Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-red-600" onSelect={() => cancelAppointment(appointment.id)}>
+                                      <XCircle className="w-4 h-4 mr-2" /> Cancel
+                                    </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               </TableCell>
@@ -972,9 +994,15 @@ export function AdminDashboard({
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem>View Details</DropdownMenuItem>
-                                <DropdownMenuItem>Edit</DropdownMenuItem>
-                                <DropdownMenuItem className="text-red-600">Cancel</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => handleViewAppointmentDetails(appointment.id)}>
+                                  <Eye className="w-4 h-4 mr-2" /> View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => handleEditAppointment(appointment.id)}>
+                                  <Calendar className="w-4 h-4 mr-2" /> Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600" onSelect={() => cancelAppointment(appointment.id)}>
+                                  <XCircle className="w-4 h-4 mr-2" /> Cancel
+                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
@@ -1837,7 +1865,7 @@ export function AdminDashboard({
                                   <div className="font-medium text-gray-900">{appointment.customer.name}</div>
                                   <div className="text-sm text-gray-500">{appointment.id}</div>
                                 </div>
-                                <span className="font-bold text-green-600">${appointment.service.price}</span>
+                                <span className="font-bold text-green-600">${appointment.final_amount}</span>
                               </div>
                               <div className="grid grid-cols-2 gap-2 text-sm mb-3">
                                 <div className="col-span-2">
@@ -2257,7 +2285,7 @@ export function AdminDashboard({
                             const staffAppointments = appointments.filter(a => a.assignedStaff?.id === staff.id);
                             const completedAppointments = staffAppointments.filter(a => a.status === 'completed');
                             const completionRate = staffAppointments.length > 0 ? Math.round((completedAppointments.length / staffAppointments.length) * 100) : 0;
-                            const revenue = completedAppointments.reduce((sum, a) => sum + a.service.price, 0);
+                            const revenue = completedAppointments.reduce((sum, a) => sum + (a.final_amount ?? a.service.price), 0);
                             
                             return (
                               <TableRow key={staff.id}>
@@ -2301,7 +2329,7 @@ export function AdminDashboard({
                         const staffAppointments = appointments.filter(a => a.assignedStaff?.id === staff.id);
                         const completedAppointments = staffAppointments.filter(a => a.status === 'completed');
                         const completionRate = staffAppointments.length > 0 ? Math.round((completedAppointments.length / staffAppointments.length) * 100) : 0;
-                        const revenue = completedAppointments.reduce((sum, a) => sum + a.service.price, 0);
+                        const revenue = completedAppointments.reduce((sum, a) => sum + (a.final_amount ?? a.service.price), 0);
                         
                         return (
                           <Card key={staff.id} className="p-4 border-purple-100">

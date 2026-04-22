@@ -160,7 +160,7 @@ export default function App() {
             {/* Mobile Sidebar */}
             <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
               <SheetContent side="left" className="w-72 p-0 border-0 bg-transparent shadow-none">
-                <div className="h-full bg-white p-4">
+                <div className="h-full bg-white dark:bg-gray-950 p-4">
                   <Sidebar 
                     role={userRole} 
                     activeSection={activeSection} 

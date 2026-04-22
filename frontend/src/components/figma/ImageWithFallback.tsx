@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 
 // Gradient palettes for placeholder cards based on index
 const GRADIENTS = [
@@ -15,11 +15,15 @@ type ImageWithFallbackProps = React.ImgHTMLAttributes<HTMLImageElement> & {
 }
 
 export function ImageWithFallback(props: ImageWithFallbackProps) {
-  const [didError, setDidError] = useState(false)
+  const [didError, setDidError] = useState(false);
+
+  useEffect(() => {
+    setDidError(false);
+  }, [props.src]);
 
   const handleError = () => {
-    setDidError(true)
-  }
+    setDidError(true);
+  };
 
   const { src, alt, style, className, gradientIndex = 0, ...rest } = props
   const gradient = GRADIENTS[gradientIndex % GRADIENTS.length]

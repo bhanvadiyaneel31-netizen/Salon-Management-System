@@ -92,7 +92,7 @@ interface Appointment {
 }
 
 interface Notification {
-  id: number;
+  id: string;
   type: 'new_appointment' | 'reminder' | 'update' | 'cancellation';
   title: string;
   message: string;
@@ -209,7 +209,7 @@ export function StaffDashboard({
     try {
       const data = await api.notifications.getAll();
       setNotifications(data.map((n: any) => ({
-        id: n.id,
+        id: String(n.id),
         type: n.type as any,
         title: n.title,
         message: n.message,

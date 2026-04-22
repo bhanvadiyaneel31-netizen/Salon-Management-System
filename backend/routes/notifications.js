@@ -38,7 +38,7 @@ async function markAsRead(req, res) {
       { _id: req.params.id, userId: req.user.user_id },
       { $set: { isRead: true } }
     );
-    if (result.modifiedCount === 0)
+    if (result.matchedCount === 0)
       return res.status(404).json({ error: 'Notification not found' });
     res.json({ message: 'Notification marked as read' });
   } catch (error) {

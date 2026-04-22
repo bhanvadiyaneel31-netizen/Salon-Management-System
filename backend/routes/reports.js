@@ -56,9 +56,9 @@ async function getReportData(reportType, staffId, startDate, endDate) {
     status:          a.status,
     price:           a.price,
     notes:           a.notes,
-    original_amount: a.originalAmount || a.price || 0,
-    discount_amount: a.discountAmount || 0,
-    final_amount:    a.finalAmount    || a.price || 0,
+    original_amount: a.originalAmount ?? a.price ?? 0,
+    discount_amount: a.discountAmount ?? 0,
+    final_amount:    a.finalAmount    ?? a.price ?? 0,
     discount_type:   a.discountType,
     customer_name:   a.customerId?.name || 'Unknown',
     staff_name:      a.staffId?.name    || null,
@@ -67,9 +67,9 @@ async function getReportData(reportType, staffId, startDate, endDate) {
 
   const completed  = rows.filter(r => r.status === 'completed');
   const cancelled  = rows.filter(r => r.status === 'cancelled');
-  const totalRevenue  = completed.reduce((s, r) => s + Number(r.final_amount   || 0), 0);
-  const totalDiscount = rows.reduce(     (s, r) => s + Number(r.discount_amount || 0), 0);
-  const grossRevenue  = rows.reduce(     (s, r) => s + Number(r.original_amount || 0), 0);
+  const totalRevenue  = completed.reduce((s, r) => s + Number(r.final_amount    || 0), 0);
+  const totalDiscount = completed.reduce((s, r) => s + Number(r.discount_amount || 0), 0);
+  const grossRevenue  = completed.reduce((s, r) => s + Number(r.original_amount || 0), 0);
   const avgServiceValue = completed.length > 0 ? totalRevenue / completed.length : 0;
 
   const serviceCounts = {};

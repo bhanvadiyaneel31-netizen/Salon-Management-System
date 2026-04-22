@@ -656,21 +656,21 @@ export const mockAPI = {
       // Mock users with different roles based on email
       const mockUsers: { [key: string]: User } = {
         'customer@example.com': {
-          id: 1,
+          id: '1',
           name: 'John Customer',
           email: 'customer@example.com',
           role: 'customer',
           created_at: new Date().toISOString()
         },
         'staff@example.com': {
-          id: 2,
+          id: '2',
           name: 'Sarah Staff',
           email: 'staff@example.com',
           role: 'staff',
           created_at: new Date().toISOString()
         },
         'admin@example.com': {
-          id: 3,
+          id: '3',
           name: 'Admin User',
           email: 'admin@example.com',
           role: 'admin',
@@ -680,7 +680,7 @@ export const mockAPI = {
       
       // Find user by email or create a customer by default
       const mockUser = mockUsers[credentials.email] || {
-        id: 1,
+        id: '1',
         name: 'John Doe',
         email: credentials.email,
         role: 'customer' as const,
@@ -702,7 +702,7 @@ export const mockAPI = {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       const mockUser: User = {
-        id: Date.now(), // Use timestamp as mock ID
+        id: String(Date.now()), // Use timestamp as mock ID
         name: userData.name,
         email: userData.email,
         phone: userData.phone,
@@ -732,11 +732,23 @@ export const mockAPI = {
 
     isAuthenticated(): boolean {
       return !!localStorage.getItem('auth_token');
+    },
+
+    async getProfile(): Promise<User & { total_appointments: number }> {
+      const user = mockAPI.auth.getCurrentUser();
+      if (!user) throw new Error('Not authenticated');
+      return { ...user, total_appointments: 5 };
+    },
+
+    async getMe(): Promise<User> {
+      const user = mockAPI.auth.getCurrentUser();
+      if (!user) throw new Error('Not authenticated');
+      return user;
     }
   },
 
   users: {
-    async update(id: number | null, data: any): Promise<User> {
+    async update(id: string | null, data: any): Promise<User> {
       await new Promise(resolve => setTimeout(resolve, 500));
       const user = id ? { id, name: 'Mock User', email: 'mock@example.com', role: 'staff' as const, created_at: '' } : mockAPI.auth.getCurrentUser();
       if (!user) throw new Error('Not authenticated');
@@ -752,35 +764,35 @@ export const mockAPI = {
   services: {
     async getAll(): Promise<Service[]> {
       return [
-        { id: 1, name: 'Hair Cut & Style', description: 'Professional cuts, coloring, and styling', duration: 60, price: 85, category: 'Hair' },
-        { id: 2, name: 'Hair Coloring', description: 'Professional hair coloring service', duration: 120, price: 150, category: 'Hair' },
-        { id: 3, name: 'Signature Facial', description: 'Rejuvenating facial care and treatments', duration: 75, price: 120, category: 'Facial' },
-        { id: 4, name: 'Gel Manicure', description: 'Professional manicure with gel polish', duration: 45, price: 65, category: 'Nails' },
-        { id: 5, name: 'Spa Pedicure', description: 'Relaxing pedicure treatment', duration: 60, price: 75, category: 'Nails' },
-        { id: 6, name: 'Relaxing Massage', description: 'Full body relaxation massage', duration: 90, price: 180, category: 'Massage' }
+        { id: '1', name: 'Hair Cut & Style', description: 'Professional cuts, coloring, and styling', duration: 60, price: 85, category: 'Hair' },
+        { id: '2', name: 'Hair Coloring', description: 'Professional hair coloring service', duration: 120, price: 150, category: 'Hair' },
+        { id: '3', name: 'Signature Facial', description: 'Rejuvenating facial care and treatments', duration: 75, price: 120, category: 'Facial' },
+        { id: '4', name: 'Gel Manicure', description: 'Professional manicure with gel polish', duration: 45, price: 65, category: 'Nails' },
+        { id: '5', name: 'Spa Pedicure', description: 'Relaxing pedicure treatment', duration: 60, price: 75, category: 'Nails' },
+        { id: '6', name: 'Relaxing Massage', description: 'Full body relaxation massage', duration: 90, price: 180, category: 'Massage' }
       ];
     },
 
     async create(service: Omit<Service, 'id'>): Promise<Service> {
       await new Promise(resolve => setTimeout(resolve, 500));
-      const newService = { id: Date.now(), ...service };
-      return newService;
+      const newService = { id: String(Date.now()), ...service };
+      return newService as Service;
     },
 
-    async update(id: number, service: Partial<Service>): Promise<Service> {
+    async update(id: string, service: Partial<Service>): Promise<Service> {
       await new Promise(resolve => setTimeout(resolve, 500));
       return { id, ...service } as Service;
     },
 
-    async delete(id: number): Promise<void> {
+    async delete(id: string): Promise<void> {
       await new Promise(resolve => setTimeout(resolve, 500));
     },
 
-    async assignStaff(serviceId: number, staffId: number): Promise<void> {
+    async assignStaff(serviceId: string, staffId: string): Promise<void> {
       await new Promise(resolve => setTimeout(resolve, 500));
     },
 
-    async removeStaff(serviceId: number, staffId: number): Promise<void> {
+    async removeStaff(serviceId: string, staffId: string): Promise<void> {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   },
@@ -788,20 +800,20 @@ export const mockAPI = {
   staff: {
     async getAll(): Promise<Staff[]> {
       return [
-        { id: 1, name: 'Sarah Johnson', email: 'sarah@salon.com', specialty: 'Hair Styling', rating: 4.9, is_available: true },
-        { id: 2, name: 'Emma Wilson', email: 'emma@salon.com', specialty: 'Facial Treatments', rating: 4.8, is_available: true },
-        { id: 3, name: 'Lisa Chen', email: 'lisa@salon.com', specialty: 'Nail Care', rating: 4.7, is_available: true },
-        { id: 4, name: 'Any Available Staff', email: 'staff@salon.com', specialty: 'All Services', rating: 4.8, is_available: true }
+        { id: '1', name: 'Sarah Johnson', email: 'sarah@salon.com', specialty: 'Hair Styling', rating: 4.9, is_available: true },
+        { id: '2', name: 'Emma Wilson', email: 'emma@salon.com', specialty: 'Facial Treatments', rating: 4.8, is_available: true },
+        { id: '3', name: 'Lisa Chen', email: 'lisa@salon.com', specialty: 'Nail Care', rating: 4.7, is_available: true },
+        { id: '4', name: 'Any Available Staff', email: 'staff@salon.com', specialty: 'All Services', rating: 4.8, is_available: true }
       ];
     },
 
     async getAssignments() {
       return [
-        { id: 1, name: 'Emma Wilson', email: 'emma.wilson@salon.com', phone: '+1 (555) 123-4567', role: 'Senior Stylist', specialty: 'Hair Cutting & Styling', status: 'active', rating: 4.9, service_ids: [1, 2] },
-        { id: 2, name: 'Lisa Davis', email: 'lisa.davis@salon.com', phone: '+1 (555) 234-5678', role: 'Hair Stylist', specialty: 'Hair Services', status: 'active', rating: 4.8, service_ids: [1] },
-        { id: 3, name: 'Sarah Johnson', email: 'sarah.johnson@salon.com', phone: '+1 (555) 345-6789', role: 'Facial Specialist', specialty: 'Skin Care & Treatments', status: 'active', rating: 4.7, service_ids: [3] },
-        { id: 4, name: 'Mike Roberts', email: 'mike.roberts@salon.com', phone: '+1 (555) 456-7890', role: 'Nail Technician', specialty: 'Manicure & Pedicure', status: 'active', rating: 4.6, service_ids: [4, 5] },
-        { id: 5, name: 'Carlos Martinez', email: 'carlos.martinez@salon.com', phone: '+1 (555) 567-8901', role: 'Massage Therapist', specialty: 'Relaxation & Therapeutic Massage', status: 'active', rating: 4.8, service_ids: [6] }
+        { id: '1', name: 'Emma Wilson', email: 'emma.wilson@salon.com', phone: '+1 (555) 123-4567', role: 'Senior Stylist', specialty: 'Hair Cutting & Styling', status: 'active', rating: 4.9, service_ids: ['1', '2'] },
+        { id: '2', name: 'Lisa Davis', email: 'lisa.davis@salon.com', phone: '+1 (555) 234-5678', role: 'Hair Stylist', specialty: 'Hair Services', status: 'active', rating: 4.8, service_ids: ['1'] },
+        { id: '3', name: 'Sarah Johnson', email: 'sarah.johnson@salon.com', phone: '+1 (555) 345-6789', role: 'Facial Specialist', specialty: 'Skin Care & Treatments', status: 'active', rating: 4.7, service_ids: ['3'] },
+        { id: '4', name: 'Mike Roberts', email: 'mike.roberts@salon.com', phone: '+1 (555) 456-7890', role: 'Nail Technician', specialty: 'Manicure & Pedicure', status: 'active', rating: 4.6, service_ids: ['4', '5'] },
+        { id: '5', name: 'Carlos Martinez', email: 'carlos.martinez@salon.com', phone: '+1 (555) 567-8901', role: 'Massage Therapist', specialty: 'Relaxation & Therapeutic Massage', status: 'active', rating: 4.8, service_ids: ['6'] }
       ];
     }
   },
@@ -811,15 +823,15 @@ export const mockAPI = {
       return [];
     },
 
-    async getByCustomer(customerId: number): Promise<Appointment[]> {
+    async getByCustomer(customerId: string): Promise<Appointment[]> {
       return [];
     },
 
     async create(booking: BookingRequest): Promise<Appointment> {
       const mockAppointment: Appointment = {
-        id: Date.now(),
-        customer_id: 1,
-        staff_id: booking.staff_id,
+        id: String(Date.now()),
+        customer_id: '1',
+        staff_id: booking.staff_id || '1',
         service_id: booking.service_id,
         appointment_date: booking.appointment_date,
         appointment_time: booking.appointment_time,
@@ -832,15 +844,15 @@ export const mockAPI = {
 
     async getAllForAdmin() {
       const mockAppointments = [
-        { id: 1, customer: { id: 1, name: 'Sarah Johnson', email: 'sarah.j@email.com', phone: '+1 (555) 111-2222' }, staff: { id: 1, name: 'Emma Wilson', role: 'Senior Stylist' }, service: { id: 1, name: 'Hair Cut & Style', duration: 60 }, appointment_date: '2024-12-20', appointment_time: '10:00', status: 'confirmed', price: 85, notes: 'First time client', created_at: '2024-12-19T10:00:00Z' },
-        { id: 2, customer: { id: 2, name: 'Mike Chen', email: 'mike.chen@email.com', phone: '+1 (555) 333-4444' }, staff: { id: 3, name: 'Sarah Johnson', role: 'Facial Specialist' }, service: { id: 3, name: 'Signature Facial', duration: 75 }, appointment_date: '2024-12-20', appointment_time: '14:00', status: 'pending', price: 120, created_at: '2024-12-19T11:00:00Z' },
-        { id: 3, customer: { id: 3, name: 'Anna Rodriguez', email: 'anna.r@email.com', phone: '+1 (555) 555-6666' }, staff: { id: 4, name: 'Mike Roberts', role: 'Nail Technician' }, service: { id: 4, name: 'Gel Manicure', duration: 45 }, appointment_date: '2024-12-20', appointment_time: '15:30', status: 'confirmed', price: 65, created_at: '2024-12-19T12:00:00Z' },
-        { id: 4, customer: { id: 4, name: 'David Kim', email: 'david.kim@email.com', phone: '+1 (555) 777-8888' }, staff: { id: 1, name: 'Emma Wilson', role: 'Senior Stylist' }, service: { id: 2, name: 'Hair Coloring', duration: 120 }, appointment_date: '2024-12-19', appointment_time: '13:00', status: 'completed', price: 150, created_at: '2024-12-18T14:00:00Z' },
-        { id: 5, customer: { id: 5, name: 'Jennifer Lee', email: 'jen.lee@email.com', phone: '+1 (555) 999-0000' }, staff: { id: 5, name: 'Carlos Martinez', role: 'Massage Therapist' }, service: { id: 6, name: 'Relaxing Massage', duration: 90 }, appointment_date: '2024-12-21', appointment_time: '11:00', status: 'pending', price: 180, created_at: '2024-12-19T16:00:00Z' }
+        { id: '1', customer: { id: '1', name: 'Sarah Johnson', email: 'sarah.j@email.com', phone: '+1 (555) 111-2222' }, staff: { id: '1', name: 'Emma Wilson', role: 'Senior Stylist' }, service: { id: '1', name: 'Hair Cut & Style', duration: 60 }, appointment_date: '2024-12-20', appointment_time: '10:00', status: 'confirmed', price: 85, notes: 'First time client', created_at: '2024-12-19T10:00:00Z' },
+        { id: '2', customer: { id: '2', name: 'Mike Chen', email: 'mike.chen@email.com', phone: '+1 (555) 333-4444' }, staff: { id: '3', name: 'Sarah Johnson', role: 'Facial Specialist' }, service: { id: '3', name: 'Signature Facial', duration: 75 }, appointment_date: '2024-12-20', appointment_time: '14:00', status: 'pending', price: 120, created_at: '2024-12-19T11:00:00Z' },
+        { id: '3', customer: { id: '3', name: 'Anna Rodriguez', email: 'anna.r@email.com', phone: '+1 (555) 555-6666' }, staff: { id: '4', name: 'Mike Roberts', role: 'Nail Technician' }, service: { id: '4', name: 'Gel Manicure', duration: 45 }, appointment_date: '2024-12-20', appointment_time: '15:30', status: 'confirmed', price: 65, created_at: '2024-12-19T12:00:00Z' },
+        { id: '4', customer: { id: '4', name: 'David Kim', email: 'david.kim@email.com', phone: '+1 (555) 777-8888' }, staff: { id: '1', name: 'Emma Wilson', role: 'Senior Stylist' }, service: { id: '2', name: 'Hair Coloring', duration: 120 }, appointment_date: '2024-12-19', appointment_time: '13:00', status: 'completed', price: 150, created_at: '2024-12-18T14:00:00Z' },
+        { id: '5', customer: { id: '5', name: 'Jennifer Lee', email: 'jen.lee@email.com', phone: '+1 (555) 999-0000' }, staff: { id: '5', name: 'Carlos Martinez', role: 'Massage Therapist' }, service: { id: '6', name: 'Relaxing Massage', duration: 90 }, appointment_date: '2024-12-21', appointment_time: '11:00', status: 'pending', price: 180, created_at: '2024-12-19T16:00:00Z' }
       ];
 
       return {
-        appointments: mockAppointments,
+        appointments: mockAppointments as any,
         pagination: {
           page: 1,
           per_page: 50,
@@ -852,15 +864,15 @@ export const mockAPI = {
       };
     },
 
-    async updateStatusAdmin(id: number, status: string, notes?: string): Promise<void> {
+    async updateStatusAdmin(id: string, status: string, notes?: string): Promise<void> {
       await new Promise(resolve => setTimeout(resolve, 500));
     },
 
-    async rescheduleAdmin(id: number, updates: any): Promise<void> {
+    async rescheduleAdmin(id: string, updates: any): Promise<void> {
       await new Promise(resolve => setTimeout(resolve, 500));
     },
 
-    async deleteAdmin(id: number, reason?: string): Promise<void> {
+    async deleteAdmin(id: string, reason?: string): Promise<void> {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   },
@@ -898,40 +910,83 @@ export const mockAPI = {
 
     async getStaffPerformance() {
       return [
-        { id: 1, name: 'Sarah Johnson', role: 'Hair Stylist', appointments: 28, rating: 4.9 },
-        { id: 2, name: 'Emma Wilson', role: 'Esthetician', appointments: 22, rating: 4.8 },
-        { id: 3, name: 'Lisa Chen', role: 'Nail Technician', appointments: 25, rating: 4.7 },
-        { id: 4, name: 'Mike Davis', role: 'Massage Therapist', appointments: 18, rating: 4.6 }
+        { id: '1', name: 'Sarah Johnson', role: 'Hair Stylist', appointments: 28, rating: 4.9 },
+        { id: '2', name: 'Emma Wilson', role: 'Esthetician', appointments: 22, rating: 4.8 },
+        { id: '3', name: 'Lisa Chen', role: 'Nail Technician', appointments: 25, rating: 4.7 },
+        { id: '4', name: 'Mike Davis', role: 'Massage Therapist', appointments: 18, rating: 4.6 }
       ];
     },
 
     async getServicePerformance() {
       return [
-        { service_id: 1, service_name: 'Hair Cut & Style', category: 'Hair', base_price: 85, total_bookings: 45, completed_bookings: 42, total_revenue: 3570, average_revenue: 85, completion_rate: 93.3 },
-        { service_id: 2, service_name: 'Hair Coloring', category: 'Hair', base_price: 150, total_bookings: 28, completed_bookings: 26, total_revenue: 3900, average_revenue: 150, completion_rate: 92.9 },
-        { service_id: 3, service_name: 'Signature Facial', category: 'Facial', base_price: 120, total_bookings: 35, completed_bookings: 33, total_revenue: 3960, average_revenue: 120, completion_rate: 94.3 },
-        { service_id: 4, service_name: 'Gel Manicure', category: 'Nails', base_price: 65, total_bookings: 52, completed_bookings: 49, total_revenue: 3185, average_revenue: 65, completion_rate: 94.2 },
-        { service_id: 5, service_name: 'Spa Pedicure', category: 'Nails', base_price: 75, total_bookings: 38, completed_bookings: 36, total_revenue: 2700, average_revenue: 75, completion_rate: 94.7 },
-        { service_id: 6, service_name: 'Relaxing Massage', category: 'Massage', base_price: 180, total_bookings: 22, completed_bookings: 20, total_revenue: 3600, average_revenue: 180, completion_rate: 90.9 }
+        { service_id: '1', service_name: 'Hair Cut & Style', category: 'Hair', base_price: 85, total_bookings: 45, completed_bookings: 42, total_revenue: 3570, average_revenue: 85, completion_rate: 93.3 },
+        { service_id: '2', service_name: 'Hair Coloring', category: 'Hair', base_price: 150, total_bookings: 28, completed_bookings: 26, total_revenue: 3900, average_revenue: 150, completion_rate: 92.9 },
+        { service_id: '3', service_name: 'Signature Facial', category: 'Facial', base_price: 120, total_bookings: 35, completed_bookings: 33, total_revenue: 3960, average_revenue: 120, completion_rate: 94.3 },
+        { service_id: '4', service_name: 'Gel Manicure', category: 'Nails', base_price: 65, total_bookings: 52, completed_bookings: 49, total_revenue: 3185, average_revenue: 65, completion_rate: 94.2 },
+        { service_id: '5', service_name: 'Spa Pedicure', category: 'Nails', base_price: 75, total_bookings: 38, completed_bookings: 36, total_revenue: 2700, average_revenue: 75, completion_rate: 94.7 },
+        { service_id: '6', service_name: 'Relaxing Massage', category: 'Massage', base_price: 180, total_bookings: 22, completed_bookings: 20, total_revenue: 3600, average_revenue: 180, completion_rate: 90.9 }
       ];
     },
 
     async getStaffWorkload() {
       return [
-        { staff_id: 1, staff_name: 'Emma Wilson', role: 'Senior Stylist', total_appointments: 45, completed_appointments: 42, total_hours: 63, total_revenue: 6300, completion_rate: 93.3 },
-        { staff_id: 2, staff_name: 'Lisa Davis', role: 'Hair Stylist', total_appointments: 28, completed_appointments: 26, total_hours: 26, total_revenue: 2210, completion_rate: 92.9 },
-        { staff_id: 3, staff_name: 'Sarah Johnson', role: 'Facial Specialist', total_appointments: 35, completed_appointments: 33, total_hours: 41.25, total_revenue: 3960, completion_rate: 94.3 },
-        { staff_id: 4, staff_name: 'Mike Roberts', role: 'Nail Technician', total_appointments: 52, completed_appointments: 49, total_hours: 61.25, total_revenue: 3185, completion_rate: 94.2 },
-        { staff_id: 5, staff_name: 'Carlos Martinez', role: 'Massage Therapist', total_appointments: 22, completed_appointments: 20, total_hours: 30, total_revenue: 3600, completion_rate: 90.9 }
+        { staff_id: '1', staff_name: 'Emma Wilson', role: 'Senior Stylist', total_appointments: 45, completed_appointments: 42, total_hours: 63, total_revenue: 6300, completion_rate: 93.3 },
+        { staff_id: '2', staff_name: 'Lisa Davis', role: 'Hair Stylist', total_appointments: 28, completed_appointments: 26, total_hours: 26, total_revenue: 2210, completion_rate: 92.9 },
+        { staff_id: '3', staff_name: 'Sarah Johnson', role: 'Facial Specialist', total_appointments: 35, completed_appointments: 33, total_hours: 41.25, total_revenue: 3960, completion_rate: 94.3 },
+        { staff_id: '4', staff_name: 'Mike Roberts', role: 'Nail Technician', total_appointments: 52, completed_appointments: 49, total_hours: 61.25, total_revenue: 3185, completion_rate: 94.2 },
+        { staff_id: '5', staff_name: 'Carlos Martinez', role: 'Massage Therapist', total_appointments: 22, completed_appointments: 20, total_hours: 30, total_revenue: 3600, completion_rate: 90.9 }
       ];
     }
   },
+
   notifications: {
     async getAll(): Promise<Notification[]> {
       return [];
     },
     async markAsRead(): Promise<void> {},
     async markAllRead(): Promise<void> {}
+  },
+
+  loyalty: {
+    async getHistory(): Promise<LoyaltyHistory[]> {
+      return [];
+    },
+    async getSettings(): Promise<LoyaltySettings> {
+      return { id: '1', points_per_dollar: 1, redemption_rate: 0.1, max_discount_percent: 20, min_booking_amount: 50, points_expiry_days: 365, updated_at: new Date().toISOString() };
+    },
+    async updateSettings(settings: any) {
+      return { message: 'Settings updated' };
+    },
+    async getRewards(): Promise<any[]> {
+      return [];
+    },
+    async addReward(reward: any) {
+      return { message: 'Reward added' };
+    },
+    async updateReward(id: number, reward: any) {
+      return { message: 'Reward updated' };
+    },
+    async deleteReward(id: number) {
+      return { message: 'Reward deleted' };
+    },
+    async adjust(data: any) {
+      return { message: 'Points adjusted' };
+    }
+  },
+
+  reports: {
+    async generate(data: any) {
+      return { data: [], summary: {} };
+    },
+    async export(data: any) {
+      return new Blob();
+    }
+  },
+
+  reviews: {
+    async getStaffReviews(staffId?: string) {
+      return [];
+    }
   }
 };
 

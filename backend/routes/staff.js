@@ -253,11 +253,13 @@ router.patch('/:id', requireAdmin, async (req, res) => {
     }
 
     const profile = await StaffProfile.findOne({ userId: staffId });
+    const freshUser = await User.findById(staffId);
+    
     res.json({
-      id:           user._id.toString(),
-      name:         user.name,
-      email:        user.email,
-      phone:        user.phone || '',
+      id:           freshUser._id.toString(),
+      name:         freshUser.name,
+      email:        freshUser.email,
+      phone:        freshUser.phone || '',
       category:     profile?.category || '',
       specialty:    profile?.specialty || '',
       rating:       profile?.rating || 0,

@@ -414,13 +414,23 @@ export function CustomerDashboard({
   };
 
   const handleRedeemPoints = async (points: number) => {
-    toast.success(`Redeemed ${points} points for a $10 discount!`);
-    setProfile(prev => ({
-      ...prev,
-      loyaltyPoints: Math.max(0, prev.loyaltyPoints - points)
-    }));
-    // Re-sync from server after a short delay to confirm the deduction
-    setTimeout(() => loadProfile(), 1000);
+    try {
+      const currentUser = api.auth.getCurrentUser();
+      if (!currentUser) return;
+      
+      await api.loyalty.adjust({
+        user_id: currentUser.id,
+        points: points,
+        type: 'redeem',
+        description: 'Point redemption from dashboard'
+      } as any);
+      
+      toast.success(`Redeemed ${points} points for a $10 discount!`);
+      await loadProfile();
+      await loadLoyaltyData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to redeem points");
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -513,7 +523,7 @@ export function CustomerDashboard({
               <p className="text-gray-500 text-sm">Next Visit</p>
               <p className="text-xl font-bold text-gray-900">
                 {upcomingAppointments.length > 0 
-                  ? format(new Date(upcomingAppointments[0].date), 'MMM d, h:mm a')
+                  ? format(new Date(`${upcomingAppointments[0].date}T${upcomingAppointments[0].time}`), 'MMM d, h:mm a')
                   : 'No upcoming visits'}
               </p>
             </div>

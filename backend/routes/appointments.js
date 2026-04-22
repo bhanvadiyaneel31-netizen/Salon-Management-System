@@ -374,7 +374,7 @@ router.patch('/:id/status', verifyToken, async (req, res) => {
       }
     }
 
-    if (apt.status !== status) {
+    if (prevStatus !== status) {
       const emailType = status === 'confirmed' ? 'confirmed' : status === 'completed' ? 'completed' : status === 'cancelled' ? 'cancelled' : 'update';
       sendAppointmentEmail({
         to: mapped.customer?.email, customerName: mapped.customer?.name,

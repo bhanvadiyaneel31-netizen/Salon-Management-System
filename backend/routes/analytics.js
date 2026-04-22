@@ -23,7 +23,7 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
 
     const revAgg = await Appointment.aggregate([
       { $match: { appointmentDate: today, status: 'completed' } },
-      { $group: { _id: null, total: { $sum: '$finalAmount' } } },
+      { $group: { _id: null, total: { $sum: { $ifNull: ['$finalAmount', '$price'] } } } },
     ]);
     const todayRevenue = revAgg[0]?.total || 0;
 
@@ -54,8 +54,9 @@ router.get('/weekly-data', requireAdmin, async (req, res) => {
     const sixDaysAgo = new Date(now);
     sixDaysAgo.setDate(now.getDate() - 6);
     const fromDate = fmtDate(sixDaysAgo);
+    const toDate   = fmtDate(now);
 
-    const raw = await Appointment.find({ appointmentDate: { $gte: fromDate } });
+    const raw = await Appointment.find({ appointmentDate: { $gte: fromDate, $lte: toDate } });
 
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const weeklyFormat = [

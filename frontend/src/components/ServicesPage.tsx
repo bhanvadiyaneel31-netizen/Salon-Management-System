@@ -44,7 +44,7 @@ export function ServicesPage({ setCurrentView, setPreselectedServiceId }: Servic
   ];
 
   const getServicesByCategory = (key: string) => {
-    return services.filter(s => s.category === key);
+    return services.filter(s => s.category?.toLowerCase() === key.toLowerCase());
   };
 
   return (
@@ -165,6 +165,7 @@ export function ServicesPage({ setCurrentView, setPreselectedServiceId }: Servic
             <Button
               variant="outline"
               size="lg"
+              onClick={() => setCurrentView('contact')}
               className="border-2 border-white text-white hover:bg-white hover:text-purple-600 text-base sm:text-lg px-6 sm:px-8 py-5 sm:py-6 rounded-2xl w-full sm:w-auto"
             >
               Contact Us

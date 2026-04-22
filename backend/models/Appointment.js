@@ -41,8 +41,19 @@ appointmentSchema.set('toJSON', {
     ret.reward_id        = ret.rewardId?.toString() || null;
     ret.created_at       = ret.createdAt;
     ret.updated_at       = ret.updatedAt;
+
     delete ret._id;
     delete ret.__v;
+    delete ret.appointmentDate;
+    delete ret.appointmentTime;
+    delete ret.pointsRedeemed;
+    delete ret.discountAmount;
+    delete ret.originalAmount;
+    delete ret.finalAmount;
+    delete ret.discountType;
+    delete ret.rewardId;
+    delete ret.createdAt;
+    delete ret.updatedAt;
     return ret;
   }
 });

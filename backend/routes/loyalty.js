@@ -9,22 +9,39 @@ const { verifyToken, requireAdmin } = require('../middleware/authMiddleware');
 const cleanupExpiredPoints = async (userId) => {
   try {
     const now = new Date();
+    // Find expired entries for this user
     const expired = await LoyaltyPointsHistory.find({
       userId, type: 'earn', pointsRemaining: { $gt: 0 }, expiryDate: { $lt: now },
     });
 
     if (expired.length === 0) return;
 
-    let totalExpired = 0;
     for (const entry of expired) {
-      totalExpired += entry.pointsRemaining;
-      await LoyaltyPointsHistory.create({ userId, points: entry.pointsRemaining, pointsRemaining: 0, type: 'redeem', reason: `Points expired (from entry #${entry._id})` });
-      await LoyaltyPointsHistory.findByIdAndUpdate(entry._id, { pointsRemaining: 0 });
-    }
+      // Atomically claim the expired points
+      const claimedEntry = await LoyaltyPointsHistory.findOneAndUpdate(
+        { _id: entry._id, pointsRemaining: { $gt: 0 } },
+        { $set: { pointsRemaining: 0 } },
+        { new: true }
+      );
 
-    await User.findByIdAndUpdate(userId, { $inc: { loyaltyPoints: -totalExpired } });
-    // Clamp to 0 minimum
-    await User.findOneAndUpdate({ _id: userId, loyaltyPoints: { $lt: 0 } }, { loyaltyPoints: 0 });
+      // Only process if we successfully claimed the points (prevents race condition)
+      if (claimedEntry && entry.pointsRemaining > 0) {
+        const amountToDeduct = entry.pointsRemaining;
+
+        // Create expiration record
+        await LoyaltyPointsHistory.create({ 
+          userId, 
+          points: amountToDeduct, 
+          pointsRemaining: 0, 
+          type: 'redeem', 
+          reason: `Points expired (from entry #${entry._id})` 
+        });
+
+        // Decrement user's points and clamp to 0 minimum
+        await User.findByIdAndUpdate(userId, { $inc: { loyaltyPoints: -amountToDeduct } });
+        await User.findOneAndUpdate({ _id: userId, loyaltyPoints: { $lt: 0 } }, { loyaltyPoints: 0 });
+      }
+    }
   } catch (err) {
     console.error('Failed to cleanup expired points:', err);
   }
@@ -162,6 +179,7 @@ router.post('/adjust', verifyToken, requireAdmin, async (req, res) => {
     await LoyaltyPointsHistory.create({ 
       userId: targetUser._id, 
       points: Math.abs(points), 
+      pointsRemaining: type === 'earn' ? Math.abs(points) : 0,
       type, 
       reason: finalReason 
     });

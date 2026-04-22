@@ -39,8 +39,8 @@ router.put('/update', verifyToken, async (req, res) => {
     const targetUser = await User.findById(targetUserId);
     if (!targetUser) return res.status(404).json({ error: 'User not found' });
 
-    if (updaterRole === 'staff' && targetUserId !== updaterId)
-      return res.status(403).json({ error: 'Staff can only update their own profile' });
+    if ((updaterRole === 'staff' || updaterRole === 'customer') && targetUserId !== updaterId)
+      return res.status(403).json({ error: `${updaterRole.charAt(0).toUpperCase() + updaterRole.slice(1)} can only update their own profile` });
 
     const userUpdates         = {};
     const staffProfileUpdates = {};

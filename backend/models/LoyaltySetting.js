@@ -19,8 +19,15 @@ loyaltySettingSchema.set('toJSON', {
     ret.min_booking_amount  = ret.minBookingAmount;
     ret.points_expiry_days  = ret.pointsExpiryDays;
     ret.updated_at          = ret.updatedAt;
+    
     delete ret._id;
     delete ret.__v;
+    delete ret.pointsPerDollar;
+    delete ret.redemptionRate;
+    delete ret.maxDiscountPercent;
+    delete ret.minBookingAmount;
+    delete ret.pointsExpiryDays;
+    delete ret.updatedAt;
     return ret;
   }
 });

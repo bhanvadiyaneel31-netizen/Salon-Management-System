@@ -1,12 +1,4 @@
 .env
-backend/.env
-node_modules
-backend/node_modules
-backend/.env
-backend/salon.db
-backend.log
-*.db
-build/
+node_modules/
 dist/
-backend/salon.db
-backend.log
+build/

@@ -40,7 +40,7 @@ A full-stack salon appointment booking system that allows customers to book, res
 ## 🛠 Tech Stack
 *   **Frontend**: React.js, Tailwind CSS, Lucide React, Shadcn UI
 *   **Backend**: Node.js, Express.js
-*   **Database**: SQLite (Persistent & Embedded)
+*   **Database**: MongoDB (Persistent, Atlas Cloud or Local)
 *   **Authentication**: JWT (JSON Web Tokens) & Google OAuth 2.0
 *   **Email System**: Nodemailer with SMTP (Gmail Integration)
 *   **Reports**: ExcelJS & PDFKit
@@ -55,7 +55,7 @@ A full-stack salon appointment booking system that allows customers to book, res
 │   ├── middleware/     # Auth & RBAC Logic
 │   ├── services/       # Email & Helper Services
 │   ├── uploads/        # Service & Profile Images
-│   └── salon.db        # SQLite Database
+│   └── (MongoDB Connection Managed via URI)
 ├── src/                # React Frontend
 │   ├── components/     # UI Components & Dashboards
 │   ├── services/       # API Client (Axios)
@@ -135,7 +135,7 @@ Automated emails are sent for the following events:
 *   **RBAC**: Strict Role-Based Access Control ensures users can only access data relevant to their role.
 *   **Input Validation**: Backend validation for all dates, times, and staff assignments.
 *   **Secure Auth**: Passwords are hashed using Bcrypt, and tokens are handled via JWT.
-*   **Single Source of Truth**: All UI states are synchronized with the SQLite database.
+*   **Single Source of Truth**: All UI states are synchronized with the MongoDB database.
 
 ---
 
