@@ -1,5 +1,5 @@
 // API configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+const API_BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
 export const API_ORIGIN = API_BASE_URL.replace('/api', '');
 
 // Types for API responses
@@ -112,7 +112,7 @@ async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = localStorage.getItem('auth_token');
-  
+
   const headers: HeadersInit = {
     ...(token && { Authorization: `Bearer ${token}` }),
     ...options.headers,
@@ -129,7 +129,7 @@ async function apiRequest<T>(
 
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-    
+
     const contentType = response.headers.get("content-type");
     const isJson = contentType && contentType.includes("application/json");
 
@@ -145,11 +145,11 @@ async function apiRequest<T>(
         throw new Error(`Server Error (${response.status}): ${text.substring(0, 100)}...`);
       }
     }
-    
+
     if (!isJson) {
       return null as any;
     }
-    
+
     return await response.json();
   } catch (error) {
     console.error('API Error:', error);
@@ -164,11 +164,11 @@ export const authAPI = {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
-    
+
     // Store token in localStorage
     localStorage.setItem('auth_token', response.token);
     localStorage.setItem('user', JSON.stringify(response.user));
-    
+
     return response;
   },
 
@@ -183,11 +183,11 @@ export const authAPI = {
       method: 'POST',
       body: JSON.stringify(secureUserData),
     });
-    
+
     // Store token in localStorage
     localStorage.setItem('auth_token', response.token);
     localStorage.setItem('user', JSON.stringify(response.user));
-    
+
     return response;
   },
 
@@ -247,13 +247,13 @@ export const usersAPI = {
       method: 'PUT',
       body: JSON.stringify({ id, ...data }),
     });
-    
+
     // If updating self, update stored user info
     const currentUser = authAPI.getCurrentUser();
     if (!id || (currentUser && id === currentUser.id)) {
       localStorage.setItem('user', JSON.stringify(response));
     }
-    
+
     return response;
   }
 };
@@ -311,7 +311,7 @@ export const servicesAPI = {
     const queryParams = new URLSearchParams();
     if (params?.bookable) queryParams.append('bookable', 'true');
     if (params?.includeInactive) queryParams.append('include_inactive', 'true');
-    
+
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return apiRequest<Service[]>(`/services${query}`);
   },
@@ -624,15 +624,15 @@ export const notificationsAPI = {
   async getAll(): Promise<Notification[]> {
     return apiRequest<Notification[]>('/notifications');
   },
-  
+
   async getUnreadCount(): Promise<{ count: number }> {
     return apiRequest<{ count: number }>('/notifications/unread-count');
   },
-  
+
   async markAsRead(id: string): Promise<void> {
     await apiRequest(`/notifications/${id}/read`, { method: 'PUT' });
   },
-  
+
   async markAllRead(): Promise<void> {
     await apiRequest('/notifications/read-all', { method: 'POST' });
   }
@@ -652,7 +652,7 @@ export const mockAPI = {
     async login(credentials: LoginRequest) {
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       // Mock users with different roles based on email
       const mockUsers: { [key: string]: User } = {
         'customer@example.com': {
@@ -677,7 +677,7 @@ export const mockAPI = {
           created_at: new Date().toISOString()
         }
       };
-      
+
       // Find user by email or create a customer by default
       const mockUser = mockUsers[credentials.email] || {
         id: '1',
@@ -686,11 +686,11 @@ export const mockAPI = {
         role: 'customer' as const,
         created_at: new Date().toISOString()
       };
-      
+
       // Store mock token and user
       localStorage.setItem('auth_token', 'mock-jwt-token-' + Date.now());
       localStorage.setItem('user', JSON.stringify(mockUser));
-      
+
       return {
         user: mockUser,
         token: 'mock-jwt-token-' + Date.now()
@@ -700,7 +700,7 @@ export const mockAPI = {
     async register(userData: RegisterRequest) {
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       const mockUser: User = {
         id: String(Date.now()), // Use timestamp as mock ID
         name: userData.name,
@@ -709,11 +709,11 @@ export const mockAPI = {
         role: 'customer', // Always enforce customer role, ignore frontend input
         created_at: new Date().toISOString()
       };
-      
+
       // Store mock token and user
       localStorage.setItem('auth_token', 'mock-jwt-token-' + Date.now());
       localStorage.setItem('user', JSON.stringify(mockUser));
-      
+
       return {
         user: mockUser,
         token: 'mock-jwt-token-' + Date.now()
@@ -752,7 +752,7 @@ export const mockAPI = {
       await new Promise(resolve => setTimeout(resolve, 500));
       const user = id ? { id, name: 'Mock User', email: 'mock@example.com', role: 'staff' as const, created_at: '' } : mockAPI.auth.getCurrentUser();
       if (!user) throw new Error('Not authenticated');
-      
+
       const updatedUser = { ...user, ...data };
       if (!id || id === user.id) {
         localStorage.setItem('user', JSON.stringify(updatedUser));
@@ -943,8 +943,8 @@ export const mockAPI = {
     async getAll(): Promise<Notification[]> {
       return [];
     },
-    async markAsRead(): Promise<void> {},
-    async markAllRead(): Promise<void> {}
+    async markAsRead(): Promise<void> { },
+    async markAllRead(): Promise<void> { }
   },
 
   loyalty: {
@@ -998,11 +998,11 @@ export const loyaltyAPI = {
   async getHistory(): Promise<LoyaltyHistory[]> {
     return apiRequest<LoyaltyHistory[]>('/loyalty/history');
   },
-  
+
   async getSettings(): Promise<LoyaltySettings & { points_expiry_days: number }> {
     return apiRequest<LoyaltySettings & { points_expiry_days: number }>('/loyalty/settings');
   },
-  
+
   async updateSettings(settings: Partial<LoyaltySettings & { points_expiry_days: number }>): Promise<{ message: string }> {
     return apiRequest<{ message: string }>('/loyalty/settings', {
       method: 'PATCH',
@@ -1033,7 +1033,7 @@ export const loyaltyAPI = {
       method: 'DELETE'
     });
   },
-  
+
   async adjust(data: { user_id: number, email?: string, points: number, type: 'earn' | 'redeem', reason?: string, description?: string }): Promise<{ message: string }> {
     return apiRequest<{ message: string }>('/loyalty/adjust', {
       method: 'POST',
