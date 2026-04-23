@@ -14,13 +14,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Calendar as CalendarPicker } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { 
-  Users, 
-  Calendar, 
-  DollarSign, 
-  TrendingUp, 
-  Settings, 
-  LogOut, 
+import {
+  Users,
+  Calendar,
+  DollarSign,
+  TrendingUp,
+  Settings,
+  LogOut,
   UserPlus,
   Scissors,
   MoreHorizontal,
@@ -68,13 +68,13 @@ interface AdminDashboardProps {
   toggleDark?: () => void;
 }
 
-export function AdminDashboard({ 
-  activeSection, 
-  setActiveSection, 
-  setCurrentView, 
-  setUserRole, 
-  isDark, 
-  toggleDark 
+export function AdminDashboard({
+  activeSection,
+  setActiveSection,
+  setCurrentView,
+  setUserRole,
+  isDark,
+  toggleDark
 }: AdminDashboardProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [manageServiceTab, setManageServiceTab] = useState<'services' | 'staff' | 'appointments'>('services');
@@ -270,8 +270,8 @@ export function AdminDashboard({
     }
   };
 
-  useEffect(() => { 
-    loadStaff(); 
+  useEffect(() => {
+    loadStaff();
     const interval = setInterval(loadStaff, 60000); // Poll every minute
     return () => clearInterval(interval);
   }, []);
@@ -350,7 +350,7 @@ export function AdminDashboard({
       setServiceDistribution(distribution);
       setDashboardStats(stats);
       setMonthlyRevenue(monthly);
-      
+
       // Map backend service performance to match the UI chart format
       const mappedServices = (servicePerf || []).map((s: any) => ({
         id: s.service_id.toString(),
@@ -456,12 +456,12 @@ export function AdminDashboard({
   // Filter staff members based on search and filters
   const filteredStaff = staffMembers.filter(staff => {
     const matchesSearch = staff.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         staff.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (staff.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (staff.specialty || '').toLowerCase().includes(searchTerm.toLowerCase());
+      staff.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (staff.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (staff.specialty || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = filterRole === 'all' || staff.category === filterRole;
     const matchesStatus = filterStatus === 'all' || staff.status === filterStatus;
-    
+
     return matchesSearch && matchesRole && matchesStatus;
   });
 
@@ -518,7 +518,7 @@ export function AdminDashboard({
         status: staffForm.status,
         role: staffForm.role
       });
-      
+
       toast.success('Staff details updated successfully!');
       resetForm();
       setEditingStaff(null);
@@ -626,7 +626,7 @@ export function AdminDashboard({
 
   // Filter appointments based on search and filters
   const filteredAppointments = appointments.filter(appointment => {
-    const matchesSearch = 
+    const matchesSearch =
       appointment.customer.name.toLowerCase().includes(appointmentSearchTerm.toLowerCase()) ||
       appointment.id.toLowerCase().includes(appointmentSearchTerm.toLowerCase()) ||
       appointment.customer.email.toLowerCase().includes(appointmentSearchTerm.toLowerCase());
@@ -635,7 +635,7 @@ export function AdminDashboard({
       if (appointmentDateFilter === 'all') return true;
       const appointmentDate = new Date(appointment.date);
       const today = new Date();
-      
+
       switch (appointmentDateFilter) {
         case 'today':
           return format(appointmentDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
@@ -654,14 +654,14 @@ export function AdminDashboard({
       }
     })();
 
-    const matchesStaff = appointmentStaffFilter === 'all' || 
+    const matchesStaff = appointmentStaffFilter === 'all' ||
       (appointment.assignedStaff && appointment.assignedStaff.id.toString() === appointmentStaffFilter) ||
       (appointmentStaffFilter === 'unassigned' && !appointment.assignedStaff);
-    
-    const matchesService = appointmentServiceFilter === 'all' || 
+
+    const matchesService = appointmentServiceFilter === 'all' ||
       (appointment.service.id && appointment.service.id.toString() === appointmentServiceFilter);
-    
-    const matchesStatus = appointmentStatusFilter === 'all' || 
+
+    const matchesStatus = appointmentStatusFilter === 'all' ||
       appointment.status === appointmentStatusFilter;
 
     const matchesDiscount = (() => {
@@ -679,15 +679,15 @@ export function AdminDashboard({
   });
 
   // Separate appointments by status for history tabs
-  const upcomingAppointments = filteredAppointments.filter(apt => 
+  const upcomingAppointments = filteredAppointments.filter(apt =>
     apt.status === 'pending' || apt.status === 'confirmed'
   );
-  
-  const completedAppointments = filteredAppointments.filter(apt => 
+
+  const completedAppointments = filteredAppointments.filter(apt =>
     apt.status === 'completed'
   );
-  
-  const cancelledAppointments = filteredAppointments.filter(apt => 
+
+  const cancelledAppointments = filteredAppointments.filter(apt =>
     apt.status === 'cancelled'
   );
 
@@ -749,7 +749,7 @@ export function AdminDashboard({
         format,
         ...exportParams
       });
-      
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -758,7 +758,7 @@ export function AdminDashboard({
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
+
       toast.success(`Report exported successfully!`, { id: 'export-toast' });
     } catch (err) {
       console.error('Export error:', err);
@@ -772,11 +772,11 @@ export function AdminDashboard({
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               {activeSection === 'dashboard' ? 'Dashboard Overview' :
-               activeSection === 'staff' ? 'Staff Management' :
-               activeSection === 'manage-services' ? 'Service Management' :
-               activeSection === 'appointments' ? 'Appointment Management' :
-               activeSection === 'reports' ? 'Reports & Analytics' :
-               activeSection.replace('-', ' ')}
+                activeSection === 'staff' ? 'Staff Management' :
+                  activeSection === 'manage-services' ? 'Service Management' :
+                    activeSection === 'appointments' ? 'Appointment Management' :
+                      activeSection === 'reports' ? 'Reports & Analytics' :
+                        activeSection.replace('-', ' ')}
             </h1>
             <p className="text-gray-500">Admin Portal • Manage your salon operations and staff</p>
           </div>
@@ -788,434 +788,329 @@ export function AdminDashboard({
         </div>
 
         <div className="space-y-6 lg:space-y-8">
-            {activeSection === 'dashboard' && (
-              <>
-                {/* Stats Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
-                  <Card className="border-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl shadow-xl text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-blue-100">Today's Appointments</p>
-                          <p className="text-3xl font-bold">{dashboardStats.todayAppointments}</p>
-                        </div>
-                        <Calendar className="w-10 h-10 text-blue-200" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-0 bg-gradient-to-r from-green-500 to-green-600 rounded-3xl shadow-xl text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-green-100">Today's Revenue</p>
-                          <p className="text-3xl font-bold">${dashboardStats.todayRevenue.toFixed(0)}</p>
-                        </div>
-                        <DollarSign className="w-10 h-10 text-green-200" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-0 bg-gradient-to-r from-purple-500 to-purple-600 rounded-3xl shadow-xl text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-purple-100">Active Staff</p>
-                          <p className="text-3xl font-bold">{dashboardStats.activeStaff}</p>
-                        </div>
-                        <Users className="w-10 h-10 text-purple-200" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-0 bg-gradient-to-r from-pink-500 to-pink-600 rounded-3xl shadow-xl text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-pink-100">Growth Rate</p>
-                          <p className="text-3xl font-bold">+{dashboardStats.growthRate}%</p>
-                        </div>
-                        <TrendingUp className="w-10 h-10 text-pink-200" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Charts */}
-                <div className="grid lg:grid-cols-2 gap-8">
-                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                    <CardHeader>
-                      <CardTitle className="text-xl font-bold text-gray-900">Weekly Overview</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={dailyAppointments}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="day" />
-                          <YAxis />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="appointments" fill="#8B5CF6" name="Appointments" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                    <CardHeader>
-                      <CardTitle className="text-xl font-bold text-gray-900">Service Distribution</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <PieChart>
-                          <Pie
-                            data={serviceDistribution}
-                            cx="50%"
-                            cy="45%"
-                            labelLine={true}
-                            label={({ name, value, percent }) => {
-                              if (value === 0 || percent < 0.05) return null;
-                              return `${name}: ${value}`;
-                            }}
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="value"
-                          >
-                            {serviceDistribution.map((entry) => (
-                              <Cell key={`cell-${entry.name}`} fill={entry.color} stroke="none" />
-                            ))}
-                          </Pie>
-                          <Tooltip />
-                          <Legend 
-                            verticalAlign="bottom" 
-                            height={36}
-                            formatter={(value, entry: any) => (
-                              <span className="text-gray-700 text-sm">
-                                {value} ({entry.payload.value})
-                              </span>
-                            )}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Recent Appointments */}
-                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle className="text-xl font-bold text-gray-900">Recent Appointments</CardTitle>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-purple-200 text-purple-600 hover:bg-purple-50 rounded-xl"
-                      onClick={() => setActiveSection('appointments')}
-                    >
-                      View All
-                    </Button>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="hidden md:block overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Customer</TableHead>
-                            <TableHead>Service</TableHead>
-                            <TableHead>Staff</TableHead>
-                            <TableHead>Time</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead></TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {recentAppointments.map((appointment) => (
-                            <TableRow key={appointment.id}>
-                              <TableCell className="font-medium">{appointment.customer}</TableCell>
-                              <TableCell>{appointment.service}</TableCell>
-                              <TableCell>{appointment.staff}</TableCell>
-                              <TableCell>{appointment.time}</TableCell>
-                              <TableCell>
-                                <Badge className={getStatusColor(appointment.status)}>
-                                  {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onSelect={() => handleViewAppointmentDetails(appointment.id)}>
-                                      <Eye className="w-4 h-4 mr-2" /> View Details
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => handleEditAppointment(appointment.id)}>
-                                      <Calendar className="w-4 h-4 mr-2" /> Edit
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem className="text-red-600" onSelect={() => cancelAppointment(appointment.id)}>
-                                      <XCircle className="w-4 h-4 mr-2" /> Cancel
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    <div className="grid grid-cols-1 gap-4 md:hidden">
-                      {recentAppointments.map((appointment) => (
-                        <Card key={appointment.id} className="p-4 border-purple-100">
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <div className="font-medium text-gray-900">{appointment.customer}</div>
-                              <div className="text-sm text-gray-500">{appointment.service}</div>
-                            </div>
-                            <Badge className={getStatusColor(appointment.status)}>
-                              {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-                            </Badge>
-                          </div>
-                          <div className="text-sm text-gray-600 mb-3 space-y-1">
-                            <div className="flex items-center gap-2">
-                              <Users className="w-4 h-4 text-purple-400" />
-                              {appointment.staff}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 text-purple-400" />
-                              {appointment.time}
-                            </div>
-                          </div>
-                          <div className="flex justify-end border-t border-purple-50 pt-3">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="h-8 border-purple-200">
-                                  Actions <MoreHorizontal className="h-4 w-4 ml-2" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onSelect={() => handleViewAppointmentDetails(appointment.id)}>
-                                  <Eye className="w-4 h-4 mr-2" /> View Details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => handleEditAppointment(appointment.id)}>
-                                  <Calendar className="w-4 h-4 mr-2" /> Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="text-red-600" onSelect={() => cancelAppointment(appointment.id)}>
-                                  <XCircle className="w-4 h-4 mr-2" /> Cancel
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Staff Performance Overview */}
-                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle className="text-xl font-bold text-gray-900">Staff Performance Overview</CardTitle>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-purple-200 text-purple-600 hover:bg-purple-50 rounded-xl"
-                      onClick={() => setActiveSection('staff')}
-                    >
-                      Manage Staff
-                    </Button>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {staffMembers.slice(0, 4).map((staff) => (
-                        <div key={staff.id} className="p-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl border border-purple-100">
-                          <div className="flex justify-between items-start mb-4">
-                            <div>
-                              <h3 className="font-bold text-lg text-gray-900">{staff.name}</h3>
-                              <p className="text-gray-600">{staff.role}</p>
-                            </div>
-                            <Badge variant="secondary" className="bg-purple-100 text-purple-700">
-                              ⭐ {staff.rating.toFixed(1)}
-                            </Badge>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-gray-600">This week: {staff.appointments} appointments</span>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="text-purple-600 hover:bg-purple-100"
-                              onClick={() => handleViewDetails(staff)}
-                            >
-                              View Details
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-
-            {activeSection === 'staff' && (
-              <>
-                <div className="flex justify-end mb-6">
-                  <Dialog open={isAddStaffOpen} onOpenChange={setIsAddStaffOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add New Staff
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>Add New Staff Member</DialogTitle>
-                        <DialogDescription>
-                          Enter the details for the new staff member below.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="name">Full Name *</Label>
-                          <Input 
-                            id="name" 
-                            placeholder="Enter full name" 
-                            value={staffForm.name}
-                            onChange={(e) => setStaffForm(prev => ({ ...prev, name: e.target.value }))}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="email">Email *</Label>
-                          <Input 
-                            id="email" 
-                            type="email" 
-                            placeholder="Enter email address" 
-                            value={staffForm.email}
-                            onChange={(e) => setStaffForm(prev => ({ ...prev, email: e.target.value }))}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="password">Password *</Label>
-                          <Input 
-                            id="password" 
-                            type="password" 
-                            placeholder="Enter initial password" 
-                            value={staffForm.password}
-                            onChange={(e) => setStaffForm(prev => ({ ...prev, password: e.target.value }))}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="category">Primary Service Category *</Label>
-                          <Select value={staffForm.category} onValueChange={(value) => setStaffForm(prev => ({ ...prev, category: value }))}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Hair">Hair</SelectItem>
-                              <SelectItem value="Facial">Facial</SelectItem>
-                              <SelectItem value="Nails">Nails</SelectItem>
-                              <SelectItem value="Massage">Massage</SelectItem>
-                              <SelectItem value="Wellness">Wellness</SelectItem>
-                              <SelectItem value="Beauty">Beauty</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Switch 
-                            id="active" 
-                            checked={staffForm.status === 'active'}
-                            onCheckedChange={(checked) => setStaffForm(prev => ({ ...prev, status: checked ? 'active' : 'inactive' }))}
-                          />
-                          <Label htmlFor="active">Active Status</Label>
-                        </div>
-                      </div>
-                      <DialogFooter className="gap-2">
-                        <Button variant="outline" onClick={() => {
-                          setIsAddStaffOpen(false);
-                          resetForm();
-                        }}>
-                          Cancel
-                        </Button>
-                        <Button onClick={handleAddStaff} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
-                          Add Staff Member
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-
-                {/* KPI Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
-                  <Card className="border-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl shadow-xl text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-blue-100">Total Staff</p>
-                          <p className="text-3xl font-bold">{staffMembers.length}</p>
-                        </div>
-                        <Users className="w-10 h-10 text-blue-200" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-0 bg-gradient-to-r from-green-500 to-green-600 rounded-3xl shadow-xl text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-green-100">Active Staff</p>
-                          <p className="text-3xl font-bold">{staffMembers.filter(s => s.status === 'active').length}</p>
-                        </div>
-                        <Award className="w-10 h-10 text-green-200" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-0 bg-gradient-to-r from-purple-500 to-purple-600 rounded-3xl shadow-xl text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-purple-100">Avg Rating</p>
-                          <p className="text-3xl font-bold">{staffMembers.length > 0 ? (staffMembers.reduce((acc, s) => acc + s.rating, 0) / staffMembers.length).toFixed(1) : '0.0'}</p>
-                        </div>
-                        <Star className="w-10 h-10 text-purple-200" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-0 bg-gradient-to-r from-pink-500 to-pink-600 rounded-3xl shadow-xl text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-pink-100">Total Completed</p>
-                          <p className="text-3xl font-bold">{staffMembers.reduce((acc, s) => acc + s.appointments, 0)}</p>
-                        </div>
-                        <Clock className="w-10 h-10 text-pink-200" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Search and Filter */}
-                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+          {activeSection === 'dashboard' && (
+            <>
+              {/* Stats Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+                <Card className="border-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl shadow-xl text-white">
                   <CardContent className="p-6">
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-blue-100">Today's Appointments</p>
+                        <p className="text-3xl font-bold">{dashboardStats.todayAppointments}</p>
+                      </div>
+                      <Calendar className="w-10 h-10 text-blue-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 bg-gradient-to-r from-green-500 to-green-600 rounded-3xl shadow-xl text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-green-100">Today's Revenue</p>
+                        <p className="text-3xl font-bold">${dashboardStats.todayRevenue.toFixed(0)}</p>
+                      </div>
+                      <DollarSign className="w-10 h-10 text-green-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 bg-gradient-to-r from-purple-500 to-purple-600 rounded-3xl shadow-xl text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-purple-100">Active Staff</p>
+                        <p className="text-3xl font-bold">{dashboardStats.activeStaff}</p>
+                      </div>
+                      <Users className="w-10 h-10 text-purple-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 bg-gradient-to-r from-pink-500 to-pink-600 rounded-3xl shadow-xl text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-pink-100">Growth Rate</p>
+                        <p className="text-3xl font-bold">+{dashboardStats.growthRate}%</p>
+                      </div>
+                      <TrendingUp className="w-10 h-10 text-pink-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Charts */}
+              <div className="grid lg:grid-cols-2 gap-8">
+                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold text-gray-900">Weekly Overview</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={dailyAppointments}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="day" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="appointments" fill="#8B5CF6" name="Appointments" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold text-gray-900">Service Distribution</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={serviceDistribution}
+                          cx="50%"
+                          cy="45%"
+                          labelLine={true}
+                          label={({ name, value, percent }) => {
+                            if (value === 0 || percent < 0.05) return null;
+                            return `${name}: ${value}`;
+                          }}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {serviceDistribution.map((entry) => (
+                            <Cell key={`cell-${entry.name}`} fill={entry.color} stroke="none" />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend
+                          verticalAlign="bottom"
+                          height={36}
+                          formatter={(value, entry: any) => (
+                            <span className="text-gray-700 text-sm">
+                              {value} ({entry.payload.value})
+                            </span>
+                          )}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Recent Appointments */}
+              <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-xl font-bold text-gray-900">Recent Appointments</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-purple-200 text-purple-600 hover:bg-purple-50 rounded-xl"
+                    onClick={() => setActiveSection('appointments')}
+                  >
+                    View All
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Customer</TableHead>
+                          <TableHead>Service</TableHead>
+                          <TableHead>Staff</TableHead>
+                          <TableHead>Time</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {recentAppointments.map((appointment) => (
+                          <TableRow key={appointment.id}>
+                            <TableCell className="font-medium">{appointment.customer}</TableCell>
+                            <TableCell>{appointment.service}</TableCell>
+                            <TableCell>{appointment.staff}</TableCell>
+                            <TableCell>{appointment.time}</TableCell>
+                            <TableCell>
+                              <Badge className={getStatusColor(appointment.status)}>
+                                {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onSelect={() => handleViewAppointmentDetails(appointment.id)}>
+                                    <Eye className="w-4 h-4 mr-2" /> View Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onSelect={() => handleEditAppointment(appointment.id)}>
+                                    <Calendar className="w-4 h-4 mr-2" /> Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-red-600" onSelect={() => cancelAppointment(appointment.id)}>
+                                    <XCircle className="w-4 h-4 mr-2" /> Cancel
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:hidden">
+                    {recentAppointments.map((appointment) => (
+                      <Card key={appointment.id} className="p-4 border-purple-100">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <div className="font-medium text-gray-900">{appointment.customer}</div>
+                            <div className="text-sm text-gray-500">{appointment.service}</div>
+                          </div>
+                          <Badge className={getStatusColor(appointment.status)}>
+                            {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-gray-600 mb-3 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Users className="w-4 h-4 text-purple-400" />
+                            {appointment.staff}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-purple-400" />
+                            {appointment.time}
+                          </div>
+                        </div>
+                        <div className="flex justify-end border-t border-purple-50 pt-3">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm" className="h-8 border-purple-200">
+                                Actions <MoreHorizontal className="h-4 w-4 ml-2" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onSelect={() => handleViewAppointmentDetails(appointment.id)}>
+                                <Eye className="w-4 h-4 mr-2" /> View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => handleEditAppointment(appointment.id)}>
+                                <Calendar className="w-4 h-4 mr-2" /> Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-red-600" onSelect={() => cancelAppointment(appointment.id)}>
+                                <XCircle className="w-4 h-4 mr-2" /> Cancel
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Staff Performance Overview */}
+              <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-xl font-bold text-gray-900">Staff Performance Overview</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-purple-200 text-purple-600 hover:bg-purple-50 rounded-xl"
+                    onClick={() => setActiveSection('staff')}
+                  >
+                    Manage Staff
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {staffMembers.slice(0, 4).map((staff) => (
+                      <div key={staff.id} className="p-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl border border-purple-100">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h3 className="font-bold text-lg text-gray-900">{staff.name}</h3>
+                            <p className="text-gray-600">{staff.role}</p>
+                          </div>
+                          <Badge variant="secondary" className="bg-purple-100 text-purple-700">
+                            ⭐ {staff.rating.toFixed(1)}
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">This week: {staff.appointments} appointments</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-purple-600 hover:bg-purple-100"
+                            onClick={() => handleViewDetails(staff)}
+                          >
+                            View Details
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {activeSection === 'staff' && (
+            <>
+              <div className="flex justify-end mb-6">
+                <Dialog open={isAddStaffOpen} onOpenChange={setIsAddStaffOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add New Staff
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Add New Staff Member</DialogTitle>
+                      <DialogDescription>
+                        Enter the details for the new staff member below.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Full Name *</Label>
                         <Input
-                          placeholder="Search staff by name, email, or role..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="pl-10 border-purple-200 focus:border-purple-400 rounded-xl"
+                          id="name"
+                          placeholder="Enter full name"
+                          value={staffForm.name}
+                          onChange={(e) => setStaffForm(prev => ({ ...prev, name: e.target.value }))}
                         />
                       </div>
-                      <div className="flex gap-2">
-                        <Select value={filterRole} onValueChange={setFilterRole}>
-                          <SelectTrigger className="w-40 border-purple-200 focus:border-purple-400 rounded-xl">
-                            <Filter className="w-4 h-4 mr-2" />
-                            <SelectValue placeholder="Category" />
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="Enter email address"
+                          value={staffForm.email}
+                          onChange={(e) => setStaffForm(prev => ({ ...prev, email: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="password">Password *</Label>
+                        <Input
+                          id="password"
+                          type="password"
+                          placeholder="Enter initial password"
+                          value={staffForm.password}
+                          onChange={(e) => setStaffForm(prev => ({ ...prev, password: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="category">Primary Service Category *</Label>
+                        <Select value={staffForm.category} onValueChange={(value) => setStaffForm(prev => ({ ...prev, category: value }))}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select category" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="all">All Categories</SelectItem>
                             <SelectItem value="Hair">Hair</SelectItem>
                             <SelectItem value="Facial">Facial</SelectItem>
                             <SelectItem value="Nails">Nails</SelectItem>
@@ -1224,965 +1119,477 @@ export function AdminDashboard({
                             <SelectItem value="Beauty">Beauty</SelectItem>
                           </SelectContent>
                         </Select>
-                        <Select value={filterStatus} onValueChange={setFilterStatus}>
-                          <SelectTrigger className="w-32 border-purple-200 focus:border-purple-400 rounded-xl">
-                            <SelectValue placeholder="Status" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Status</SelectItem>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="inactive">Inactive</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="active"
+                          checked={staffForm.status === 'active'}
+                          onCheckedChange={(checked) => setStaffForm(prev => ({ ...prev, status: checked ? 'active' : 'inactive' }))}
+                        />
+                        <Label htmlFor="active">Active Status</Label>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                    <DialogFooter className="gap-2">
+                      <Button variant="outline" onClick={() => {
+                        setIsAddStaffOpen(false);
+                        resetForm();
+                      }}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleAddStaff} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+                        Add Staff Member
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
 
-                {/* Staff Table */}
-                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                  <CardHeader>
-                    <CardTitle className="text-xl font-bold text-gray-900">Staff Members ({filteredStaff.length})</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <div className="hidden md:block">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Staff ID</TableHead>
-                              <TableHead>Name</TableHead>
-                              <TableHead>Email</TableHead>
-                              <TableHead>Category</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead>Completed Appts</TableHead>
-                              <TableHead>Rating</TableHead>
-                              <TableHead>Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {filteredStaff.map((staff) => (
-                              <TableRow key={staff.id}>
-                                <TableCell className="font-medium">#{staff.id.toString().padStart(3, '0')}</TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                                      <span className="text-white text-sm font-bold">
-                                        {staff.name.split(' ').map(n => n[0]).join('')}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <div className="font-medium">{staff.name}</div>
-                                      <div className="text-sm text-gray-500">{staff.specialty}</div>
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell>{staff.email}</TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className="border-purple-200 text-purple-700">
-                                    {staff.category || 'N/A'}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge className={getStaffStatusColor(staff.status)}>
-                                    {staff.status.charAt(0).toUpperCase() + staff.status.slice(1)}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>{staff.appointments}</TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-1">
-                                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                                    <span className="font-medium">{staff.rating.toFixed(1)}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50"
-                                      onClick={() => handleViewDetails(staff)}
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 w-8 p-0 text-purple-600 hover:bg-purple-50"
-                                      onClick={() => openEditStaff(staff)}
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 w-8 p-0 text-red-600 hover:bg-red-50"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>Remove Staff Member</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            Are you sure you want to remove {staff.name} from the staff? This action cannot be undone.
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                          <AlertDialogAction
-                                            onClick={() => handleDeleteStaff(staff.id)}
-                                            className="bg-red-600 hover:bg-red-700"
-                                          >
-                                            Remove Staff
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 gap-4 md:hidden">
-                        {filteredStaff.map((staff) => (
-                          <Card key={staff.id} className="p-4 border-purple-100">
-                            <div className="flex justify-between items-start mb-3">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                  <span className="text-white font-bold">
-                                    {staff.name.split(' ').map(n => n[0]).join('')}
-                                  </span>
-                                </div>
-                                <div>
-                                  <div className="font-medium text-gray-900">{staff.name}</div>
-                                  <div className="text-sm text-gray-500">#{staff.id.toString().padStart(3, '0')}</div>
-                                </div>
-                              </div>
-                              <Badge className={getStaffStatusColor(staff.status)}>
-                                {staff.status.charAt(0).toUpperCase() + staff.status.slice(1)}
-                              </Badge>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                              <div>
-                                <span className="text-gray-500 block">Category</span>
-                                <span className="font-medium">{staff.category || 'N/A'}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500 block">Rating</span>
-                                <span className="font-medium flex items-center gap-1">
-                                  <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" /> {staff.rating.toFixed(1)}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500 block">Completed</span>
-                                <span className="font-medium">{staff.appointments} Appts</span>
-                              </div>
-                              <div className="col-span-2">
-                                <span className="text-gray-500 block">Email</span>
-                                <span className="font-medium">{staff.email}</span>
-                              </div>
-                            </div>
-                            <div className="flex gap-2 justify-end pt-3 border-t border-purple-50">
-                              <Button variant="outline" size="sm" className="flex-1 bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100" onClick={() => handleViewDetails(staff)}>
-                                <Eye className="h-4 w-4 mr-2" /> View
-                              </Button>
-                              <Button variant="outline" size="sm" className="flex-1 bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100" onClick={() => openEditStaff(staff)}>
-                                <Edit className="h-4 w-4 mr-2" /> Edit
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="outline" size="sm" className="flex-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100">
-                                    <Trash2 className="h-4 w-4 mr-2" /> Delete
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Remove Staff Member</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to remove {staff.name} from the staff? This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleDeleteStaff(staff.id)} className="bg-red-600 hover:bg-red-700">
-                                      Remove Staff
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </Card>
-                        ))}
-                      </div>
-                      {filteredStaff.length === 0 && (
-                        <div className="text-center py-8 text-gray-500">
-                          No staff members found matching your search criteria.
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-
-            {activeSection === 'manage-services' && (
-              <ManageServicePanel defaultTab={manageServiceTab} />
-            )}
-
-            {activeSection === 'appointments' && (
-              <>
-                {/* Appointment Stats */}
-                <div className="grid md:grid-cols-4 gap-6">
-                  <Card className="border-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl shadow-xl text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-blue-100">Total Appointments</p>
-                          <p className="text-3xl font-bold">{appointments.length}</p>
-                        </div>
-                        <Calendar className="w-10 h-10 text-blue-200" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-0 bg-gradient-to-r from-green-500 to-green-600 rounded-3xl shadow-xl text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-green-100">Confirmed</p>
-                          <p className="text-3xl font-bold">{appointments.filter(a => a.status === 'confirmed').length}</p>
-                        </div>
-                        <CheckCircle2 className="w-10 h-10 text-green-200" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-0 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-3xl shadow-xl text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-yellow-100">Pending</p>
-                          <p className="text-3xl font-bold">{appointments.filter(a => a.status === 'pending').length}</p>
-                        </div>
-                        <AlertCircle className="w-10 h-10 text-yellow-200" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-0 bg-gradient-to-r from-purple-500 to-purple-600 rounded-3xl shadow-xl text-white">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-purple-100">Unassigned</p>
-                          <p className="text-3xl font-bold">{appointments.filter(a => !a.assignedStaff).length}</p>
-                        </div>
-                        <UserCog className="w-10 h-10 text-purple-200" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Search and Filters */}
-                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+              {/* KPI Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+                <Card className="border-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl shadow-xl text-white">
                   <CardContent className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-                      <div className="lg:col-span-2">
-                        <div className="relative">
-                          <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                          <Input
-                            placeholder="Search by customer name, booking ID, or email..."
-                            value={appointmentSearchTerm}
-                            onChange={(e) => setAppointmentSearchTerm(e.target.value)}
-                            className="pl-10 border-purple-200 focus:border-purple-400 rounded-xl"
-                          />
-                        </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-blue-100">Total Staff</p>
+                        <p className="text-3xl font-bold">{staffMembers.length}</p>
                       </div>
-                      
-                      <Select value={appointmentDateFilter} onValueChange={setAppointmentDateFilter}>
-                        <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
-                          <CalendarIcon className="w-4 h-4 mr-2" />
-                          <SelectValue placeholder="Date" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Dates</SelectItem>
-                          <SelectItem value="today">Today</SelectItem>
-                          <SelectItem value="tomorrow">Tomorrow</SelectItem>
-                          <SelectItem value="week">This Week</SelectItem>
-                          <SelectItem value="month">This Month</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Users className="w-10 h-10 text-blue-200" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-                      <Select value={appointmentStaffFilter} onValueChange={setAppointmentStaffFilter}>
-                        <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
-                          <Users className="w-4 h-4 mr-2" />
-                          <SelectValue placeholder="Staff" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Staff</SelectItem>
-                          <SelectItem value="unassigned">Unassigned</SelectItem>
-                          {staffMembers.filter(s => s.status === 'active').map(staff => (
-                            <SelectItem key={staff.id} value={staff.id.toString()}>{staff.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                <Card className="border-0 bg-gradient-to-r from-green-500 to-green-600 rounded-3xl shadow-xl text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-green-100">Active Staff</p>
+                        <p className="text-3xl font-bold">{staffMembers.filter(s => s.status === 'active').length}</p>
+                      </div>
+                      <Award className="w-10 h-10 text-green-200" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-                      <Select value={appointmentServiceFilter} onValueChange={setAppointmentServiceFilter}>
-                        <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
-                          <Scissors className="w-4 h-4 mr-2" />
-                          <SelectValue placeholder="Service" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Services</SelectItem>
-                          {services.map(service => (
-                            <SelectItem key={service.id} value={service.id.toString()}>{service.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                <Card className="border-0 bg-gradient-to-r from-purple-500 to-purple-600 rounded-3xl shadow-xl text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-purple-100">Avg Rating</p>
+                        <p className="text-3xl font-bold">{staffMembers.length > 0 ? (staffMembers.reduce((acc, s) => acc + s.rating, 0) / staffMembers.length).toFixed(1) : '0.0'}</p>
+                      </div>
+                      <Star className="w-10 h-10 text-purple-200" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-                      <Select value={appointmentStatusFilter} onValueChange={setAppointmentStatusFilter}>
-                        <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
+                <Card className="border-0 bg-gradient-to-r from-pink-500 to-pink-600 rounded-3xl shadow-xl text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-pink-100">Total Completed</p>
+                        <p className="text-3xl font-bold">{staffMembers.reduce((acc, s) => acc + s.appointments, 0)}</p>
+                      </div>
+                      <Clock className="w-10 h-10 text-pink-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Search and Filter */}
+              <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                <CardContent className="p-6">
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                      <Input
+                        placeholder="Search staff by name, email, or role..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10 border-purple-200 focus:border-purple-400 rounded-xl"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Select value={filterRole} onValueChange={setFilterRole}>
+                        <SelectTrigger className="w-40 border-purple-200 focus:border-purple-400 rounded-xl">
                           <Filter className="w-4 h-4 mr-2" />
+                          <SelectValue placeholder="Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Categories</SelectItem>
+                          <SelectItem value="Hair">Hair</SelectItem>
+                          <SelectItem value="Facial">Facial</SelectItem>
+                          <SelectItem value="Nails">Nails</SelectItem>
+                          <SelectItem value="Massage">Massage</SelectItem>
+                          <SelectItem value="Wellness">Wellness</SelectItem>
+                          <SelectItem value="Beauty">Beauty</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={filterStatus} onValueChange={setFilterStatus}>
+                        <SelectTrigger className="w-32 border-purple-200 focus:border-purple-400 rounded-xl">
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All Status</SelectItem>
-                          <SelectItem value="pending">Pending</SelectItem>
-                          <SelectItem value="confirmed">Confirmed</SelectItem>
-                          <SelectItem value="completed">Completed</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <Select value={appointmentDiscountFilter} onValueChange={setAppointmentDiscountFilter}>
-                        <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
-                          <Coins className="w-4 h-4 mr-2" />
-                          <SelectValue placeholder="Discount" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Bookings</SelectItem>
-                          <SelectItem value="discounted">Discounted Only</SelectItem>
-                          <SelectItem value="none">No Discount</SelectItem>
-                          <SelectItem value="loyalty">Loyalty Used</SelectItem>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </CardContent>
+              </Card>
 
-                {/* Appointment History Tabs */}
-                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                  <CardHeader>
-                    <CardTitle className="text-xl font-bold text-gray-900">Appointment History</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Tabs value={appointmentHistoryTab} onValueChange={setAppointmentHistoryTab}>
-                      <TabsList className="flex flex-col sm:grid sm:grid-cols-3 w-full h-auto gap-1 bg-purple-50 p-1 rounded-xl">
-                        <TabsTrigger value="upcoming" className="w-full">Upcoming ({upcomingAppointments.length})</TabsTrigger>
-                        <TabsTrigger value="completed" className="w-full">Completed ({completedAppointments.length})</TabsTrigger>
-                        <TabsTrigger value="cancelled" className="w-full">Cancelled ({cancelledAppointments.length})</TabsTrigger>
-                      </TabsList>
-
-                      <TabsContent value="upcoming" className="mt-6">
-                        <div className="hidden md:block overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Booking ID</TableHead>
-                                <TableHead>Customer</TableHead>
-                                <TableHead>Service</TableHead>
-                                <TableHead>Date & Time</TableHead>
-                                <TableHead>Assigned Staff</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {upcomingAppointments.map((appointment) => (
-                                <TableRow key={appointment.id}>
-                                  <TableCell className="font-medium">{appointment.id}</TableCell>
-                                  <TableCell>
-                                    <div>
-                                      <div className="font-medium">{appointment.customer.name}</div>
-                                      <div className="text-sm text-gray-500">{appointment.customer.phone}</div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div>
-                                      <div className="font-medium">{appointment.service.name}</div>
-                                      <div className="text-sm text-gray-500">${appointment.service.price} • {appointment.service.duration}min</div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div>
-                                      <div className="font-medium">{format(new Date(appointment.date), 'MMM d, yyyy')}</div>
-                                      <div className="text-sm text-gray-500">{appointment.time}</div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    {appointment.assignedStaff ? (
-                                      <Badge variant="outline" className="border-green-200 text-green-700">
-                                        {appointment.assignedStaff.name}
-                                      </Badge>
-                                    ) : (
-                                      <Badge variant="outline" className="border-red-200 text-red-700">
-                                        Unassigned
-                                      </Badge>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge className={getStatusColor(appointment.status)}>
-                                      {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell>
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                          <MoreHorizontal className="h-4 w-4" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end">
-                                        <DropdownMenuItem onClick={() => {
-                                          setSelectedAppointment(appointment);
-                                          setIsAppointmentDetailsOpen(true);
-                                        }}>
-                                          <Eye className="w-4 h-4 mr-2" />
-                                          View Details
-                                        </DropdownMenuItem>
-                                        {!appointment.assignedStaff && (
-                                          <DropdownMenuItem onClick={() => {
-                                            setSelectedAppointment(appointment);
-                                            setIsAssignStaffOpen(true);
-                                          }}>
-                                            <UserCog className="w-4 h-4 mr-2" />
-                                            Assign Staff
-                                          </DropdownMenuItem>
-                                        )}
-                                        <DropdownMenuItem onClick={() => {
-                                          setSelectedAppointment(appointment);
-                                          setRescheduleDate(appointment.date);
-                                          setRescheduleTime(appointment.time);
-                                          setIsEditAppointmentOpen(true);
-                                        }}>
-                                          <Edit className="w-4 h-4 mr-2" />
-                                          Reschedule
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem 
-                                          onClick={() => updateAppointmentStatus(appointment.id, 'confirmed')}
-                                          disabled={appointment.status === 'confirmed'}
-                                        >
-                                          <CheckCircle2 className="w-4 h-4 mr-2" />
-                                          Confirm
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem 
-                                          onClick={() => updateAppointmentStatus(appointment.id, 'completed')}
-                                          disabled={appointment.status === 'completed'}
-                                        >
-                                          <Zap className="w-4 h-4 mr-2" />
-                                          Mark Complete
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem 
-                                          onClick={() => cancelAppointment(appointment.id)}
-                                          className="text-red-600"
-                                        >
-                                          <XCircle className="w-4 h-4 mr-2" />
-                                          Cancel
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 gap-4 md:hidden mt-4">
-                          {upcomingAppointments.map((appointment) => (
-                            <Card key={appointment.id} className="p-4 border-purple-100">
-                              <div className="flex justify-between items-start mb-3">
-                                <div>
-                                  <div className="font-medium text-gray-900">{appointment.customer.name}</div>
-                                  <div className="text-sm text-gray-500">{appointment.id}</div>
-                                </div>
-                                <Badge className={getStatusColor(appointment.status)}>
-                                  {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-                                </Badge>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                                <div className="col-span-2">
-                                  <span className="text-gray-500 block">Service</span>
-                                  <span className="font-medium">{appointment.service.name} (${appointment.service.price})</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500 block">Date & Time</span>
-                                  <span className="font-medium">{format(new Date(appointment.date), 'MMM d, yyyy')} • {appointment.time}</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500 block">Staff</span>
-                                  {appointment.assignedStaff ? (
-                                    <span className="font-medium text-green-600">{appointment.assignedStaff.name}</span>
-                                  ) : (
-                                    <span className="font-medium text-red-600">Unassigned</span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex gap-2 justify-end pt-3 border-t border-purple-50">
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm" className="w-full border-purple-200 text-purple-600">
-                                      Manage Booking <MoreHorizontal className="h-4 w-4 ml-2" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-56">
-                                    <DropdownMenuItem onClick={() => {
-                                      setSelectedAppointment(appointment);
-                                      setIsAppointmentDetailsOpen(true);
-                                    }}>
-                                      <Eye className="w-4 h-4 mr-2" /> View Details
-                                    </DropdownMenuItem>
-                                    {!appointment.assignedStaff && (
-                                      <DropdownMenuItem onClick={() => {
-                                        setSelectedAppointment(appointment);
-                                        setIsAssignStaffOpen(true);
-                                      }}>
-                                        <UserCog className="w-4 h-4 mr-2" /> Assign Staff
-                                      </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuItem onClick={() => {
-                                      setSelectedAppointment(appointment);
-                                      setIsEditAppointmentOpen(true);
-                                    }}>
-                                      <Edit className="w-4 h-4 mr-2" /> Reschedule
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem 
-                                      onClick={() => updateAppointmentStatus(appointment.id, 'confirmed')}
-                                      disabled={appointment.status === 'confirmed'}
-                                    >
-                                      <CheckCircle2 className="w-4 h-4 mr-2" /> Confirm
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem 
-                                      onClick={() => updateAppointmentStatus(appointment.id, 'completed')}
-                                      disabled={appointment.status === 'completed'}
-                                    >
-                                      <Zap className="w-4 h-4 mr-2" /> Mark Complete
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem 
-                                      onClick={() => cancelAppointment(appointment.id)}
-                                      className="text-red-600"
-                                    >
-                                      <XCircle className="w-4 h-4 mr-2" /> Cancel
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                        
-                        {upcomingAppointments.length === 0 && (
-                          <div className="text-center py-8 text-gray-500">
-                            <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                            <p className="text-lg">No upcoming appointments found</p>
-                          </div>
-                        )}
-                      </TabsContent>
-
-                      <TabsContent value="completed" className="mt-6">
-                        <div className="hidden md:block overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Booking ID</TableHead>
-                                <TableHead>Customer</TableHead>
-                                <TableHead>Service</TableHead>
-                                <TableHead>Date & Time</TableHead>
-                                <TableHead>Staff</TableHead>
-                                <TableHead>Original</TableHead>
-                                <TableHead>Discount</TableHead>
-                                <TableHead>Final Revenue</TableHead>
-                                <TableHead>Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {completedAppointments.map((appointment) => (
-                                <TableRow key={appointment.id}>
-                                  <TableCell className="font-medium">{appointment.id}</TableCell>
-                                  <TableCell>
-                                    <div>
-                                      <div className="font-medium">{appointment.customer.name}</div>
-                                      <div className="text-sm text-gray-500">{appointment.customer.email}</div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>{appointment.service.name}</TableCell>
-                                  <TableCell>
-                                    <div>
-                                      <div className="font-medium">{format(new Date(appointment.date), 'MMM d, yyyy')}</div>
-                                      <div className="text-sm text-gray-500">{appointment.time}</div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>{appointment.assignedStaff?.name}</TableCell>
-                                  <TableCell>
-                                    <span className="text-gray-500">${appointment.original_amount}</span>
-                                  </TableCell>
-                                  <TableCell>
-                                    <span className="text-red-500">
-                                      {appointment.discount_amount > 0 ? `-$${appointment.discount_amount}` : '-'}
+              {/* Staff Table */}
+              <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                <CardHeader>
+                  <CardTitle className="text-xl font-bold text-gray-900">Staff Members ({filteredStaff.length})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <div className="hidden md:block">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Staff ID</TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Completed Appts</TableHead>
+                            <TableHead>Rating</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredStaff.map((staff) => (
+                            <TableRow key={staff.id}>
+                              <TableCell className="font-medium">#{staff.id.toString().padStart(3, '0')}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+                                    <span className="text-white text-sm font-bold">
+                                      {staff.name.split(' ').map(n => n[0]).join('')}
                                     </span>
-                                  </TableCell>
-                                  <TableCell>
-                                    <span className="font-bold text-green-600">${appointment.final_amount}</span>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        setSelectedAppointment(appointment);
-                                        setIsAppointmentDetailsOpen(true);
-                                      }}
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 gap-4 md:hidden mt-4">
-                          {completedAppointments.map((appointment) => (
-                            <Card key={appointment.id} className="p-4 border-purple-100">
-                              <div className="flex justify-between items-start mb-3">
-                                <div>
-                                  <div className="font-medium text-gray-900">{appointment.customer.name}</div>
-                                  <div className="text-sm text-gray-500">{appointment.id}</div>
+                                  </div>
+                                  <div>
+                                    <div className="font-medium">{staff.name}</div>
+                                    <div className="text-sm text-gray-500">{staff.specialty}</div>
+                                  </div>
                                 </div>
-                                <span className="font-bold text-green-600">${appointment.final_amount}</span>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                                <div className="col-span-2">
-                                  <span className="text-gray-500 block">Service</span>
-                                  <span className="font-medium">{appointment.service.name}</span>
+                              </TableCell>
+                              <TableCell>{staff.email}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="border-purple-200 text-purple-700">
+                                  {staff.category || 'N/A'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={getStaffStatusColor(staff.status)}>
+                                  {staff.status.charAt(0).toUpperCase() + staff.status.slice(1)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>{staff.appointments}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                                  <span className="font-medium">{staff.rating.toFixed(1)}</span>
                                 </div>
-                                <div>
-                                  <span className="text-gray-500 block">Date & Time</span>
-                                  <span className="font-medium">{format(new Date(appointment.date), 'MMM d, yyyy')} <br/> {appointment.time}</span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50"
+                                    onClick={() => handleViewDetails(staff)}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-purple-600 hover:bg-purple-50"
+                                    onClick={() => openEditStaff(staff)}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 text-red-600 hover:bg-red-50"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Remove Staff Member</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Are you sure you want to remove {staff.name} from the staff? This action cannot be undone.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={() => handleDeleteStaff(staff.id)}
+                                          className="bg-red-600 hover:bg-red-700"
+                                        >
+                                          Remove Staff
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
                                 </div>
-                                <div>
-                                  <span className="text-gray-500 block">Staff</span>
-                                  <span className="font-medium">{appointment.assignedStaff?.name}</span>
-                                </div>
-                              </div>
-                              <div className="flex justify-end pt-3 border-t border-purple-50">
-                                <Button variant="outline" size="sm" className="w-full text-blue-600 bg-blue-50 hover:bg-blue-100" onClick={() => {
-                                  setSelectedAppointment(appointment);
-                                  setIsAppointmentDetailsOpen(true);
-                                }}>
-                                  <Eye className="w-4 h-4 mr-2" /> View Details
-                                </Button>
-                              </div>
-                            </Card>
+                              </TableCell>
+                            </TableRow>
                           ))}
-                        </div>
-                        
-                        {completedAppointments.length === 0 && (
-                          <div className="text-center py-8 text-gray-500">
-                            <CheckCircle2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                            <p className="text-lg">No completed appointments found</p>
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:hidden">
+                      {filteredStaff.map((staff) => (
+                        <Card key={staff.id} className="p-4 border-purple-100">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span className="text-white font-bold">
+                                  {staff.name.split(' ').map(n => n[0]).join('')}
+                                </span>
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900">{staff.name}</div>
+                                <div className="text-sm text-gray-500">#{staff.id.toString().padStart(3, '0')}</div>
+                              </div>
+                            </div>
+                            <Badge className={getStaffStatusColor(staff.status)}>
+                              {staff.status.charAt(0).toUpperCase() + staff.status.slice(1)}
+                            </Badge>
                           </div>
-                        )}
-                      </TabsContent>
-
-                      <TabsContent value="cancelled" className="mt-6">
-                        <div className="hidden md:block overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Booking ID</TableHead>
-                                <TableHead>Customer</TableHead>
-                                <TableHead>Service</TableHead>
-                                <TableHead>Original Date</TableHead>
-                                <TableHead>Reason</TableHead>
-                                <TableHead>Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {cancelledAppointments.map((appointment) => (
-                                <TableRow key={appointment.id}>
-                                  <TableCell className="font-medium">{appointment.id}</TableCell>
-                                  <TableCell>
-                                    <div>
-                                      <div className="font-medium">{appointment.customer.name}</div>
-                                      <div className="text-sm text-gray-500">{appointment.customer.phone}</div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>{appointment.service.name}</TableCell>
-                                  <TableCell>
-                                    <div>
-                                      <div className="font-medium">{format(new Date(appointment.date), 'MMM d, yyyy')}</div>
-                                      <div className="text-sm text-gray-500">{appointment.time}</div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <span className="text-sm text-gray-600">{appointment.notes || 'No reason provided'}</span>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        setSelectedAppointment(appointment);
-                                        setIsAppointmentDetailsOpen(true);
-                                      }}
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 gap-4 md:hidden mt-4">
-                          {cancelledAppointments.map((appointment) => (
-                            <Card key={appointment.id} className="p-4 border-red-100 bg-red-50/30">
-                              <div className="flex justify-between items-start mb-3">
-                                <div>
-                                  <div className="font-medium text-gray-900">{appointment.customer.name}</div>
-                                  <div className="text-sm text-gray-500">{appointment.id}</div>
-                                </div>
-                                <Badge className="bg-red-100 text-red-700">Cancelled</Badge>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                                <div className="col-span-2">
-                                  <span className="text-gray-500 block">Service</span>
-                                  <span className="font-medium">{appointment.service.name}</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500 block">Date & Time</span>
-                                  <span className="font-medium">{format(new Date(appointment.date), 'MMM d, yyyy')} <br/> {appointment.time}</span>
-                                </div>
-                                <div className="col-span-2 mt-2">
-                                  <span className="text-gray-500 block">Reason</span>
-                                  <span className="font-medium text-gray-700">{appointment.notes || 'No reason provided'}</span>
-                                </div>
-                              </div>
-                              <div className="flex justify-end pt-3 border-t border-red-100">
-                                <Button variant="outline" size="sm" className="w-full text-gray-700 hover:bg-gray-100" onClick={() => {
-                                  setSelectedAppointment(appointment);
-                                  setIsAppointmentDetailsOpen(true);
-                                }}>
-                                  <Eye className="w-4 h-4 mr-2" /> View Details
-                                </Button>
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                        
-                        {cancelledAppointments.length === 0 && (
-                          <div className="text-center py-8 text-gray-500">
-                            <XCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                            <p className="text-lg">No cancelled appointments found</p>
+                          <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                            <div>
+                              <span className="text-gray-500 block">Category</span>
+                              <span className="font-medium">{staff.category || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 block">Rating</span>
+                              <span className="font-medium flex items-center gap-1">
+                                <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" /> {staff.rating.toFixed(1)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 block">Completed</span>
+                              <span className="font-medium">{staff.appointments} Appts</span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-gray-500 block">Email</span>
+                              <span className="font-medium">{staff.email}</span>
+                            </div>
                           </div>
-                        )}
-                      </TabsContent>
-                    </Tabs>
-                  </CardContent>
-                </Card>
-              </>
-            )}
+                          <div className="flex gap-2 justify-end pt-3 border-t border-purple-50">
+                            <Button variant="outline" size="sm" className="flex-1 bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100" onClick={() => handleViewDetails(staff)}>
+                              <Eye className="h-4 w-4 mr-2" /> View
+                            </Button>
+                            <Button variant="outline" size="sm" className="flex-1 bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100" onClick={() => openEditStaff(staff)}>
+                              <Edit className="h-4 w-4 mr-2" /> Edit
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="outline" size="sm" className="flex-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100">
+                                  <Trash2 className="h-4 w-4 mr-2" /> Delete
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Remove Staff Member</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to remove {staff.name} from the staff? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteStaff(staff.id)} className="bg-red-600 hover:bg-red-700">
+                                    Remove Staff
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                    {filteredStaff.length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        No staff members found matching your search criteria.
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
 
-            {activeSection === 'reports' && (
-              <>
-                {/* Report Generation */}
-                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                  <CardHeader>
-                    <CardTitle className="text-xl font-bold text-gray-900">Generate Reports</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                      <Select value={reportType} onValueChange={setReportType}>
-                        <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
-                          <BarChart3 className="w-4 h-4 mr-2" />
-                          <SelectValue placeholder="Report Type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="daily">Daily Report</SelectItem>
-                          <SelectItem value="weekly">Weekly Report</SelectItem>
-                          <SelectItem value="monthly">Monthly Report</SelectItem>
-                          <SelectItem value="custom">Custom Range</SelectItem>
-                        </SelectContent>
-                      </Select>
+          {activeSection === 'manage-services' && (
+            <ManageServicePanel defaultTab={manageServiceTab} />
+          )}
 
-                      <Select value={selectedReportStaff} onValueChange={setSelectedReportStaff}>
-                        <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
-                          <Users className="w-4 h-4 mr-2" />
-                          <SelectValue placeholder="Staff Member" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Staff</SelectItem>
-                          {staffMembers.filter(s => s.status === 'active').map(staff => (
-                            <SelectItem key={staff.id} value={staff.id.toString()}>{staff.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      {reportType === 'custom' && (
-                        <>
-                          <Input
-                            type="date"
-                            value={reportStartDate}
-                            onChange={(e) => setReportStartDate(e.target.value)}
-                            className="border-purple-200 focus:border-purple-400 rounded-xl"
-                          />
-                          <Input
-                            type="date"
-                            value={reportEndDate}
-                            onChange={(e) => setReportEndDate(e.target.value)}
-                            className="border-purple-200 focus:border-purple-400 rounded-xl"
-                          />
-                        </>
-                      )}
-
-                      <Button 
-                        onClick={() => generateReport(reportType)}
-                        disabled={isGeneratingReport}
-                        className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl"
-                      >
-                        {isGeneratingReport ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            Generating...
-                          </>
-                        ) : (
-                          <>
-                            <FileText className="w-4 h-4 mr-2" />
-                            Generate Report
-                          </>
-                        )}
-                      </Button>
-
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" className="border-purple-200 text-purple-600 hover:bg-purple-50 rounded-xl">
-                            <Download className="w-4 h-4 mr-2" />
-                            Export
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => exportReport('pdf')}>
-                            <FileText className="w-4 h-4 mr-2" />
-                            Export as PDF
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => exportReport('excel')}>
-                            <Download className="w-4 h-4 mr-2" />
-                            Export as Excel
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+          {activeSection === 'appointments' && (
+            <>
+              {/* Appointment Stats */}
+              <div className="grid md:grid-cols-4 gap-6">
+                <Card className="border-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl shadow-xl text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-blue-100">Total Appointments</p>
+                        <p className="text-3xl font-bold">{appointments.length}</p>
+                      </div>
+                      <Calendar className="w-10 h-10 text-blue-200" />
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* Report Statistics */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Total Appointments</p>
-                          <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                            {reportResult ? reportResult.summary.totalAppointments : '0'}
-                          </h3>
-                        </div>
-                        <div className="bg-purple-100 p-3 rounded-2xl group-hover:bg-purple-200 transition-colors">
-                          <Calendar className="w-6 h-6 text-purple-600" />
-                        </div>
+                <Card className="border-0 bg-gradient-to-r from-green-500 to-green-600 rounded-3xl shadow-xl text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-green-100">Confirmed</p>
+                        <p className="text-3xl font-bold">{appointments.filter(a => a.status === 'confirmed').length}</p>
                       </div>
-                    </CardContent>
-                  </Card>
+                      <CheckCircle2 className="w-10 h-10 text-green-200" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Gross Revenue</p>
-                          <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                            ${reportResult ? (reportResult.summary.grossRevenue || 0).toLocaleString() : '0'}
-                          </h3>
-                        </div>
-                        <div className="bg-blue-100 p-3 rounded-2xl group-hover:bg-blue-200 transition-colors">
-                          <DollarSign className="w-6 h-6 text-blue-600" />
-                        </div>
+                <Card className="border-0 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-3xl shadow-xl text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-yellow-100">Pending</p>
+                        <p className="text-3xl font-bold">{appointments.filter(a => a.status === 'pending').length}</p>
                       </div>
-                    </CardContent>
-                  </Card>
+                      <AlertCircle className="w-10 h-10 text-yellow-200" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Total Discount</p>
-                          <h3 className="text-2xl font-bold text-red-600 mt-1">
-                            -${reportResult ? (reportResult.summary.totalDiscount || 0).toLocaleString() : '0'}
-                          </h3>
-                        </div>
-                        <div className="bg-red-100 p-3 rounded-2xl group-hover:bg-red-200 transition-colors">
-                          <Coins className="w-6 h-6 text-red-600" />
-                        </div>
+                <Card className="border-0 bg-gradient-to-r from-purple-500 to-purple-600 rounded-3xl shadow-xl text-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-purple-100">Unassigned</p>
+                        <p className="text-3xl font-bold">{appointments.filter(a => !a.assignedStaff).length}</p>
                       </div>
-                    </CardContent>
-                  </Card>
+                      <UserCog className="w-10 h-10 text-purple-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
-                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Net Revenue</p>
-                          <h3 className="text-2xl font-bold text-green-600 mt-1">
-                            ${reportResult ? reportResult.summary.totalRevenue.toLocaleString() : '0'}
-                          </h3>
-                        </div>
-                        <div className="bg-green-100 p-3 rounded-2xl group-hover:bg-green-200 transition-colors">
-                          <DollarSign className="w-6 h-6 text-green-600" />
-                        </div>
+              {/* Search and Filters */}
+              <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                <CardContent className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                    <div className="lg:col-span-2">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                        <Input
+                          placeholder="Search by customer name, booking ID, or email..."
+                          value={appointmentSearchTerm}
+                          onChange={(e) => setAppointmentSearchTerm(e.target.value)}
+                          className="pl-10 border-purple-200 focus:border-purple-400 rounded-xl"
+                        />
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
 
-                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Cancelled</p>
-                          <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                            {reportResult ? reportResult.summary.cancelledAppointments : '0'}
-                          </h3>
-                        </div>
-                        <div className="bg-red-100 p-3 rounded-2xl group-hover:bg-red-200 transition-colors">
-                          <XCircle className="w-6 h-6 text-red-600" />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
+                    <Select value={appointmentDateFilter} onValueChange={setAppointmentDateFilter}>
+                      <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
+                        <CalendarIcon className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Date" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Dates</SelectItem>
+                        <SelectItem value="today">Today</SelectItem>
+                        <SelectItem value="tomorrow">Tomorrow</SelectItem>
+                        <SelectItem value="week">This Week</SelectItem>
+                        <SelectItem value="month">This Month</SelectItem>
+                      </SelectContent>
+                    </Select>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
-                  <Card className="lg:col-span-2 border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                    <CardHeader>
-                      <CardTitle className="text-xl font-bold text-gray-900">Recent Appointments in Report</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="overflow-x-auto">
+                    <Select value={appointmentStaffFilter} onValueChange={setAppointmentStaffFilter}>
+                      <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
+                        <Users className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Staff" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Staff</SelectItem>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {staffMembers.filter(s => s.status === 'active').map(staff => (
+                          <SelectItem key={staff.id} value={staff.id.toString()}>{staff.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={appointmentServiceFilter} onValueChange={setAppointmentServiceFilter}>
+                      <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
+                        <Scissors className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Service" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Services</SelectItem>
+                        {services.map(service => (
+                          <SelectItem key={service.id} value={service.id.toString()}>{service.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={appointmentStatusFilter} onValueChange={setAppointmentStatusFilter}>
+                      <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
+                        <Filter className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="confirmed">Confirmed</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={appointmentDiscountFilter} onValueChange={setAppointmentDiscountFilter}>
+                      <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
+                        <Coins className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Discount" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Bookings</SelectItem>
+                        <SelectItem value="discounted">Discounted Only</SelectItem>
+                        <SelectItem value="none">No Discount</SelectItem>
+                        <SelectItem value="loyalty">Loyalty Used</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Appointment History Tabs */}
+              <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                <CardHeader>
+                  <CardTitle className="text-xl font-bold text-gray-900">Appointment History</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Tabs value={appointmentHistoryTab} onValueChange={setAppointmentHistoryTab}>
+                    <TabsList className="flex flex-col sm:grid sm:grid-cols-3 w-full h-auto gap-1 bg-purple-50 p-1 rounded-xl">
+                      <TabsTrigger value="upcoming" className="w-full">Upcoming ({upcomingAppointments.length})</TabsTrigger>
+                      <TabsTrigger value="completed" className="w-full">Completed ({completedAppointments.length})</TabsTrigger>
+                      <TabsTrigger value="cancelled" className="w-full">Cancelled ({cancelledAppointments.length})</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="upcoming" className="mt-6">
+                      <div className="hidden md:block overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -2190,930 +1597,1524 @@ export function AdminDashboard({
                               <TableHead>Customer</TableHead>
                               <TableHead>Service</TableHead>
                               <TableHead>Date & Time</TableHead>
-                              <TableHead>Original</TableHead>
-                              <TableHead>Discount</TableHead>
-                              <TableHead>Final</TableHead>
+                              <TableHead>Assigned Staff</TableHead>
                               <TableHead>Status</TableHead>
+                              <TableHead>Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {reportResult?.appointments.slice(0, 10).map((apt: any) => (
-                              <TableRow key={apt.id}>
-                                <TableCell className="font-medium">#{apt.id}</TableCell>
-                                <TableCell>{apt.customer_name}</TableCell>
-                                <TableCell>{apt.service_name}</TableCell>
+                            {upcomingAppointments.map((appointment) => (
+                              <TableRow key={appointment.id}>
+                                <TableCell className="font-medium">{appointment.id}</TableCell>
                                 <TableCell>
                                   <div>
-                                    <div className="font-medium">{format(new Date(apt.appointment_date), 'MMM d, yyyy')}</div>
-                                    <div className="text-sm text-gray-500">{apt.appointment_time}</div>
+                                    <div className="font-medium">{appointment.customer.name}</div>
+                                    <div className="text-sm text-gray-500">{appointment.customer.phone}</div>
                                   </div>
                                 </TableCell>
-                                <TableCell>${apt.original_amount}</TableCell>
-                                <TableCell className="text-red-500">
-                                  {apt.discount_amount > 0 ? `-$${apt.discount_amount}` : '-'}
-                                </TableCell>
-                                <TableCell className="font-bold text-green-600">${apt.final_amount}</TableCell>
                                 <TableCell>
-                                  <Badge className={getStatusColor(apt.status)}>
-                                    {apt.status}
+                                  <div>
+                                    <div className="font-medium">{appointment.service.name}</div>
+                                    <div className="text-sm text-gray-500">${appointment.service.price} • {appointment.service.duration}min</div>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div>
+                                    <div className="font-medium">{format(new Date(appointment.date), 'MMM d, yyyy')}</div>
+                                    <div className="text-sm text-gray-500">{appointment.time}</div>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  {appointment.assignedStaff ? (
+                                    <Badge variant="outline" className="border-green-200 text-green-700">
+                                      {appointment.assignedStaff.name}
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="border-red-200 text-red-700">
+                                      Unassigned
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge className={getStatusColor(appointment.status)}>
+                                    {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
                                   </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem onClick={() => {
+                                        setSelectedAppointment(appointment);
+                                        setIsAppointmentDetailsOpen(true);
+                                      }}>
+                                        <Eye className="w-4 h-4 mr-2" />
+                                        View Details
+                                      </DropdownMenuItem>
+                                      {!appointment.assignedStaff && (
+                                        <DropdownMenuItem onClick={() => {
+                                          setSelectedAppointment(appointment);
+                                          setIsAssignStaffOpen(true);
+                                        }}>
+                                          <UserCog className="w-4 h-4 mr-2" />
+                                          Assign Staff
+                                        </DropdownMenuItem>
+                                      )}
+                                      <DropdownMenuItem onClick={() => {
+                                        setSelectedAppointment(appointment);
+                                        setRescheduleDate(appointment.date);
+                                        setRescheduleTime(appointment.time);
+                                        setIsEditAppointmentOpen(true);
+                                      }}>
+                                        <Edit className="w-4 h-4 mr-2" />
+                                        Reschedule
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => updateAppointmentStatus(appointment.id, 'confirmed')}
+                                        disabled={appointment.status === 'confirmed'}
+                                      >
+                                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                                        Confirm
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => updateAppointmentStatus(appointment.id, 'completed')}
+                                        disabled={appointment.status === 'completed'}
+                                      >
+                                        <Zap className="w-4 h-4 mr-2" />
+                                        Mark Complete
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => cancelAppointment(appointment.id)}
+                                        className="text-red-600"
+                                      >
+                                        <XCircle className="w-4 h-4 mr-2" />
+                                        Cancel
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </TableCell>
                               </TableRow>
                             ))}
-                            {!reportResult && (
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:hidden mt-4">
+                        {upcomingAppointments.map((appointment) => (
+                          <Card key={appointment.id} className="p-4 border-purple-100">
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <div className="font-medium text-gray-900">{appointment.customer.name}</div>
+                                <div className="text-sm text-gray-500">{appointment.id}</div>
+                              </div>
+                              <Badge className={getStatusColor(appointment.status)}>
+                                {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                              <div className="col-span-2">
+                                <span className="text-gray-500 block">Service</span>
+                                <span className="font-medium">{appointment.service.name} (${appointment.service.price})</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500 block">Date & Time</span>
+                                <span className="font-medium">{format(new Date(appointment.date), 'MMM d, yyyy')} • {appointment.time}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500 block">Staff</span>
+                                {appointment.assignedStaff ? (
+                                  <span className="font-medium text-green-600">{appointment.assignedStaff.name}</span>
+                                ) : (
+                                  <span className="font-medium text-red-600">Unassigned</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-2 justify-end pt-3 border-t border-purple-50">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="outline" size="sm" className="w-full border-purple-200 text-purple-600">
+                                    Manage Booking <MoreHorizontal className="h-4 w-4 ml-2" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                  <DropdownMenuItem onClick={() => {
+                                    setSelectedAppointment(appointment);
+                                    setIsAppointmentDetailsOpen(true);
+                                  }}>
+                                    <Eye className="w-4 h-4 mr-2" /> View Details
+                                  </DropdownMenuItem>
+                                  {!appointment.assignedStaff && (
+                                    <DropdownMenuItem onClick={() => {
+                                      setSelectedAppointment(appointment);
+                                      setIsAssignStaffOpen(true);
+                                    }}>
+                                      <UserCog className="w-4 h-4 mr-2" /> Assign Staff
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem onClick={() => {
+                                    setSelectedAppointment(appointment);
+                                    setIsEditAppointmentOpen(true);
+                                  }}>
+                                    <Edit className="w-4 h-4 mr-2" /> Reschedule
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => updateAppointmentStatus(appointment.id, 'confirmed')}
+                                    disabled={appointment.status === 'confirmed'}
+                                  >
+                                    <CheckCircle2 className="w-4 h-4 mr-2" /> Confirm
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => updateAppointmentStatus(appointment.id, 'completed')}
+                                    disabled={appointment.status === 'completed'}
+                                  >
+                                    <Zap className="w-4 h-4 mr-2" /> Mark Complete
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => cancelAppointment(appointment.id)}
+                                    className="text-red-600"
+                                  >
+                                    <XCircle className="w-4 h-4 mr-2" /> Cancel
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+
+                      {upcomingAppointments.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                          <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                          <p className="text-lg">No upcoming appointments found</p>
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="completed" className="mt-6">
+                      <div className="hidden md:block overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Booking ID</TableHead>
+                              <TableHead>Customer</TableHead>
+                              <TableHead>Service</TableHead>
+                              <TableHead>Date & Time</TableHead>
+                              <TableHead>Staff</TableHead>
+                              <TableHead>Original</TableHead>
+                              <TableHead>Discount</TableHead>
+                              <TableHead>Final Revenue</TableHead>
+                              <TableHead>Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {completedAppointments.map((appointment) => (
+                              <TableRow key={appointment.id}>
+                                <TableCell className="font-medium">{appointment.id}</TableCell>
+                                <TableCell>
+                                  <div>
+                                    <div className="font-medium">{appointment.customer.name}</div>
+                                    <div className="text-sm text-gray-500">{appointment.customer.email}</div>
+                                  </div>
+                                </TableCell>
+                                <TableCell>{appointment.service.name}</TableCell>
+                                <TableCell>
+                                  <div>
+                                    <div className="font-medium">{format(new Date(appointment.date), 'MMM d, yyyy')}</div>
+                                    <div className="text-sm text-gray-500">{appointment.time}</div>
+                                  </div>
+                                </TableCell>
+                                <TableCell>{appointment.assignedStaff?.name}</TableCell>
+                                <TableCell>
+                                  <span className="text-gray-500">${appointment.original_amount}</span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="text-red-500">
+                                    {appointment.discount_amount > 0 ? `-$${appointment.discount_amount}` : '-'}
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="font-bold text-green-600">${appointment.final_amount}</span>
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedAppointment(appointment);
+                                      setIsAppointmentDetailsOpen(true);
+                                    }}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:hidden mt-4">
+                        {completedAppointments.map((appointment) => (
+                          <Card key={appointment.id} className="p-4 border-purple-100">
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <div className="font-medium text-gray-900">{appointment.customer.name}</div>
+                                <div className="text-sm text-gray-500">{appointment.id}</div>
+                              </div>
+                              <span className="font-bold text-green-600">${appointment.final_amount}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                              <div className="col-span-2">
+                                <span className="text-gray-500 block">Service</span>
+                                <span className="font-medium">{appointment.service.name}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500 block">Date & Time</span>
+                                <span className="font-medium">{format(new Date(appointment.date), 'MMM d, yyyy')} <br /> {appointment.time}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500 block">Staff</span>
+                                <span className="font-medium">{appointment.assignedStaff?.name}</span>
+                              </div>
+                            </div>
+                            <div className="flex justify-end pt-3 border-t border-purple-50">
+                              <Button variant="outline" size="sm" className="w-full text-blue-600 bg-blue-50 hover:bg-blue-100" onClick={() => {
+                                setSelectedAppointment(appointment);
+                                setIsAppointmentDetailsOpen(true);
+                              }}>
+                                <Eye className="w-4 h-4 mr-2" /> View Details
+                              </Button>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+
+                      {completedAppointments.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                          <CheckCircle2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                          <p className="text-lg">No completed appointments found</p>
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="cancelled" className="mt-6">
+                      <div className="hidden md:block overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Booking ID</TableHead>
+                              <TableHead>Customer</TableHead>
+                              <TableHead>Service</TableHead>
+                              <TableHead>Original Date</TableHead>
+                              <TableHead>Reason</TableHead>
+                              <TableHead>Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {cancelledAppointments.map((appointment) => (
+                              <TableRow key={appointment.id}>
+                                <TableCell className="font-medium">{appointment.id}</TableCell>
+                                <TableCell>
+                                  <div>
+                                    <div className="font-medium">{appointment.customer.name}</div>
+                                    <div className="text-sm text-gray-500">{appointment.customer.phone}</div>
+                                  </div>
+                                </TableCell>
+                                <TableCell>{appointment.service.name}</TableCell>
+                                <TableCell>
+                                  <div>
+                                    <div className="font-medium">{format(new Date(appointment.date), 'MMM d, yyyy')}</div>
+                                    <div className="text-sm text-gray-500">{appointment.time}</div>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="text-sm text-gray-600">{appointment.notes || 'No reason provided'}</span>
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedAppointment(appointment);
+                                      setIsAppointmentDetailsOpen(true);
+                                    }}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:hidden mt-4">
+                        {cancelledAppointments.map((appointment) => (
+                          <Card key={appointment.id} className="p-4 border-red-100 bg-red-50/30">
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <div className="font-medium text-gray-900">{appointment.customer.name}</div>
+                                <div className="text-sm text-gray-500">{appointment.id}</div>
+                              </div>
+                              <Badge className="bg-red-100 text-red-700">Cancelled</Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                              <div className="col-span-2">
+                                <span className="text-gray-500 block">Service</span>
+                                <span className="font-medium">{appointment.service.name}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500 block">Date & Time</span>
+                                <span className="font-medium">{format(new Date(appointment.date), 'MMM d, yyyy')} <br /> {appointment.time}</span>
+                              </div>
+                              <div className="col-span-2 mt-2">
+                                <span className="text-gray-500 block">Reason</span>
+                                <span className="font-medium text-gray-700">{appointment.notes || 'No reason provided'}</span>
+                              </div>
+                            </div>
+                            <div className="flex justify-end pt-3 border-t border-red-100">
+                              <Button variant="outline" size="sm" className="w-full text-gray-700 hover:bg-gray-100" onClick={() => {
+                                setSelectedAppointment(appointment);
+                                setIsAppointmentDetailsOpen(true);
+                              }}>
+                                <Eye className="w-4 h-4 mr-2" /> View Details
+                              </Button>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+
+                      {cancelledAppointments.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                          <XCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                          <p className="text-lg">No cancelled appointments found</p>
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {activeSection === 'reports' && (
+            <>
+              {/* Report Generation */}
+              <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                <CardHeader>
+                  <CardTitle className="text-xl font-bold text-gray-900">Generate Reports</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <Select value={reportType} onValueChange={setReportType}>
+                      <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
+                        <BarChart3 className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Report Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily Report</SelectItem>
+                        <SelectItem value="weekly">Weekly Report</SelectItem>
+                        <SelectItem value="monthly">Monthly Report</SelectItem>
+                        <SelectItem value="custom">Custom Range</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={selectedReportStaff} onValueChange={setSelectedReportStaff}>
+                      <SelectTrigger className="border-purple-200 focus:border-purple-400 rounded-xl">
+                        <Users className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Staff Member" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Staff</SelectItem>
+                        {staffMembers.filter(s => s.status === 'active').map(staff => (
+                          <SelectItem key={staff.id} value={staff.id.toString()}>{staff.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {reportType === 'custom' && (
+                      <>
+                        <Input
+                          type="date"
+                          value={reportStartDate}
+                          onChange={(e) => setReportStartDate(e.target.value)}
+                          className="border-purple-200 focus:border-purple-400 rounded-xl"
+                        />
+                        <Input
+                          type="date"
+                          value={reportEndDate}
+                          onChange={(e) => setReportEndDate(e.target.value)}
+                          className="border-purple-200 focus:border-purple-400 rounded-xl"
+                        />
+                      </>
+                    )}
+
+                    <Button
+                      onClick={() => generateReport(reportType)}
+                      disabled={isGeneratingReport}
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl"
+                    >
+                      {isGeneratingReport ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="w-4 h-4 mr-2" />
+                          Generate Report
+                        </>
+                      )}
+                    </Button>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="border-purple-200 text-purple-600 hover:bg-purple-50 rounded-xl">
+                          <Download className="w-4 h-4 mr-2" />
+                          Export
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem onClick={() => exportReport('pdf')}>
+                          <FileText className="w-4 h-4 mr-2" />
+                          Export as PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => exportReport('excel')}>
+                          <Download className="w-4 h-4 mr-2" />
+                          Export as Excel
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Report Statistics */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Total Appointments</p>
+                        <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                          {reportResult ? reportResult.summary.totalAppointments : '0'}
+                        </h3>
+                      </div>
+                      <div className="bg-purple-100 p-3 rounded-2xl group-hover:bg-purple-200 transition-colors">
+                        <Calendar className="w-6 h-6 text-purple-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Gross Revenue</p>
+                        <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                          ${reportResult ? (reportResult.summary.grossRevenue || 0).toLocaleString() : '0'}
+                        </h3>
+                      </div>
+                      <div className="bg-blue-100 p-3 rounded-2xl group-hover:bg-blue-200 transition-colors">
+                        <DollarSign className="w-6 h-6 text-blue-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Total Discount</p>
+                        <h3 className="text-2xl font-bold text-red-600 mt-1">
+                          -${reportResult ? (reportResult.summary.totalDiscount || 0).toLocaleString() : '0'}
+                        </h3>
+                      </div>
+                      <div className="bg-red-100 p-3 rounded-2xl group-hover:bg-red-200 transition-colors">
+                        <Coins className="w-6 h-6 text-red-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Net Revenue</p>
+                        <h3 className="text-2xl font-bold text-green-600 mt-1">
+                          ${reportResult ? reportResult.summary.totalRevenue.toLocaleString() : '0'}
+                        </h3>
+                      </div>
+                      <div className="bg-green-100 p-3 rounded-2xl group-hover:bg-green-200 transition-colors">
+                        <DollarSign className="w-6 h-6 text-green-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden group">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Cancelled</p>
+                        <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                          {reportResult ? reportResult.summary.cancelledAppointments : '0'}
+                        </h3>
+                      </div>
+                      <div className="bg-red-100 p-3 rounded-2xl group-hover:bg-red-200 transition-colors">
+                        <XCircle className="w-6 h-6 text-red-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
+                <Card className="lg:col-span-2 border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold text-gray-900">Recent Appointments in Report</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Booking ID</TableHead>
+                            <TableHead>Customer</TableHead>
+                            <TableHead>Service</TableHead>
+                            <TableHead>Date & Time</TableHead>
+                            <TableHead>Original</TableHead>
+                            <TableHead>Discount</TableHead>
+                            <TableHead>Final</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {reportResult?.appointments.slice(0, 10).map((apt: any) => (
+                            <TableRow key={apt.id}>
+                              <TableCell className="font-medium">#{apt.id}</TableCell>
+                              <TableCell>{apt.customer_name}</TableCell>
+                              <TableCell>{apt.service_name}</TableCell>
+                              <TableCell>
+                                <div>
+                                  <div className="font-medium">{format(new Date(apt.appointment_date), 'MMM d, yyyy')}</div>
+                                  <div className="text-sm text-gray-500">{apt.appointment_time}</div>
+                                </div>
+                              </TableCell>
+                              <TableCell>${apt.original_amount}</TableCell>
+                              <TableCell className="text-red-500">
+                                {apt.discount_amount > 0 ? `-$${apt.discount_amount}` : '-'}
+                              </TableCell>
+                              <TableCell className="font-bold text-green-600">${apt.final_amount}</TableCell>
+                              <TableCell>
+                                <Badge className={getStatusColor(apt.status)}>
+                                  {apt.status}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {!reportResult && (
+                            <TableRow>
+                              <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                                Generate a report to see data here
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold text-gray-900">Most Booked Services</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      {(reportResult ? reportResult.mostBookedServices : []).map((service: any, index: number) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-sm">
+                              {index + 1}
+                            </div>
+                            <span className="font-medium text-gray-700">{service.name}</span>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-gray-900">{service.count}</div>
+                            <div className="text-xs text-gray-500">bookings</div>
+                          </div>
+                        </div>
+                      ))}
+                      {(!reportResult || reportResult.mostBookedServices.length === 0) && (
+                        <div className="text-center py-8 text-gray-500">
+                          No service data available
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Staff Performance */}
+              <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                <CardHeader>
+                  <CardTitle className="text-xl font-bold text-gray-900">Staff Performance</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Staff Member</TableHead>
+                          <TableHead>Appointments Handled</TableHead>
+                          <TableHead>Completion Rate</TableHead>
+                          <TableHead>Revenue Generated</TableHead>
+                          <TableHead>Average Rating</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {staffMembers.filter(s => s.status === 'active' && s.appointments > 0).map((staff) => {
+                          const staffAppointments = appointments.filter(a => a.assignedStaff?.id === staff.id);
+                          const completedAppointments = staffAppointments.filter(a => a.status === 'completed');
+                          const completionRate = staffAppointments.length > 0 ? Math.round((completedAppointments.length / staffAppointments.length) * 100) : 0;
+                          const revenue = completedAppointments.reduce((sum, a) => sum + (a.final_amount ?? a.service.price), 0);
+
+                          return (
+                            <TableRow key={staff.id}>
+                              <TableCell>
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+                                    <span className="text-white text-sm font-bold">
+                                      {staff.name.split(' ').map(n => n[0]).join('')}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <div className="font-medium">{staff.name}</div>
+                                    <div className="text-sm text-gray-500">{staff.role}</div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>{staffAppointments.length}</TableCell>
+                              <TableCell>
+                                <Badge variant={completionRate >= 80 ? "default" : "secondary"} className={completionRate >= 80 ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
+                                  {completionRate}%
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <span className="font-medium text-green-600">${revenue}</span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                                  <span className="font-medium">{staff.rating.toFixed(1)}</span>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:hidden">
+                    {staffMembers.filter(s => s.status === 'active' && s.appointments > 0).map((staff) => {
+                      const staffAppointments = appointments.filter(a => a.assignedStaff?.id === staff.id);
+                      const completedAppointments = staffAppointments.filter(a => a.status === 'completed');
+                      const completionRate = staffAppointments.length > 0 ? Math.round((completedAppointments.length / staffAppointments.length) * 100) : 0;
+                      const revenue = completedAppointments.reduce((sum, a) => sum + (a.final_amount ?? a.service.price), 0);
+
+                      return (
+                        <Card key={staff.id} className="p-4 border-purple-100">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span className="text-white font-bold">
+                                  {staff.name.split(' ').map(n => n[0]).join('')}
+                                </span>
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900">{staff.name}</div>
+                                <div className="text-sm text-gray-500">{staff.role}</div>
+                              </div>
+                            </div>
+                            <Badge variant={completionRate >= 80 ? "default" : "secondary"} className={completionRate >= 80 ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
+                              {completionRate}%
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="text-gray-500 block">Appointments</span>
+                              <span className="font-medium">{staffAppointments.length} Handled</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 block">Revenue</span>
+                              <span className="font-medium text-green-600">${revenue}</span>
+                            </div>
+                            <div className="col-span-2 mt-1 pt-2 border-t border-purple-50 flex justify-between items-center">
+                              <span className="text-gray-500">Average Rating</span>
+                              <span className="font-medium flex items-center gap-1">
+                                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                                {staff.rating.toFixed(1)}
+                              </span>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Revenue Trends */}
+              <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                <CardHeader>
+                  <CardTitle className="text-xl font-bold text-gray-900">Revenue Trends</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={monthlyRevenue}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Line type="monotone" dataKey="revenue" stroke="#8B5CF6" strokeWidth={3} name="Revenue ($)" />
+                      <Line type="monotone" dataKey="appointments" stroke="#EC4899" strokeWidth={3} name="Appointments" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {activeSection === 'loyalty-settings' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Rules & Rates */}
+                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold flex items-center gap-2 text-gray-900">
+                      <Settings className="w-5 h-5 text-purple-500" />
+                      Earning & Redemption Rules
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {loyaltySettings ? (
+                      <form onSubmit={updateLoyaltySettings} className="space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <Label>Points per Dollar (Earn)</Label>
+                            <Input
+                              type="number"
+                              value={loyaltySettings.points_per_dollar}
+                              onChange={(e) => setLoyaltySettings({ ...loyaltySettings, points_per_dollar: parseInt(e.target.value) })}
+                              className="rounded-xl border-purple-100"
+                            />
+                            <p className="text-[10px] text-gray-400">1 Dollar spent = X points earned</p>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Redemption Rate ($ per Pt)</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={loyaltySettings.redemption_rate}
+                              onChange={(e) => setLoyaltySettings({ ...loyaltySettings, redemption_rate: parseFloat(e.target.value) })}
+                              className="rounded-xl border-purple-100"
+                            />
+                            <p className="text-[10px] text-gray-400">1 Point = $X Discount</p>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Max Discount %</Label>
+                            <Input
+                              type="number"
+                              value={loyaltySettings.max_discount_percent}
+                              onChange={(e) => setLoyaltySettings({ ...loyaltySettings, max_discount_percent: parseInt(e.target.value) })}
+                              className="rounded-xl border-purple-100"
+                            />
+                            <p className="text-[10px] text-gray-400">Max points discount per booking</p>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Points Expiry (Days)</Label>
+                            <Input
+                              type="number"
+                              value={loyaltySettings.points_expiry_days}
+                              onChange={(e) => setLoyaltySettings({ ...loyaltySettings, points_expiry_days: parseInt(e.target.value) })}
+                              className="rounded-xl border-purple-100"
+                            />
+                            <p className="text-[10px] text-gray-400">Points expire after X days of inactivity</p>
+                          </div>
+                        </div>
+                        <Button
+                          type="submit"
+                          disabled={isUpdatingSettings}
+                          className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl h-11"
+                        >
+                          {isUpdatingSettings ? "Updating..." : "Save Configuration"}
+                        </Button>
+                      </form>
+                    ) : (
+                      <div className="flex justify-center p-8">
+                        <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Manual Adjustments */}
+                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold flex items-center gap-2 text-gray-900">
+                      <UserCog className="w-5 h-5 text-pink-500" />
+                      Manual Point Adjustment
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="p-6 bg-purple-50/50 rounded-2xl border border-purple-100">
+                      <p className="text-sm text-gray-600 mb-4">
+                        Use this tool to manually award or deduct points for specific users.
+                      </p>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>User ID / Email</Label>
+                          <Input
+                            placeholder="Search user..."
+                            value={adjustmentUser}
+                            onChange={(e) => setAdjustmentUser(e.target.value)}
+                            className="rounded-xl border-purple-100"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Points</Label>
+                            <Input
+                              type="number"
+                              placeholder="50"
+                              value={adjustmentPoints}
+                              onChange={(e) => setAdjustmentPoints(e.target.value)}
+                              className="rounded-xl border-purple-100"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Action</Label>
+                            <Select value={adjustmentType} onValueChange={setAdjustmentType}>
+                              <SelectTrigger className="rounded-xl border-purple-100">
+                                <SelectValue placeholder="Action" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="earn">Add Points</SelectItem>
+                                <SelectItem value="redeem">Deduct Points</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={handleLoyaltyAdjustment}
+                          disabled={isAdjusting}
+                          className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-xl"
+                        >
+                          {isAdjusting ? "Applying..." : "Apply Adjustment"}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Rewards Management */}
+                <Card className="lg:col-span-2 border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold flex items-center gap-2 text-gray-900">
+                      <Award className="w-5 h-5 text-yellow-500" />
+                      Reward Tiers & Offers
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                      {/* Add New Reward Form */}
+                      <div className="md:col-span-1 space-y-4 p-6 bg-yellow-50/50 rounded-2xl border border-yellow-100 h-fit">
+                        <h4 className="font-bold text-gray-900">Add New Reward</h4>
+                        <form onSubmit={handleAddReward} className="space-y-4">
+                          <div className="space-y-2">
+                            <Label>Title</Label>
+                            <Input
+                              placeholder="e.g. Free Haircut"
+                              value={newReward.title}
+                              onChange={(e) => setNewReward({ ...newReward, title: e.target.value })}
+                              className="rounded-xl border-yellow-100"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Points Required</Label>
+                            <Input
+                              type="number"
+                              placeholder="1000"
+                              value={newReward.points_required}
+                              onChange={(e) => setNewReward({ ...newReward, points_required: e.target.value })}
+                              className="rounded-xl border-yellow-100"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Description</Label>
+                            <Input
+                              placeholder="Brief details..."
+                              value={newReward.description}
+                              onChange={(e) => setNewReward({ ...newReward, description: e.target.value })}
+                              className="rounded-xl border-yellow-100"
+                            />
+                          </div>
+                          <Button
+                            type="submit"
+                            disabled={isAddingReward}
+                            className="w-full bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl"
+                          >
+                            {isAddingReward ? "Adding..." : "Add Reward"}
+                          </Button>
+                        </form>
+                      </div>
+
+                      {/* Rewards List */}
+                      <div className="md:col-span-2">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Reward</TableHead>
+                              <TableHead>Points</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {isLoadingRewards ? (
                               <TableRow>
-                                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                                  Generate a report to see data here
+                                <TableCell colSpan={4} className="text-center py-8">
+                                  <Loader2 className="w-6 h-6 animate-spin mx-auto text-yellow-500" />
+                                </TableCell>
+                              </TableRow>
+                            ) : loyaltyRewards.map((reward) => (
+                              <TableRow key={reward.id}>
+                                <TableCell>
+                                  <div className="font-medium text-gray-900">{reward.title}</div>
+                                  <div className="text-[10px] text-gray-500">{reward.description}</div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border-0">
+                                    {reward.points_required} pts
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={reward.is_active ? "default" : "secondary"}>
+                                    {reward.is_active ? "Active" : "Hidden"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 w-8 p-0"
+                                    onClick={() => handleDeleteReward(reward.id)}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            {!isLoadingRewards && loyaltyRewards.length === 0 && (
+                              <TableRow>
+                                <TableCell colSpan={4} className="text-center py-8 text-gray-400 text-sm">
+                                  No rewards configured yet.
                                 </TableCell>
                               </TableRow>
                             )}
                           </TableBody>
                         </Table>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
 
-                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                    <CardHeader>
-                      <CardTitle className="text-xl font-bold text-gray-900">Most Booked Services</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-6">
-                        {(reportResult ? reportResult.mostBookedServices : []).map((service: any, index: number) => (
-                          <div key={index} className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-sm">
-                                {index + 1}
-                              </div>
-                              <span className="font-medium text-gray-700">{service.name}</span>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-bold text-gray-900">{service.count}</div>
-                              <div className="text-xs text-gray-500">bookings</div>
-                            </div>
-                          </div>
-                        ))}
-                        {(!reportResult || reportResult.mostBookedServices.length === 0) && (
-                          <div className="text-center py-8 text-gray-500">
-                            No service data available
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+          {/* Edit Staff Dialog */}
+          <Dialog open={isEditStaffOpen} onOpenChange={setIsEditStaffOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit Staff Member</DialogTitle>
+                <DialogDescription>
+                  Update the details for {editingStaff?.name || 'this staff member'}.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                  <p className="text-xs text-blue-700 font-medium">ℹ Admin Note</p>
+                  <p className="text-xs text-blue-600 mt-0.5">Admins can update Role, Category, and Status. Personal details are managed by the staff member.</p>
                 </div>
-
-                {/* Staff Performance */}
-                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                  <CardHeader>
-                    <CardTitle className="text-xl font-bold text-gray-900">Staff Performance</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="hidden md:block overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Staff Member</TableHead>
-                            <TableHead>Appointments Handled</TableHead>
-                            <TableHead>Completion Rate</TableHead>
-                            <TableHead>Revenue Generated</TableHead>
-                            <TableHead>Average Rating</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {staffMembers.filter(s => s.status === 'active' && s.appointments > 0).map((staff) => {
-                            const staffAppointments = appointments.filter(a => a.assignedStaff?.id === staff.id);
-                            const completedAppointments = staffAppointments.filter(a => a.status === 'completed');
-                            const completionRate = staffAppointments.length > 0 ? Math.round((completedAppointments.length / staffAppointments.length) * 100) : 0;
-                            const revenue = completedAppointments.reduce((sum, a) => sum + (a.final_amount ?? a.service.price), 0);
-                            
-                            return (
-                              <TableRow key={staff.id}>
-                                <TableCell>
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                                      <span className="text-white text-sm font-bold">
-                                        {staff.name.split(' ').map(n => n[0]).join('')}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <div className="font-medium">{staff.name}</div>
-                                      <div className="text-sm text-gray-500">{staff.role}</div>
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell>{staffAppointments.length}</TableCell>
-                                <TableCell>
-                                  <Badge variant={completionRate >= 80 ? "default" : "secondary"} className={completionRate >= 80 ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
-                                    {completionRate}%
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <span className="font-medium text-green-600">${revenue}</span>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-1">
-                                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                                    <span className="font-medium">{staff.rating.toFixed(1)}</span>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 gap-4 md:hidden">
-                      {staffMembers.filter(s => s.status === 'active' && s.appointments > 0).map((staff) => {
-                        const staffAppointments = appointments.filter(a => a.assignedStaff?.id === staff.id);
-                        const completedAppointments = staffAppointments.filter(a => a.status === 'completed');
-                        const completionRate = staffAppointments.length > 0 ? Math.round((completedAppointments.length / staffAppointments.length) * 100) : 0;
-                        const revenue = completedAppointments.reduce((sum, a) => sum + (a.final_amount ?? a.service.price), 0);
-                        
-                        return (
-                          <Card key={staff.id} className="p-4 border-purple-100">
-                            <div className="flex justify-between items-start mb-3">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                  <span className="text-white font-bold">
-                                    {staff.name.split(' ').map(n => n[0]).join('')}
-                                  </span>
-                                </div>
-                                <div>
-                                  <div className="font-medium text-gray-900">{staff.name}</div>
-                                  <div className="text-sm text-gray-500">{staff.role}</div>
-                                </div>
-                              </div>
-                              <Badge variant={completionRate >= 80 ? "default" : "secondary"} className={completionRate >= 80 ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
-                                {completionRate}%
-                              </Badge>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <div>
-                                <span className="text-gray-500 block">Appointments</span>
-                                <span className="font-medium">{staffAppointments.length} Handled</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500 block">Revenue</span>
-                                <span className="font-medium text-green-600">${revenue}</span>
-                              </div>
-                              <div className="col-span-2 mt-1 pt-2 border-t border-purple-50 flex justify-between items-center">
-                                <span className="text-gray-500">Average Rating</span>
-                                <span className="font-medium flex items-center gap-1">
-                                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                                  {staff.rating.toFixed(1)}
-                                </span>
-                              </div>
-                            </div>
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Revenue Trends */}
-                <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                  <CardHeader>
-                    <CardTitle className="text-xl font-bold text-gray-900">Revenue Trends</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={monthlyRevenue}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Line type="monotone" dataKey="revenue" stroke="#8B5CF6" strokeWidth={3} name="Revenue ($)" />
-                        <Line type="monotone" dataKey="appointments" stroke="#EC4899" strokeWidth={3} name="Appointments" />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-
-            {activeSection === 'loyalty-settings' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Rules & Rates */}
-                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                    <CardHeader>
-                      <CardTitle className="text-xl font-bold flex items-center gap-2 text-gray-900">
-                        <Settings className="w-5 h-5 text-purple-500" />
-                        Earning & Redemption Rules
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {loyaltySettings ? (
-                        <form onSubmit={updateLoyaltySettings} className="space-y-6">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                              <Label>Points per Dollar (Earn)</Label>
-                              <Input 
-                                type="number" 
-                                value={loyaltySettings.points_per_dollar} 
-                                onChange={(e) => setLoyaltySettings({...loyaltySettings, points_per_dollar: parseInt(e.target.value)})}
-                                className="rounded-xl border-purple-100"
-                              />
-                              <p className="text-[10px] text-gray-400">1 Dollar spent = X points earned</p>
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Redemption Rate ($ per Pt)</Label>
-                              <Input 
-                                type="number" 
-                                step="0.01"
-                                value={loyaltySettings.redemption_rate} 
-                                onChange={(e) => setLoyaltySettings({...loyaltySettings, redemption_rate: parseFloat(e.target.value)})}
-                                className="rounded-xl border-purple-100"
-                              />
-                              <p className="text-[10px] text-gray-400">1 Point = $X Discount</p>
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Max Discount %</Label>
-                              <Input 
-                                type="number" 
-                                value={loyaltySettings.max_discount_percent} 
-                                onChange={(e) => setLoyaltySettings({...loyaltySettings, max_discount_percent: parseInt(e.target.value)})}
-                                className="rounded-xl border-purple-100"
-                              />
-                              <p className="text-[10px] text-gray-400">Max points discount per booking</p>
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Points Expiry (Days)</Label>
-                              <Input 
-                                type="number" 
-                                value={loyaltySettings.points_expiry_days} 
-                                onChange={(e) => setLoyaltySettings({...loyaltySettings, points_expiry_days: parseInt(e.target.value)})}
-                                className="rounded-xl border-purple-100"
-                              />
-                              <p className="text-[10px] text-gray-400">Points expire after X days of inactivity</p>
-                            </div>
-                          </div>
-                          <Button 
-                            type="submit" 
-                            disabled={isUpdatingSettings}
-                            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl h-11"
-                          >
-                            {isUpdatingSettings ? "Updating..." : "Save Configuration"}
-                          </Button>
-                        </form>
-                      ) : (
-                        <div className="flex justify-center p-8">
-                          <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Manual Adjustments */}
-                  <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                    <CardHeader>
-                      <CardTitle className="text-xl font-bold flex items-center gap-2 text-gray-900">
-                        <UserCog className="w-5 h-5 text-pink-500" />
-                        Manual Point Adjustment
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                      <div className="p-6 bg-purple-50/50 rounded-2xl border border-purple-100">
-                         <p className="text-sm text-gray-600 mb-4">
-                           Use this tool to manually award or deduct points for specific users.
-                         </p>
-                         <div className="space-y-4">
-                            <div className="space-y-2">
-                              <Label>User ID / Email</Label>
-                              <Input 
-                                placeholder="Search user..." 
-                                value={adjustmentUser}
-                                onChange={(e) => setAdjustmentUser(e.target.value)}
-                                className="rounded-xl border-purple-100" 
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label>Points</Label>
-                                <Input 
-                                  type="number" 
-                                  placeholder="50" 
-                                  value={adjustmentPoints}
-                                  onChange={(e) => setAdjustmentPoints(e.target.value)}
-                                  className="rounded-xl border-purple-100" 
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Action</Label>
-                                <Select value={adjustmentType} onValueChange={setAdjustmentType}>
-                                  <SelectTrigger className="rounded-xl border-purple-100">
-                                    <SelectValue placeholder="Action" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="earn">Add Points</SelectItem>
-                                    <SelectItem value="redeem">Deduct Points</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                            <Button 
-                              onClick={handleLoyaltyAdjustment}
-                              disabled={isAdjusting}
-                              className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-xl"
-                            >
-                              {isAdjusting ? "Applying..." : "Apply Adjustment"}
-                            </Button>
-                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Rewards Management */}
-                  <Card className="lg:col-span-2 border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
-                    <CardHeader>
-                      <CardTitle className="text-xl font-bold flex items-center gap-2 text-gray-900">
-                        <Award className="w-5 h-5 text-yellow-500" />
-                        Reward Tiers & Offers
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-8">
-                       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                          {/* Add New Reward Form */}
-                          <div className="md:col-span-1 space-y-4 p-6 bg-yellow-50/50 rounded-2xl border border-yellow-100 h-fit">
-                            <h4 className="font-bold text-gray-900">Add New Reward</h4>
-                            <form onSubmit={handleAddReward} className="space-y-4">
-                               <div className="space-y-2">
-                                  <Label>Title</Label>
-                                  <Input 
-                                    placeholder="e.g. Free Haircut" 
-                                    value={newReward.title}
-                                    onChange={(e) => setNewReward({...newReward, title: e.target.value})}
-                                    className="rounded-xl border-yellow-100"
-                                  />
-                               </div>
-                               <div className="space-y-2">
-                                  <Label>Points Required</Label>
-                                  <Input 
-                                    type="number"
-                                    placeholder="1000" 
-                                    value={newReward.points_required}
-                                    onChange={(e) => setNewReward({...newReward, points_required: e.target.value})}
-                                    className="rounded-xl border-yellow-100"
-                                  />
-                               </div>
-                               <div className="space-y-2">
-                                  <Label>Description</Label>
-                                  <Input 
-                                    placeholder="Brief details..." 
-                                    value={newReward.description}
-                                    onChange={(e) => setNewReward({...newReward, description: e.target.value})}
-                                    className="rounded-xl border-yellow-100"
-                                  />
-                               </div>
-                               <Button 
-                                 type="submit" 
-                                 disabled={isAddingReward}
-                                 className="w-full bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl"
-                               >
-                                 {isAddingReward ? "Adding..." : "Add Reward"}
-                               </Button>
-                            </form>
-                          </div>
-
-                          {/* Rewards List */}
-                          <div className="md:col-span-2">
-                             <Table>
-                               <TableHeader>
-                                 <TableRow>
-                                   <TableHead>Reward</TableHead>
-                                   <TableHead>Points</TableHead>
-                                   <TableHead>Status</TableHead>
-                                   <TableHead className="text-right">Action</TableHead>
-                                 </TableRow>
-                               </TableHeader>
-                               <TableBody>
-                                 {isLoadingRewards ? (
-                                   <TableRow>
-                                      <TableCell colSpan={4} className="text-center py-8">
-                                        <Loader2 className="w-6 h-6 animate-spin mx-auto text-yellow-500" />
-                                      </TableCell>
-                                   </TableRow>
-                                 ) : loyaltyRewards.map((reward) => (
-                                   <TableRow key={reward.id}>
-                                     <TableCell>
-                                       <div className="font-medium text-gray-900">{reward.title}</div>
-                                       <div className="text-[10px] text-gray-500">{reward.description}</div>
-                                     </TableCell>
-                                     <TableCell>
-                                       <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border-0">
-                                         {reward.points_required} pts
-                                       </Badge>
-                                     </TableCell>
-                                     <TableCell>
-                                       <Badge variant={reward.is_active ? "default" : "secondary"}>
-                                         {reward.is_active ? "Active" : "Hidden"}
-                                       </Badge>
-                                     </TableCell>
-                                     <TableCell className="text-right">
-                                       <Button 
-                                         variant="ghost" 
-                                         size="sm" 
-                                         className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 w-8 p-0"
-                                         onClick={() => handleDeleteReward(reward.id)}
-                                       >
-                                         <Trash2 className="w-4 h-4" />
-                                       </Button>
-                                     </TableCell>
-                                   </TableRow>
-                                 ))}
-                                 {!isLoadingRewards && loyaltyRewards.length === 0 && (
-                                   <TableRow>
-                                     <TableCell colSpan={4} className="text-center py-8 text-gray-400 text-sm">
-                                       No rewards configured yet.
-                                     </TableCell>
-                                   </TableRow>
-                                 )}
-                               </TableBody>
-                             </Table>
-                          </div>
-                       </div>
-                    </CardContent>
-                  </Card>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name" className="flex items-center gap-2">
+                    Full Name
+                    <Badge variant="outline" className="text-[10px] py-0 h-4 border-gray-200 text-gray-400">Read-only</Badge>
+                  </Label>
+                  <Input
+                    id="edit-name"
+                    value={staffForm.name}
+                    disabled
+                    className="bg-gray-50 text-gray-400 cursor-not-allowed"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-email" className="flex items-center gap-2">
+                    Email
+                    <Badge variant="outline" className="text-[10px] py-0 h-4 border-gray-200 text-gray-400">Read-only</Badge>
+                  </Label>
+                  <Input
+                    id="edit-email"
+                    type="email"
+                    value={staffForm.email}
+                    disabled
+                    className="bg-gray-50 text-gray-400 cursor-not-allowed"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-phone" className="flex items-center gap-2">
+                    Phone
+                    <Badge variant="outline" className="text-[10px] py-0 h-4 border-gray-200 text-gray-400">Read-only</Badge>
+                  </Label>
+                  <Input
+                    id="edit-phone"
+                    type="tel"
+                    value={staffForm.phone}
+                    disabled
+                    className="bg-gray-50 text-gray-400 cursor-not-allowed"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-role">Staff Role *</Label>
+                  <Select value={staffForm.role} onValueChange={(value) => setStaffForm(prev => ({ ...prev, role: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="staff">Staff</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category">Primary Service Category *</Label>
+                  <Select value={staffForm.category} onValueChange={(value) => setStaffForm(prev => ({ ...prev, category: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Hair">Hair</SelectItem>
+                      <SelectItem value="Facial">Facial</SelectItem>
+                      <SelectItem value="Nails">Nails</SelectItem>
+                      <SelectItem value="Massage">Massage</SelectItem>
+                      <SelectItem value="Wellness">Wellness</SelectItem>
+                      <SelectItem value="Beauty">Beauty</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center space-x-2 pt-2">
+                  <Switch
+                    id="edit-active"
+                    checked={staffForm.status === 'active'}
+                    onCheckedChange={(checked) => setStaffForm(prev => ({ ...prev, status: checked ? 'active' : 'inactive' }))}
+                  />
+                  <Label htmlFor="edit-active">Active Status</Label>
                 </div>
               </div>
-            )}
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => {
+                  setIsEditStaffOpen(false);
+                  setEditingStaff(null);
+                  resetForm();
+                }}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleEditStaff}
+                  disabled={isLoading}
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 min-w-[140px]"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    'Update Staff Member'
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
-            {/* Edit Staff Dialog */}
-            <Dialog open={isEditStaffOpen} onOpenChange={setIsEditStaffOpen}>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Edit Staff Member</DialogTitle>
-                  <DialogDescription>
-                    Update the details for {editingStaff?.name || 'this staff member'}.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
-                    <p className="text-xs text-blue-700 font-medium">ℹ Admin Note</p>
-                    <p className="text-xs text-blue-600 mt-0.5">Admins can update Role, Category, and Status. Personal details are managed by the staff member.</p>
+          {/* Staff Details Sheet */}
+          <Sheet open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+            <SheetContent className="w-full sm:max-w-md">
+              <SheetHeader>
+                <SheetTitle>Staff Details</SheetTitle>
+                <SheetDescription>
+                  Complete profile and performance information
+                </SheetDescription>
+              </SheetHeader>
+              {selectedStaff && (
+                <div className="space-y-6 mt-6">
+                  {/* Profile Section */}
+                  <div className="text-center">
+                    <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mx-auto flex items-center justify-center mb-4">
+                      <span className="text-white text-2xl font-bold">
+                        {selectedStaff.name.split(' ').map((n: string) => n[0]).join('')}
+                      </span>
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900">{selectedStaff.name}</h3>
+                    <p className="text-gray-600">{selectedStaff.role}</p>
+                    <Badge className={getStaffStatusColor(selectedStaff.status)} variant="secondary">
+                      {selectedStaff.status.charAt(0).toUpperCase() + selectedStaff.status.slice(1)}
+                    </Badge>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-name" className="flex items-center gap-2">
-                      Full Name
-                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-gray-200 text-gray-400">Read-only</Badge>
-                    </Label>
-                    <Input 
-                      id="edit-name" 
-                      value={staffForm.name}
-                      disabled
-                      className="bg-gray-50 text-gray-400 cursor-not-allowed"
-                    />
+
+                  {/* Contact Info */}
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-gray-900">Contact Information</h4>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        <Mail className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm">{selectedStaff.email}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Phone className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm">{selectedStaff.phone}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-email" className="flex items-center gap-2">
-                      Email
-                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-gray-200 text-gray-400">Read-only</Badge>
-                    </Label>
-                    <Input 
-                      id="edit-email" 
-                      type="email" 
-                      value={staffForm.email}
-                      disabled
-                      className="bg-gray-50 text-gray-400 cursor-not-allowed"
-                    />
+
+                  {/* Performance Metrics */}
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-gray-900">Performance Metrics</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-purple-50 p-3 rounded-xl text-center">
+                        <div className="text-2xl font-bold text-purple-600">{selectedStaff.appointments}</div>
+                        <div className="text-xs text-purple-600">Total Completed</div>
+                      </div>
+                      <div className="bg-pink-50 p-3 rounded-xl text-center">
+                        <div className="text-2xl font-bold text-pink-600">{selectedStaff.rating.toFixed(1)}</div>
+                        <div className="text-xs text-pink-600">Avg Rating</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-phone" className="flex items-center gap-2">
-                      Phone
-                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-gray-200 text-gray-400">Read-only</Badge>
-                    </Label>
-                    <Input 
-                      id="edit-phone" 
-                      type="tel" 
-                      value={staffForm.phone}
-                      disabled
-                      className="bg-gray-50 text-gray-400 cursor-not-allowed"
-                    />
+
+                  {/* Assigned Services */}
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-gray-900">Assigned Services</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedStaff.assigned_service_ids?.length > 0 ? (
+                        selectedStaff.assigned_service_ids.map((id: any) => {
+                          // Handle both string IDs and object IDs
+                          const idStr = typeof id === 'object' ? (id._id || id.id || String(id)) : String(id);
+                          const service = services.find(s => String(s.id) === idStr || String(s._id) === idStr);
+                          return (
+                            <Badge key={idStr} variant="outline" className="border-purple-200 text-purple-600 bg-purple-50">
+                              <Scissors className="w-3 h-3 mr-1" />
+                              {service ? service.name : idStr}
+                            </Badge>
+                          );
+                        })
+                      ) : (
+                        <span className="text-sm text-gray-500 italic">No services assigned</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-role">Staff Role *</Label>
-                    <Select value={staffForm.role} onValueChange={(value) => setStaffForm(prev => ({ ...prev, role: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="staff">Staff</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
+
+                  <div className="space-y-2 text-sm">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-gray-500 text-xs uppercase tracking-wide">Specialty</span>
+                      <span className="font-medium">{selectedStaff.specialty || '—'}</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-gray-500 text-xs uppercase tracking-wide">Join Date</span>
+                      <span className="font-medium">
+                        {selectedStaff.joinDate ? new Date(selectedStaff.joinDate).toLocaleDateString() : '—'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-category">Primary Service Category *</Label>
-                    <Select value={staffForm.category} onValueChange={(value) => setStaffForm(prev => ({ ...prev, category: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Hair">Hair</SelectItem>
-                        <SelectItem value="Facial">Facial</SelectItem>
-                        <SelectItem value="Nails">Nails</SelectItem>
-                        <SelectItem value="Massage">Massage</SelectItem>
-                        <SelectItem value="Wellness">Wellness</SelectItem>
-                        <SelectItem value="Beauty">Beauty</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center space-x-2 pt-2">
-                    <Switch 
-                      id="edit-active" 
-                      checked={staffForm.status === 'active'}
-                      onCheckedChange={(checked) => setStaffForm(prev => ({ ...prev, status: checked ? 'active' : 'inactive' }))}
-                    />
-                    <Label htmlFor="edit-active">Active Status</Label>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 pt-4">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        setIsDetailsOpen(false);
+                        openEditStaff(selectedStaff);
+                      }}
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit Profile
+                    </Button>
+                    <Button className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+                      <Calendar className="w-4 h-4 mr-2" />
+                      View Schedule
+                    </Button>
                   </div>
                 </div>
-                <DialogFooter className="gap-2">
-                  <Button variant="outline" onClick={() => {
-                    setIsEditStaffOpen(false);
-                    setEditingStaff(null);
-                    resetForm();
-                  }}>
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={handleEditStaff} 
-                    disabled={isLoading}
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 min-w-[140px]"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Updating...
-                      </>
-                    ) : (
-                      'Update Staff Member'
-                    )}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+              )}
+            </SheetContent>
+          </Sheet>
 
-            {/* Staff Details Sheet */}
-            <Sheet open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-              <SheetContent className="w-full sm:max-w-md">
-                <SheetHeader>
-                  <SheetTitle>Staff Details</SheetTitle>
-                  <SheetDescription>
-                    Complete profile and performance information
-                  </SheetDescription>
-                </SheetHeader>
-                {selectedStaff && (
-                  <div className="space-y-6 mt-6">
-                    {/* Profile Section */}
-                    <div className="text-center">
-                      <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mx-auto flex items-center justify-center mb-4">
-                        <span className="text-white text-2xl font-bold">
-                          {selectedStaff.name.split(' ').map((n: string) => n[0]).join('')}
-                        </span>
-                      </div>
-                      <h3 className="text-xl font-bold text-gray-900">{selectedStaff.name}</h3>
-                      <p className="text-gray-600">{selectedStaff.role}</p>
-                      <Badge className={getStaffStatusColor(selectedStaff.status)} variant="secondary">
-                        {selectedStaff.status.charAt(0).toUpperCase() + selectedStaff.status.slice(1)}
+          {/* Appointment Details Dialog */}
+          <Dialog open={isAppointmentDetailsOpen} onOpenChange={setIsAppointmentDetailsOpen}>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Appointment Details</DialogTitle>
+                <DialogDescription>
+                  Complete information about this appointment
+                </DialogDescription>
+              </DialogHeader>
+              {selectedAppointment && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Booking ID</Label>
+                      <p className="text-gray-900 font-mono">{selectedAppointment.id}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Status</Label>
+                      <Badge className={getStatusColor(selectedAppointment.status)}>
+                        {selectedAppointment.status.charAt(0).toUpperCase() + selectedAppointment.status.slice(1)}
                       </Badge>
                     </div>
+                  </div>
 
-                    {/* Contact Info */}
-                    <div className="space-y-3">
-                      <h4 className="font-semibold text-gray-900">Contact Information</h4>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                          <Mail className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm">{selectedStaff.email}</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Phone className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm">{selectedStaff.phone}</span>
-                        </div>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Customer Information</Label>
+                    <div className="mt-2 space-y-2">
+                      <p className="font-medium">{selectedAppointment.customer.name}</p>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Mail className="w-4 h-4" />
+                        {selectedAppointment.customer.email}
                       </div>
-                    </div>
-
-                    {/* Performance Metrics */}
-                    <div className="space-y-3">
-                      <h4 className="font-semibold text-gray-900">Performance Metrics</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-purple-50 p-3 rounded-xl text-center">
-                          <div className="text-2xl font-bold text-purple-600">{selectedStaff.appointments}</div>
-                          <div className="text-xs text-purple-600">Total Completed</div>
-                        </div>
-                        <div className="bg-pink-50 p-3 rounded-xl text-center">
-                          <div className="text-2xl font-bold text-pink-600">{selectedStaff.rating.toFixed(1)}</div>
-                          <div className="text-xs text-pink-600">Avg Rating</div>
-                        </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Phone className="w-4 h-4" />
+                        {selectedAppointment.customer.phone}
                       </div>
-                    </div>
-
-                    {/* Assigned Services */}
-                    <div className="space-y-3">
-                      <h4 className="font-semibold text-gray-900">Assigned Services</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedStaff.assigned_service_ids?.length > 0 ? (
-                          selectedStaff.assigned_service_ids.map((id: number) => {
-                            const service = services.find(s => s.id === id);
-                            return (
-                              <Badge key={id} variant="outline" className="border-purple-200 text-purple-600">
-                                {service ? service.name : `Service #${id}`}
-                              </Badge>
-                            );
-                          })
-                        ) : (
-                          <span className="text-sm text-gray-500 italic">No services assigned</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Additional Info */}
-                    <div className="space-y-3">
-                      <h4 className="font-semibold text-gray-900">Additional Information</h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Specialty:</span>
-                          <span className="font-medium">{selectedStaff.specialty}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Join Date:</span>
-                          <span className="font-medium">{new Date(selectedStaff.joinDate).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-2 pt-4">
-                      <Button 
-                        variant="outline" 
-                        className="flex-1"
-                        onClick={() => {
-                          setIsDetailsOpen(false);
-                          openEditStaff(selectedStaff);
-                        }}
-                      >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Edit Profile
-                      </Button>
-                      <Button className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
-                        <Calendar className="w-4 h-4 mr-2" />
-                        View Schedule
-                      </Button>
                     </div>
                   </div>
-                )}
-              </SheetContent>
-            </Sheet>
 
-            {/* Appointment Details Dialog */}
-            <Dialog open={isAppointmentDetailsOpen} onOpenChange={setIsAppointmentDetailsOpen}>
-              <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>Appointment Details</DialogTitle>
-                  <DialogDescription>
-                    Complete information about this appointment
-                  </DialogDescription>
-                </DialogHeader>
-                {selectedAppointment && (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Booking ID</Label>
-                        <p className="text-gray-900 font-mono">{selectedAppointment.id}</p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Status</Label>
-                        <Badge className={getStatusColor(selectedAppointment.status)}>
-                          {selectedAppointment.status.charAt(0).toUpperCase() + selectedAppointment.status.slice(1)}
-                        </Badge>
-                      </div>
-                    </div>
-
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-sm font-medium text-gray-700">Customer Information</Label>
-                      <div className="mt-2 space-y-2">
-                        <p className="font-medium">{selectedAppointment.customer.name}</p>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Mail className="w-4 h-4" />
-                          {selectedAppointment.customer.email}
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Phone className="w-4 h-4" />
-                          {selectedAppointment.customer.phone}
-                        </div>
-                      </div>
+                      <Label className="text-sm font-medium text-gray-700">Service</Label>
+                      <p className="text-gray-900">{selectedAppointment.service.name}</p>
+                      <p className="text-sm text-gray-600">${selectedAppointment.service.price} • {selectedAppointment.service.duration} min</p>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Service</Label>
-                        <p className="text-gray-900">{selectedAppointment.service.name}</p>
-                        <p className="text-sm text-gray-600">${selectedAppointment.service.price} • {selectedAppointment.service.duration} min</p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Assigned Staff</Label>
-                        {selectedAppointment.assignedStaff ? (
-                          <p className="text-gray-900">{selectedAppointment.assignedStaff.name}</p>
-                        ) : (
-                          <Badge variant="outline" className="border-red-200 text-red-700">
-                            Unassigned
-                          </Badge>
-                        )}
-                      </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Assigned Staff</Label>
+                      {selectedAppointment.assignedStaff ? (
+                        <p className="text-gray-900">{selectedAppointment.assignedStaff.name}</p>
+                      ) : (
+                        <Badge variant="outline" className="border-red-200 text-red-700">
+                          Unassigned
+                        </Badge>
+                      )}
                     </div>
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Date</Label>
-                        <p className="text-gray-900">{format(new Date(selectedAppointment.date), 'MMMM d, yyyy')}</p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Time</Label>
-                        <p className="text-gray-900">{selectedAppointment.time}</p>
-                      </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Date</Label>
+                      <p className="text-gray-900">{format(new Date(selectedAppointment.date), 'MMMM d, yyyy')}</p>
                     </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Time</Label>
+                      <p className="text-gray-900">{selectedAppointment.time}</p>
+                    </div>
+                  </div>
 
-                    {selectedAppointment.notes && (
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Notes</Label>
-                        <p className="text-gray-600 mt-1">{selectedAppointment.notes}</p>
+                  {selectedAppointment.notes && (
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Notes</Label>
+                      <p className="text-gray-600 mt-1">{selectedAppointment.notes}</p>
+                    </div>
+                  )}
+
+                  <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100">
+                    <Label className="text-sm font-bold text-purple-900 mb-2 block">Financial Summary</Label>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Original Price:</span>
+                        <span className="font-medium">${selectedAppointment.original_amount}</span>
                       </div>
-                    )}
-
-                    <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100">
-                      <Label className="text-sm font-bold text-purple-900 mb-2 block">Financial Summary</Label>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Original Price:</span>
-                          <span className="font-medium">${selectedAppointment.original_amount}</span>
+                      {selectedAppointment.discount_amount > 0 && (
+                        <div className="flex justify-between text-sm text-red-600">
+                          <span>Loyalty Discount ({selectedAppointment.discount_type || 'loyalty'}):</span>
+                          <span>-${selectedAppointment.discount_amount}</span>
                         </div>
-                        {selectedAppointment.discount_amount > 0 && (
-                          <div className="flex justify-between text-sm text-red-600">
-                            <span>Loyalty Discount ({selectedAppointment.discount_type || 'loyalty'}):</span>
-                            <span>-${selectedAppointment.discount_amount}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between text-base font-bold pt-2 border-t border-purple-100">
-                          <span className="text-purple-900">Final Payable:</span>
-                          <span className="text-purple-600">${selectedAppointment.final_amount}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Booked Via</Label>
-                        <p className="text-gray-600">{selectedAppointment.bookedBy}</p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Created</Label>
-                        <p className="text-gray-600">{format(new Date(selectedAppointment.createdAt), 'MMM d, yyyy')}</p>
+                      )}
+                      <div className="flex justify-between text-base font-bold pt-2 border-t border-purple-100">
+                        <span className="text-purple-900">Final Payable:</span>
+                        <span className="text-purple-600">${selectedAppointment.final_amount}</span>
                       </div>
                     </div>
                   </div>
-                )}
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAppointmentDetailsOpen(false)}>
-                    Close
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
 
-            {/* Assign Staff Dialog */}
-            <Dialog open={isAssignStaffOpen} onOpenChange={setIsAssignStaffOpen}>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Assign Staff Member</DialogTitle>
-                  <DialogDescription>
-                    Select a staff member to assign to this appointment
-                  </DialogDescription>
-                </DialogHeader>
-                {selectedAppointment && (
-                  <div className="space-y-4">
-                    <div className="p-4 bg-purple-50 rounded-lg">
-                      <p className="font-medium">{selectedAppointment.customer.name}</p>
-                      <p className="text-sm text-gray-600">{selectedAppointment.service.name}</p>
-                      <p className="text-sm text-gray-600">{format(new Date(selectedAppointment.date), 'MMM d, yyyy')} at {selectedAppointment.time}</p>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Booked Via</Label>
+                      <p className="text-gray-600">{selectedAppointment.bookedBy}</p>
                     </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Created</Label>
+                      <p className="text-gray-600">{format(new Date(selectedAppointment.createdAt), 'MMM d, yyyy')}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsAppointmentDetailsOpen(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
-                    <div className="space-y-3">
-                      <Label>Available Staff Members</Label>
-                      <div className="space-y-2">
-                        {(() => {
-                          const eligibleStaff = staffMembers.filter(s => 
-                            s.status === 'active' && 
-                            (!selectedAppointment.service.id || (s.assigned_service_ids && s.assigned_service_ids.includes(selectedAppointment.service.id)))
+          {/* Assign Staff Dialog */}
+          <Dialog open={isAssignStaffOpen} onOpenChange={setIsAssignStaffOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Assign Staff Member</DialogTitle>
+                <DialogDescription>
+                  Select a staff member to assign to this appointment
+                </DialogDescription>
+              </DialogHeader>
+              {selectedAppointment && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-purple-50 rounded-lg">
+                    <p className="font-medium">{selectedAppointment.customer.name}</p>
+                    <p className="text-sm text-gray-600">{selectedAppointment.service.name}</p>
+                    <p className="text-sm text-gray-600">{format(new Date(selectedAppointment.date), 'MMM d, yyyy')} at {selectedAppointment.time}</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label>Available Staff Members</Label>
+                    <div className="space-y-2">
+                      {(() => {
+                        const eligibleStaff = staffMembers.filter(s =>
+                          s.status === 'active' &&
+                          (!selectedAppointment.service.id || (s.assigned_service_ids && s.assigned_service_ids.includes(selectedAppointment.service.id)))
+                        );
+
+                        if (eligibleStaff.length === 0) {
+                          return (
+                            <div className="p-4 border border-dashed border-amber-200 bg-amber-50 rounded-lg text-center">
+                              <AlertCircle className="w-5 h-5 text-amber-500 mx-auto mb-2" />
+                              <p className="text-sm text-amber-700 font-medium">No specialized staff assigned to this service</p>
+                              <p className="text-xs text-amber-600 mt-1">Please assign a staff member to this service in Staff Management first.</p>
+                            </div>
                           );
-                          
-                          if (eligibleStaff.length === 0) {
-                            return (
-                              <div className="p-4 border border-dashed border-amber-200 bg-amber-50 rounded-lg text-center">
-                                <AlertCircle className="w-5 h-5 text-amber-500 mx-auto mb-2" />
-                                <p className="text-sm text-amber-700 font-medium">No specialized staff assigned to this service</p>
-                                <p className="text-xs text-amber-600 mt-1">Please assign a staff member to this service in Staff Management first.</p>
-                              </div>
-                            );
-                          }
+                        }
 
-                          return eligibleStaff.map(staff => (
-                            <Button
-                              key={staff.id}
-                              variant="outline"
-                              className="w-full justify-start h-auto py-3 border-purple-100 hover:border-purple-300 hover:bg-purple-50 transition-all"
-                              onClick={() => assignStaffToAppointment(selectedAppointment.id, staff.id)}
-                            >
-                              <div className="flex items-center gap-3 w-full">
-                                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
-                                  <span className="text-white text-sm font-bold">
-                                    {staff.name.split(' ').map((n: string) => n[0]).join('')}
-                                  </span>
-                                </div>
-                                <div className="text-left flex-1 min-w-0">
-                                  <div className="font-semibold text-gray-900 truncate">{staff.name}</div>
-                                  <div className="text-xs text-gray-500 truncate">{staff.role}</div>
-                                </div>
-                                <div className="flex items-center gap-1 text-amber-500">
-                                  <Star className="w-3 h-3 fill-current" />
-                                  <span className="text-xs font-bold">{staff.rating.toFixed(1)}</span>
-                                </div>
+                        return eligibleStaff.map(staff => (
+                          <Button
+                            key={staff.id}
+                            variant="outline"
+                            className="w-full justify-start h-auto py-3 border-purple-100 hover:border-purple-300 hover:bg-purple-50 transition-all"
+                            onClick={() => assignStaffToAppointment(selectedAppointment.id, staff.id)}
+                          >
+                            <div className="flex items-center gap-3 w-full">
+                              <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
+                                <span className="text-white text-sm font-bold">
+                                  {staff.name.split(' ').map((n: string) => n[0]).join('')}
+                                </span>
                               </div>
-                            </Button>
-                          ));
-                        })()}
-                      </div>
+                              <div className="text-left flex-1 min-w-0">
+                                <div className="font-semibold text-gray-900 truncate">{staff.name}</div>
+                                <div className="text-xs text-gray-500 truncate">{staff.role}</div>
+                              </div>
+                              <div className="flex items-center gap-1 text-amber-500">
+                                <Star className="w-3 h-3 fill-current" />
+                                <span className="text-xs font-bold">{staff.rating.toFixed(1)}</span>
+                              </div>
+                            </div>
+                          </Button>
+                        ));
+                      })()}
                     </div>
                   </div>
-                )}
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAssignStaffOpen(false)}>
-                    Cancel
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsAssignStaffOpen(false)}>
+                  Cancel
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
-            {/* Edit/Reschedule Appointment Dialog */}
-            <Dialog open={isEditAppointmentOpen} onOpenChange={setIsEditAppointmentOpen}>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Reschedule Appointment</DialogTitle>
-                  <DialogDescription>
-                    Update the date and time for this appointment
-                  </DialogDescription>
-                </DialogHeader>
-                {selectedAppointment && (
-                  <div className="space-y-4">
-                    <div className="p-4 bg-purple-50 rounded-lg">
-                      <p className="font-medium">{selectedAppointment.customer.name}</p>
-                      <p className="text-sm text-gray-600">{selectedAppointment.service.name}</p>
+          {/* Edit/Reschedule Appointment Dialog */}
+          <Dialog open={isEditAppointmentOpen} onOpenChange={setIsEditAppointmentOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Reschedule Appointment</DialogTitle>
+                <DialogDescription>
+                  Update the date and time for this appointment
+                </DialogDescription>
+              </DialogHeader>
+              {selectedAppointment && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-purple-50 rounded-lg">
+                    <p className="font-medium">{selectedAppointment.customer.name}</p>
+                    <p className="text-sm text-gray-600">{selectedAppointment.service.name}</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <Label>New Date</Label>
+                      <Input
+                        type="date"
+                        value={rescheduleDate}
+                        onChange={(e) => setRescheduleDate(e.target.value)}
+                        className="border-purple-200 focus:border-purple-400 rounded-xl"
+                      />
                     </div>
-
-                    <div className="space-y-3">
-                      <div>
-                        <Label>New Date</Label>
-                        <Input 
-                          type="date" 
-                          value={rescheduleDate}
-                          onChange={(e) => setRescheduleDate(e.target.value)}
-                          className="border-purple-200 focus:border-purple-400 rounded-xl"
-                        />
-                      </div>
-                      <div>
-                        <Label>New Time</Label>
-                        <Input 
-                          type="time" 
-                          value={rescheduleTime}
-                          onChange={(e) => setRescheduleTime(e.target.value)}
-                          className="border-purple-200 focus:border-purple-400 rounded-xl"
-                        />
-                      </div>
+                    <div>
+                      <Label>New Time</Label>
+                      <Input
+                        type="time"
+                        value={rescheduleTime}
+                        onChange={(e) => setRescheduleTime(e.target.value)}
+                        className="border-purple-200 focus:border-purple-400 rounded-xl"
+                      />
                     </div>
                   </div>
-                )}
-                <DialogFooter className="gap-2">
-                  <Button variant="outline" onClick={() => setIsEditAppointmentOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={() => {
-                      if (rescheduleDate && rescheduleTime) {
-                        rescheduleAppointment(selectedAppointment?.id, rescheduleDate, rescheduleTime);
-                      } else {
-                        toast.error('Please select both date and time');
-                      }
-                    }}
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                  >
-                    Reschedule
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                </div>
+              )}
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setIsEditAppointmentOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (rescheduleDate && rescheduleTime) {
+                      rescheduleAppointment(selectedAppointment?.id, rescheduleDate, rescheduleTime);
+                    } else {
+                      toast.error('Please select both date and time');
+                    }
+                  }}
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                >
+                  Reschedule
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </div>
