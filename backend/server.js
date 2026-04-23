@@ -29,7 +29,6 @@ const PORT = process.env.PORT || 5001;
 // Trust proxy
 app.set('trust proxy', 1);
 
-// ✅ 1. CORS MUST BE FIRST
 // ✅ CORS FIRST
 app.use(cors({
   origin: true,

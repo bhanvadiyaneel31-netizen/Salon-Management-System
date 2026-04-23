@@ -20,9 +20,9 @@ router.get('/staff', verifyToken, async (req, res) => {
         query.staffId = new mongoose.Types.ObjectId(req.query.staff_id);
       }
     } else if (req.user.role === 'customer') {
-       // Customer sees only reviews they wrote
-       if (!mongoose.Types.ObjectId.isValid(req.user.user_id)) return res.status(403).json({ error: 'Invalid user session' });
-       query.userId = new mongoose.Types.ObjectId(req.user.user_id);
+      // Customer sees only reviews they wrote
+      if (!mongoose.Types.ObjectId.isValid(req.user.user_id)) return res.status(403).json({ error: 'Invalid user session' });
+      query.userId = new mongoose.Types.ObjectId(req.user.user_id);
     } else {
       return res.status(403).json({ error: 'Not authorized' });
     }
@@ -47,6 +47,49 @@ router.get('/staff', verifyToken, async (req, res) => {
   } catch (error) {
     console.error('[REVIEWS] Fetch error:', error.message);
     res.status(500).json({ error: 'Failed to fetch reviews' });
+  }
+});
+
+// ---------- POST /api/reviews ----------
+router.post('/', verifyToken, async (req, res) => {
+  try {
+    const { appointmentId, staffId, serviceId, rating, comment } = req.body;
+
+    // Validate required fields
+    if (!appointmentId || !staffId || !serviceId || !rating) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Validate IDs
+    if (
+      !mongoose.Types.ObjectId.isValid(appointmentId) ||
+      !mongoose.Types.ObjectId.isValid(staffId) ||
+      !mongoose.Types.ObjectId.isValid(serviceId)
+    ) {
+      return res.status(400).json({ error: 'Invalid ID format' });
+    }
+
+    // Prevent duplicate review for same appointment
+    const existing = await Review.findOne({ appointmentId });
+    if (existing) {
+      return res.status(400).json({ error: 'Review already submitted for this appointment' });
+    }
+
+    const review = new Review({
+      appointmentId: new mongoose.Types.ObjectId(appointmentId),
+      userId: new mongoose.Types.ObjectId(req.user.user_id),
+      staffId: new mongoose.Types.ObjectId(staffId),
+      serviceId: new mongoose.Types.ObjectId(serviceId),
+      rating,
+      comment: comment || ''
+    });
+
+    await review.save();
+    res.status(201).json({ message: 'Review submitted successfully', review });
+
+  } catch (error) {
+    console.error('[REVIEWS] Submit error:', error.message);
+    res.status(500).json({ error: 'Failed to submit review' });
   }
 });
 
