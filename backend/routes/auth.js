@@ -10,26 +10,26 @@ const { sendPasswordResetEmail } = require('../services/emailService');
 // ---------- Helpers ----------
 
 const getUserDetails = async (userId) => {
-  const user    = await User.findById(userId);
+  const user = await User.findById(userId);
   const profile = await StaffProfile.findOne({ userId });
   const reviewCount = await Appointment.countDocuments({ staffId: userId, status: 'completed' });
   return { user, profile, reviewCount };
 };
 
 const formatUserResponse = (user, profile = null, reviewCount = 0) => ({
-  id:            user._id.toString(),
-  name:          user.name,
-  email:         user.email,
-  phone:         user.phone || '',
-  role:          user.role,
-  address:       user.address || '',
+  id: user._id.toString(),
+  name: user.name,
+  email: user.email,
+  phone: user.phone || '',
+  role: user.role,
+  address: user.address || '',
   profile_image: user.profileImage || '',
   loyalty_points: user.loyaltyPoints || 0,
-  rating:        profile?.rating || 0,
-  review_count:  reviewCount,
+  rating: profile?.rating || 0,
+  review_count: reviewCount,
   reminders: {
-    email:  user.reminderEmail !== false,
-    sms:    user.reminderSms   !== false,
+    email: user.reminderEmail !== false,
+    sms: user.reminderSms !== false,
     timing: user.reminderTiming || '24h',
   },
   created_at: user.createdAt,
@@ -79,9 +79,9 @@ router.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) return res.status(401).json({ error: 'Invalid email or password' });
 
-    const profile     = await StaffProfile.findOne({ userId: user._id });
+    const profile = await StaffProfile.findOne({ userId: user._id });
     const reviewCount = await Appointment.countDocuments({ staffId: user._id, status: 'completed' });
-    const token       = generateToken(user);
+    const token = generateToken(user);
 
     res.status(200).json({ user: formatUserResponse(user, profile, reviewCount), token });
   } catch (error) {
@@ -117,17 +117,17 @@ router.post('/forgot-password', async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase().trim() }, 'name email authProvider');
     if (!user || user.authProvider === 'google') return res.status(200).json(GENERIC_RESPONSE);
 
-    const rawToken    = crypto.randomBytes(32).toString('hex');
+    const rawToken = crypto.randomBytes(32).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expireTimestamp = Date.now() + 15 * 60 * 1000;
 
     await User.findByIdAndUpdate(user._id, {
-      resetPasswordToken:  hashedToken,
+      resetPasswordToken: hashedToken,
       resetPasswordExpire: expireTimestamp,
     });
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const resetUrl    = `${frontendUrl}/reset-password/${rawToken}`;
+    const resetUrl = `${frontendUrl}/reset-password/${rawToken}`;
 
     try {
       await sendPasswordResetEmail(user.email, resetUrl, user.name);
@@ -157,7 +157,7 @@ router.post('/reset-password/:token', async (req, res) => {
   try {
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
     const user = await User.findOne({
-      resetPasswordToken:  hashedToken,
+      resetPasswordToken: hashedToken,
       resetPasswordExpire: { $gt: Date.now() },
     });
 
@@ -168,8 +168,8 @@ router.post('/reset-password/:token', async (req, res) => {
     const newPasswordHash = await bcrypt.hash(password, salt);
 
     await User.findByIdAndUpdate(user._id, {
-      passwordHash:        newPasswordHash,
-      resetPasswordToken:  null,
+      passwordHash: newPasswordHash,
+      resetPasswordToken: null,
       resetPasswordExpire: null,
     });
 
@@ -177,6 +177,17 @@ router.post('/reset-password/:token', async (req, res) => {
   } catch (error) {
     console.error('[RESET PASSWORD] Error:', error);
     return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/auth/me
+router.get('/me', verifyToken, async (req, res) => {
+  try {
+    const { user, profile, reviewCount } = await getUserDetails(req.user.user_id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.status(200).json(formatUserResponse(user, profile, reviewCount));
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
