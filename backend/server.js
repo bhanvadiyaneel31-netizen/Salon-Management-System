@@ -26,29 +26,27 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Trust proxy for Render/Vercel
+// Trust proxy
 app.set('trust proxy', 1);
 
-// Security & Performance Middleware
-app.use(helmet({
-  crossOriginResourcePolicy: false, // Allow images to be served from the same domain
-}));
-app.use(compression());
-app.use(morgan('combined')); // Production logging
-
-// Rate Limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: { error: 'Too many requests from this IP, please try again after 15 minutes' }
-});
-app.use('/api/', limiter);
-
-// CORS Configuration
+// ✅ 1. CORS MUST BE FIRST
 app.use(cors({
-  origin: true,
+  origin: '*',
   credentials: true
 }));
+
+// ✅ 2. Handle preflight explicitly (VERY IMPORTANT)
+app.options('*', cors());
+
+// ✅ 3. Then security & performance
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+}));
+app.use(compression());
+app.use(morgan('combined'));
+
+// ❌ TEMPORARILY DISABLE RATE LIMIT
+// app.use('/api/', limiter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(passport.initialize());
