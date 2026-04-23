@@ -41,10 +41,15 @@ export function AuthPages({ view, setCurrentView, setUserRole }: AuthPagesProps)
       };
 
       const response = await api.auth.login(credentials);
+
+      // 🔥 STORE TOKEN
+      // inside api.auth.login()
+      localStorage.setItem('auth_token', response.token);
+
       setUserRole(response.user.role);
-      
+
       toast.success('Login successful!');
-      
+
       // Navigate based on user role
       if (response.user.role === 'customer') setCurrentView('customer-dashboard');
       else if (response.user.role === 'admin') setCurrentView('admin-dashboard');
@@ -71,10 +76,15 @@ export function AuthPages({ view, setCurrentView, setUserRole }: AuthPagesProps)
       };
 
       const response = await api.auth.register(userData);
+
+      // 🔥 STORE TOKEN
+      // inside api.auth.login()
+      localStorage.setItem('auth_token', response.token);
+
       setUserRole(response.user.role);
-      
+
       toast.success('Account created successfully!');
-      
+
       // Always redirect to customer dashboard since only customers can register
       setCurrentView('customer-dashboard');
     } catch (error) {
@@ -103,8 +113,8 @@ export function AuthPages({ view, setCurrentView, setUserRole }: AuthPagesProps)
             {view === 'login' ? 'Welcome Back' : 'Create Customer Account'}
           </CardTitle>
           <p className="text-gray-600">
-            {view === 'login' 
-              ? 'Sign in to your account to continue' 
+            {view === 'login'
+              ? 'Sign in to your account to continue'
               : 'Join us as a customer and start your beauty journey'
             }
           </p>
