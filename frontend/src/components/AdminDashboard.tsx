@@ -2817,14 +2817,11 @@ export function AdminDashboard({
                     <h4 className="font-semibold text-gray-900">Assigned Services</h4>
                     <div className="flex flex-wrap gap-2">
                       {selectedStaff.assigned_service_ids?.length > 0 ? (
-                        selectedStaff.assigned_service_ids.map((id: any) => {
-                          // Handle both string IDs and object IDs
-                          const idStr = typeof id === 'object' ? (id._id || id.id || String(id)) : String(id);
-                          const service = services.find(s => String(s.id) === idStr || String(s._id) === idStr);
+                        selectedStaff.assigned_service_ids.map((id: number) => {
+                          const service = services.find(s => s.id === id);
                           return (
-                            <Badge key={idStr} variant="outline" className="border-purple-200 text-purple-600 bg-purple-50">
-                              <Scissors className="w-3 h-3 mr-1" />
-                              {service ? service.name : idStr}
+                            <Badge key={id} variant="outline" className="border-purple-200 text-purple-600">
+                              {service ? service.name : `Service #${id}`}
                             </Badge>
                           );
                         })
@@ -2834,16 +2831,18 @@ export function AdminDashboard({
                     </div>
                   </div>
 
-                  <div className="space-y-2 text-sm">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-gray-500 text-xs uppercase tracking-wide">Specialty</span>
-                      <span className="font-medium">{selectedStaff.specialty || '—'}</span>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-gray-500 text-xs uppercase tracking-wide">Join Date</span>
-                      <span className="font-medium">
-                        {selectedStaff.joinDate ? new Date(selectedStaff.joinDate).toLocaleDateString() : '—'}
-                      </span>
+                  {/* Additional Info */}
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-gray-900">Additional Information</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Specialty:</span>
+                        <span className="font-medium">{selectedStaff.specialty}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Join Date:</span>
+                        <span className="font-medium">{new Date(selectedStaff.joinDate).toLocaleDateString()}</span>
+                      </div>
                     </div>
                   </div>
 

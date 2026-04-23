@@ -47,7 +47,7 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
     { number: 3, title: 'Choose Date & Time', icon: Clock },
     { number: 4, title: 'Confirm Booking', icon: Check }
   ];
-  
+
   const selectedServiceData = services.find(s => s.id.toString() === selectedService);
   const selectedStaffData = staffList.find(s => s.id.toString() === selectedStaff);
 
@@ -76,7 +76,23 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
     const loadStaff = async () => {
       setLoadingStaff(true);
       try {
-        const data = await api.staff.getAvailable('', selectedService);
+        const selectedServiceData = services.find(
+          s => (s.id || s._id)?.toString() === selectedService?.toString()
+        );
+
+        console.log("Selected Service:", selectedServiceData);
+
+        if (!selectedServiceData) {
+          console.error("Service not found");
+          setStaffList([]);
+          return;
+        }
+
+        const data = await api.staff.getAvailable(
+          '',
+          selectedService?.toString()
+        );
+
         setStaffList(data);
       } catch (error) {
         toast.error('Failed to load staff');
@@ -100,13 +116,13 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         console.log(`[FRONTEND] Loading slots for staff: ${selectedStaff}, service: ${selectedService}, date: ${dateStr}`);
         const data = await api.appointments.getAvailableSlots(dateStr, selectedStaff, selectedService);
-        
+
         if (cancelled) return;
 
         // Additional frontend filtering for today to ensure real-time accuracy
         const isToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
         let filteredSlots = data;
-        
+
         if (isToday) {
           const now = new Date();
           const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -116,10 +132,10 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
             return slotMinutes > currentMinutes + 15; // 15 min buffer
           });
         }
-        
+
         if (cancelled) return;
         setAvailableTimeSlots(filteredSlots);
-        
+
         // Add a timer to re-filter slots every minute if it's today
         let slotTimer: any;
         if (isToday) {
@@ -133,9 +149,9 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
             }));
           }, 60000);
         }
-        
+
         if (selectedTime && !filteredSlots.includes(selectedTime)) {
-           setSelectedTime('');
+          setSelectedTime('');
         }
 
         return () => {
@@ -197,19 +213,19 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
 
     // Max discount allowed by settings
     const maxDiscountAllowed = (price * loyaltySettings.max_discount_percent) / 100;
-    
+
     // Points to use: either the fixed reward points or all available points
     const pointsToUse = selectedReward ? selectedReward.points_required : userPoints;
-    
+
     // Value of those points
     const potentialDiscount = pointsToUse * loyaltySettings.redemption_rate;
-    
+
     // Actual discount is limited by the max allowed
     const actualDiscount = Math.min(maxDiscountAllowed, potentialDiscount);
-    
+
     // Points actually required for the given discount (recalculates downwards if capped)
     const requiredPoints = Math.ceil(actualDiscount / loyaltySettings.redemption_rate);
-    
+
     setDiscountAmount(actualDiscount);
     setPointsToRedeem(requiredPoints);
   }, [usePoints, loyaltySettings, selectedServiceData, userPoints, selectedReward]);
@@ -292,7 +308,7 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
   // Update Loyalty Redemption UI in Step 4
   const renderLoyaltyRedemption = () => {
     if (!userPoints || !loyaltySettings) return null;
-    
+
     const canRedeemCashback = selectedServiceData?.price >= loyaltySettings.min_booking_amount;
     const availableRewards = loyaltyRewards.filter(r => userPoints >= r.points_required);
 
@@ -309,11 +325,11 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
             <p className="text-sm text-gray-500">You have {userPoints} points available</p>
           </div>
         </div>
-        
+
         <div className="space-y-4">
           {/* Option 1: Direct Discount (Cashback) */}
           {canRedeemCashback && (
-            <div 
+            <div
               onClick={() => {
                 if (usePoints && !selectedReward) setUsePoints(false);
                 else {
@@ -321,9 +337,8 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
                   setSelectedReward(null);
                 }
               }}
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                usePoints && !selectedReward ? 'border-purple-500 bg-purple-50' : 'border-gray-100 hover:border-purple-200'
-              }`}
+              className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${usePoints && !selectedReward ? 'border-purple-500 bg-purple-50' : 'border-gray-100 hover:border-purple-200'
+                }`}
             >
               <div className="flex justify-between items-center">
                 <div>
@@ -331,7 +346,7 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
                   <p className="text-xs text-gray-500">Redeem {pointsToRedeem} pts for ${discountAmount.toFixed(0)} off</p>
                 </div>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${usePoints && !selectedReward ? 'border-purple-500 bg-purple-500' : 'border-gray-300'}`}>
-                   {usePoints && !selectedReward && <Check className="w-3 h-3 text-white" />}
+                  {usePoints && !selectedReward && <Check className="w-3 h-3 text-white" />}
                 </div>
               </div>
             </div>
@@ -339,15 +354,14 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
 
           {/* Option 2: Specific Rewards */}
           {availableRewards.map((reward) => (
-            <div 
+            <div
               key={reward.id}
               onClick={() => {
                 setUsePoints(true);
                 setSelectedReward(reward);
               }}
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                selectedReward?.id === reward.id ? 'border-amber-500 bg-amber-50' : 'border-gray-100 hover:border-amber-200'
-              }`}
+              className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedReward?.id === reward.id ? 'border-amber-500 bg-amber-50' : 'border-gray-100 hover:border-amber-200'
+                }`}
             >
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
@@ -358,7 +372,7 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
                   </div>
                 </div>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedReward?.id === reward.id ? 'border-amber-500 bg-amber-500' : 'border-gray-300'}`}>
-                   {selectedReward?.id === reward.id && <Check className="w-3 h-3 text-white" />}
+                  {selectedReward?.id === reward.id && <Check className="w-3 h-3 text-white" />}
                 </div>
               </div>
             </div>
@@ -411,9 +425,8 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
               return (
                 <div key={step.number} className="flex items-center flex-shrink-0">
                   <div className={`flex items-center space-x-2 sm:space-x-3 ${index < steps.length - 1 ? 'pr-2 sm:pr-4' : ''}`}>
-                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
-                      isCompleted ? 'bg-green-500 text-white' : isActive ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'bg-gray-200 text-gray-500'
-                    }`}>
+                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 ${isCompleted ? 'bg-green-500 text-white' : isActive ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'bg-gray-200 text-gray-500'
+                      }`}>
                       {isCompleted ? <Check className="w-4 h-4 sm:w-5 sm:h-5" /> : <Icon className="w-4 h-4 sm:w-5 sm:h-5" />}
                     </div>
                     <div className="hidden sm:block">
@@ -451,11 +464,10 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
                     <div
                       key={service.id}
                       onClick={() => setSelectedService(service.id.toString())}
-                      className={`p-4 sm:p-6 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${
-                        selectedService === service.id.toString()
-                          ? 'border-purple-500 bg-purple-50'
-                          : 'border-gray-200 hover:border-purple-300'
-                      }`}
+                      className={`p-4 sm:p-6 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${selectedService === service.id.toString()
+                        ? 'border-purple-500 bg-purple-50'
+                        : 'border-gray-200 hover:border-purple-300'
+                        }`}
                     >
                       <div className="flex justify-between items-start mb-3">
                         <h3 className="font-bold text-base sm:text-lg text-gray-900">{service.name}</h3>
@@ -495,11 +507,10 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
                     <div
                       key={member.id}
                       onClick={() => setSelectedStaff(member.id.toString())}
-                      className={`p-4 sm:p-6 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${
-                        selectedStaff === member.id.toString()
-                          ? 'border-purple-500 bg-purple-50'
-                          : 'border-gray-200 hover:border-purple-300'
-                      }`}
+                      className={`p-4 sm:p-6 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${selectedStaff === member.id.toString()
+                        ? 'border-purple-500 bg-purple-50'
+                        : 'border-gray-200 hover:border-purple-300'
+                        }`}
                     >
                       <h3 className="font-bold text-base sm:text-lg text-gray-900 mb-2">{member.name}</h3>
                       <p className="text-sm sm:text-base text-gray-600">{member.specialty}</p>
@@ -518,17 +529,17 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
                 <div className="flex flex-col">
                   <h3 className="font-bold text-base sm:text-lg mb-4">Select Date</h3>
                   <div className="flex justify-center lg:justify-start">
-                      <Calendar
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={setSelectedDate}
-                        className="rounded-2xl border border-purple-200"
-                        disabled={(date) => {
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          return date < today;
-                        }}
-                      />
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={setSelectedDate}
+                      className="rounded-2xl border border-purple-200"
+                      disabled={(date) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        return date < today;
+                      }}
+                    />
                   </div>
                 </div>
                 <div>
@@ -549,11 +560,10 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
                           variant={selectedTime === time ? "default" : "outline"}
                           size="sm"
                           onClick={() => setSelectedTime(time)}
-                          className={`rounded-xl text-sm ${
-                            selectedTime === time
-                              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0'
-                              : 'border-purple-200 text-purple-600 hover:bg-purple-50'
-                          }`}
+                          className={`rounded-xl text-sm ${selectedTime === time
+                            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0'
+                            : 'border-purple-200 text-purple-600 hover:bg-purple-50'
+                            }`}
                         >
                           {time}
                         </Button>
