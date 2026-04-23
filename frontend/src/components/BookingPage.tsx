@@ -90,7 +90,7 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
 
         const data = await api.staff.getAvailable(
           '',
-          selectedService?.toString()
+          selectedService
         );
 
         setStaffList(data);
