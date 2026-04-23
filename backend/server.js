@@ -30,13 +30,15 @@ const PORT = process.env.PORT || 5001;
 app.set('trust proxy', 1);
 
 // ✅ 1. CORS MUST BE FIRST
+// ✅ CORS FIRST
 app.use(cors({
   origin: '*',
-  credentials: true
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// ✅ 2. Handle preflight explicitly (VERY IMPORTANT)
-app.options('*', cors());
+// ✅ FIXED preflight handler
+app.options('/*', cors());
 
 // ✅ 3. Then security & performance
 app.use(helmet({
