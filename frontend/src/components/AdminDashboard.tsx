@@ -174,7 +174,7 @@ export function AdminDashboard({
         specialty: s.specialty || '',
         rating: s.rating ?? 0,
         appointments: s.completed_appointments ?? 0,
-        assigned_service_ids: s.assigned_service_ids || [],
+        assigned_service_ids: s.assigned_service_ids || s.services || [],
         totalClients: 0,
         hoursWorked: 0,
         joinDate: s.created_at ? s.created_at.split('T')[0] : '',

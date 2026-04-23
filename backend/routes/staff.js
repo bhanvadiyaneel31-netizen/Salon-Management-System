@@ -35,6 +35,7 @@ router.get('/', async (req, res) => {
         created_at:            p?.createdAt || u.createdAt,
         completed_appointments: countMap[u._id.toString()] || 0,
         services:              (p?.services || []).map(id => id.toString()),
+        assigned_service_ids:  (p?.services || []).map(id => id.toString()),
       };
     });
 
@@ -95,6 +96,38 @@ router.get('/available', async (req, res) => {
   } catch (error) {
     console.error('[STAFF] Failed to fetch available staff:', error.message);
     res.status(500).json({ error: 'Failed to fetch available staff' });
+  }
+});
+
+// ---------- GET /api/staff/:id ----------
+router.get('/:id', async (req, res) => {
+  const staffId = req.params.id;
+  try {
+    if (!mongoose.Types.ObjectId.isValid(staffId)) return res.status(400).json({ error: 'Invalid staff ID' });
+    
+    const user = await User.findOne({ _id: staffId, role: 'staff' });
+    if (!user) return res.status(404).json({ error: 'Staff member not found' });
+
+    const profile = await StaffProfile.findOne({ userId: staffId }).populate('services');
+    const appointmentCount = await Appointment.countDocuments({ staffId, status: 'completed' });
+
+    res.json({
+      id:           user._id.toString(),
+      name:         user.name,
+      email:        user.email,
+      phone:        user.phone || '',
+      category:     profile?.category || '',
+      specialty:    profile?.specialty || '',
+      rating:       profile?.rating || 0,
+      is_available: profile?.isAvailable ?? true,
+      services:     (profile?.services || []).map(s => ({ id: s._id.toString(), name: s.name })),
+      assigned_service_ids: (profile?.services || []).map(s => s._id.toString()),
+      completed_appointments: appointmentCount,
+      created_at:   user.createdAt,
+    });
+  } catch (error) {
+    console.error('[STAFF] Failed to fetch staff detail:', error.message);
+    res.status(500).json({ error: 'Failed to fetch staff details' });
   }
 });
 
