@@ -1,3 +1,4 @@
+console.log("✅ GoogleAuth routes loaded");
 const express = require('express');
 const router = express.Router();
 const passport = require('passport');
@@ -18,9 +19,9 @@ const generateToken = (user) => {
 // Redirects to Google login
 router.get('/google', (req, res, next) => {
   const mode = req.query.mode || 'login';
-  passport.authenticate('google', { 
+  passport.authenticate('google', {
     scope: ['profile', 'email'],
-    state: mode 
+    state: mode
   })(req, res, next);
 });
 
@@ -41,7 +42,7 @@ router.get('/google/callback', (req, res, next) => {
 
     // Successful authentication
     const token = generateToken(user);
-    
+
     // Redirect to frontend with token
     // The frontend will handle this in App.tsx
     res.redirect(`${FRONTEND_URL}/auth-success?token=${token}`);
