@@ -37,9 +37,6 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// ✅ FIXED preflight handler
-app.options('/*', cors());
-
 // ✅ 3. Then security & performance
 app.use(helmet({
   crossOriginResourcePolicy: false,
