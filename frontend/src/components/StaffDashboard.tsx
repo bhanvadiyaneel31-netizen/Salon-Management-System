@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { 
-  Calendar as CalendarIcon, 
-  Users, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
+import {
+  Calendar as CalendarIcon,
+  Users,
+  Clock,
+  CheckCircle2,
+  XCircle,
   AlertCircle,
   MoreVertical,
   Search,
@@ -34,28 +34,28 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogTrigger,
   DialogFooter,
   DialogDescription
 } from "./ui/dialog";
 import { Label } from "./ui/label";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from "./ui/select";
-import { 
-  Sheet, 
-  SheetContent, 
-  SheetHeader, 
-  SheetTitle, 
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
   SheetDescription,
   SheetTrigger,
   SheetFooter
@@ -110,13 +110,13 @@ interface StaffDashboardProps {
   toggleDark: () => void;
 }
 
-export function StaffDashboard({ 
-  activeSection, 
-  setActiveSection, 
-  setCurrentView, 
-  setUserRole, 
-  isDark, 
-  toggleDark 
+export function StaffDashboard({
+  activeSection,
+  setActiveSection,
+  setCurrentView,
+  setUserRole,
+  isDark,
+  toggleDark
 }: StaffDashboardProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
@@ -144,6 +144,42 @@ export function StaffDashboard({
     password: '',
     currentPassword: ''
   });
+
+  const profileImageInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be smaller than 5MB');
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        setProfileForm(prev => ({ ...prev, profile_image: base64 }));
+        setIsUploadingImage(false);
+        toast.success('Profile picture selected — click Save to apply');
+      };
+      reader.onerror = () => {
+        toast.error('Failed to read image file');
+        setIsUploadingImage(false);
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      toast.error('Failed to process image');
+      setIsUploadingImage(false);
+    }
+  };
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -174,7 +210,7 @@ export function StaffDashboard({
         final_amount: a.final_amount || a.price || 0,
         points_redeemed: a.points_redeemed || 0
       })));
-      
+
       const ratingData = await staffAPI.getRating(userData.id);
       setStaffRating(ratingData);
     } catch (err) {
@@ -195,13 +231,13 @@ export function StaffDashboard({
 
   useEffect(() => {
     if (userData?.id) {
-       const fetchData = () => {
-         loadDashboardData();
-         loadReviews();
-       };
-       fetchData();
-       const interval = setInterval(fetchData, 60000); // Poll every minute
-       return () => clearInterval(interval);
+      const fetchData = () => {
+        loadDashboardData();
+        loadReviews();
+      };
+      fetchData();
+      const interval = setInterval(fetchData, 60000); // Poll every minute
+      return () => clearInterval(interval);
     }
   }, [userData?.id]);
 
@@ -262,19 +298,19 @@ export function StaffDashboard({
       await api.notifications.markAsRead(id);
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
       setUnreadCount(prev => Math.max(0, prev - 1));
-      
+
       if (notification.appointment_id) {
         handleNotificationClick(notification);
       }
     } catch (err) {
-       console.error('Failed to mark as read', err);
+      console.error('Failed to mark as read', err);
     }
   };
 
   const handleNotificationClick = async (notification: Notification) => {
     if (notification.appointment_id) {
       let apt = appointments.find(a => a.id === notification.appointment_id);
-      
+
       if (!apt) {
         try {
           const data = await appointmentsAPI.getById(notification.appointment_id);
@@ -311,7 +347,7 @@ export function StaffDashboard({
           return;
         }
       }
-      
+
       setSelectedAppointment(apt);
       setIsDetailsPanelOpen(true);
     }
@@ -327,7 +363,7 @@ export function StaffDashboard({
         address: profileForm.address,
         profile_image: profileForm.profile_image
       };
-      
+
       if (profileForm.password) {
         if (!profileForm.currentPassword) {
           toast.error('Current password is required to set a new password');
@@ -339,7 +375,7 @@ export function StaffDashboard({
       }
 
       const result = await staffAPI.updateProfile(updateData);
-      
+
       // Sync the returned server data to local state & localStorage
       const updatedUser = {
         ...userData,
@@ -352,7 +388,7 @@ export function StaffDashboard({
       };
       setUserData(updatedUser);
       localStorage.setItem('user', JSON.stringify(updatedUser));
-      
+
       // Update form with server-confirmed data
       setProfileForm(prev => ({
         ...prev,
@@ -364,7 +400,7 @@ export function StaffDashboard({
         password: '', // Clear password field after successful update
         currentPassword: ''
       }));
-      
+
       toast.success('Profile updated successfully');
       await loadDashboardData(); // Re-fetch all metrics to ensure UI sync
     } catch (err: any) {
@@ -426,7 +462,7 @@ export function StaffDashboard({
             <p className="text-xs text-gray-500 mt-1">Ready for your day?</p>
           </CardContent>
         </Card>
-        
+
         <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border-l-4 border-l-pink-500">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">Pending Requests</CardTitle>
@@ -534,8 +570,8 @@ export function StaffDashboard({
         <p className="text-gray-500">View and manage all your salon sessions</p>
         <div className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input 
-            placeholder="Search customers..." 
+          <Input
+            placeholder="Search customers..."
             className="pl-10 border-purple-200 rounded-xl focus:border-purple-400"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -547,8 +583,8 @@ export function StaffDashboard({
         {appointments
           .filter(a => a.customer.name.toLowerCase().includes(searchTerm.toLowerCase()))
           .map((appointment) => (
-            <Card 
-              key={appointment.id} 
+            <Card
+              key={appointment.id}
               className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg hover:shadow-xl transition-all cursor-pointer overflow-hidden group"
               onClick={() => {
                 setSelectedAppointment(appointment);
@@ -566,7 +602,7 @@ export function StaffDashboard({
                     {appointment.status}
                   </Badge>
                 </div>
-                
+
                 <div className="space-y-3">
                   <div className="flex items-center text-sm text-gray-600">
                     <CalendarIcon className="w-4 h-4 mr-2 text-purple-500" />
@@ -589,13 +625,13 @@ export function StaffDashboard({
       <div className="flex items-center justify-between">
         <p className="text-gray-500">Plan your availability and sessions</p>
         <div className="flex items-center bg-white p-1 rounded-xl shadow-sm border border-purple-100">
-          <Button 
-            variant={scheduleFilter === 'today' ? 'default' : 'ghost'} 
+          <Button
+            variant={scheduleFilter === 'today' ? 'default' : 'ghost'}
             className="rounded-lg px-4 h-9 text-xs"
             onClick={() => setScheduleFilter('today')}
           >Today</Button>
-          <Button 
-            variant={scheduleFilter === 'upcoming' ? 'default' : 'ghost'} 
+          <Button
+            variant={scheduleFilter === 'upcoming' ? 'default' : 'ghost'}
             className="rounded-lg px-4 h-9 text-xs"
             onClick={() => setScheduleFilter('upcoming')}
           >Upcoming</Button>
@@ -626,7 +662,7 @@ export function StaffDashboard({
                   <div className="absolute left-[11px] top-2 bottom-0 w-0.5 bg-purple-100" />
                   {/* Timeline dot */}
                   <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-white border-4 border-purple-500 z-10" />
-                  
+
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-gray-50/50 hover:bg-white transition-all border border-transparent hover:border-purple-100 hover:shadow-md">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
@@ -638,29 +674,29 @@ export function StaffDashboard({
                       <p className="text-xs text-gray-600">{a.service.name} • {a.service.duration} mins</p>
                     </div>
                     <div className="flex items-center gap-2">
-                       {a.status === 'confirmed' && (
-                         <Button 
-                           size="sm" 
-                           className="bg-purple-600 hover:bg-purple-700 text-white text-xs h-8 rounded-lg"
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             updateAppointmentStatus(a.id, 'in-progress');
-                           }}
-                         >Start</Button>
-                       )}
-                       {a.status === 'in-progress' && (
-                         <Button 
-                           size="sm" 
-                           className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 rounded-lg"
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             updateAppointmentStatus(a.id, 'completed');
-                           }}
-                         >Finish</Button>
-                       )}
-                       <Badge className={`${getStatusColor(a.status)} border text-[10px]`}>
-                         {a.status}
-                       </Badge>
+                      {a.status === 'confirmed' && (
+                        <Button
+                          size="sm"
+                          className="bg-purple-600 hover:bg-purple-700 text-white text-xs h-8 rounded-lg"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateAppointmentStatus(a.id, 'in-progress');
+                          }}
+                        >Start</Button>
+                      )}
+                      {a.status === 'in-progress' && (
+                        <Button
+                          size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 rounded-lg"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateAppointmentStatus(a.id, 'completed');
+                          }}
+                        >Finish</Button>
+                      )}
+                      <Badge className={`${getStatusColor(a.status)} border text-[10px]`}>
+                        {a.status}
+                      </Badge>
                     </div>
                   </div>
                 </div>
@@ -685,17 +721,16 @@ export function StaffDashboard({
 
       <div className="space-y-3">
         {notifications.map((n) => (
-          <Card 
-            key={n.id} 
+          <Card
+            key={n.id}
             className={`border-0 rounded-2xl shadow-sm cursor-pointer transition-all hover:shadow-md ${!n.read ? 'bg-purple-50/50 border-l-4 border-l-purple-500' : 'bg-white'}`}
             onClick={() => markAsRead(n.id)}
           >
             <CardContent className="p-4 flex items-start gap-4">
-              <div className={`mt-1 p-2 rounded-xl ${
-                n.type === 'new_appointment' ? 'bg-green-100 text-green-600' :
+              <div className={`mt-1 p-2 rounded-xl ${n.type === 'new_appointment' ? 'bg-green-100 text-green-600' :
                 n.type === 'cancellation' ? 'bg-red-100 text-red-600' :
-                'bg-purple-100 text-purple-600'
-              }`}>
+                  'bg-purple-100 text-purple-600'
+                }`}>
                 <Bell className="w-5 h-5" />
               </div>
               <div className="flex-1">
@@ -711,8 +746,8 @@ export function StaffDashboard({
         ))}
         {notifications.length === 0 && (
           <div className="text-center py-12 text-gray-500">
-             <Bell className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-             <p>No new notifications.</p>
+            <Bell className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+            <p>No new notifications.</p>
           </div>
         )}
       </div>
@@ -735,7 +770,7 @@ export function StaffDashboard({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Full Name</Label>
-                <Input 
+                <Input
                   value={profileForm.name}
                   onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
                   className="rounded-xl border-purple-200"
@@ -744,7 +779,7 @@ export function StaffDashboard({
               </div>
               <div className="space-y-2">
                 <Label>Email Address</Label>
-                <Input 
+                <Input
                   type="email"
                   value={profileForm.email}
                   onChange={(e) => setProfileForm(prev => ({ ...prev, email: e.target.value }))}
@@ -755,7 +790,7 @@ export function StaffDashboard({
               </div>
               <div className="space-y-2">
                 <Label>Phone Number</Label>
-                <Input 
+                <Input
                   value={profileForm.phone}
                   onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))}
                   className="rounded-xl border-purple-200"
@@ -764,7 +799,7 @@ export function StaffDashboard({
               </div>
               <div className="space-y-2">
                 <Label>New Password</Label>
-                <Input 
+                <Input
                   type="password"
                   placeholder="Leave blank to keep current"
                   value={profileForm.password}
@@ -774,7 +809,7 @@ export function StaffDashboard({
               </div>
               <div className="space-y-2">
                 <Label>Current Password</Label>
-                <Input 
+                <Input
                   type="password"
                   placeholder="Required for password changes"
                   value={profileForm.currentPassword}
@@ -787,7 +822,7 @@ export function StaffDashboard({
                   Primary Service Category
                   <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">Admin Controlled</span>
                 </Label>
-                <Input 
+                <Input
                   value={userData?.category || 'Not Assigned'}
                   disabled
                   className="rounded-xl bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed"
@@ -795,7 +830,7 @@ export function StaffDashboard({
                 <p className="text-[10px] text-amber-600 italic px-1">Your service category is set by administration and determines which services you handle.</p>
               </div>
             </div>
-            <Button 
+            <Button
               className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl h-11"
               onClick={updateProfile}
               disabled={isUpdatingProfile}
@@ -818,13 +853,29 @@ export function StaffDashboard({
                   <User className="w-10 h-10 text-purple-300" />
                 )}
               </div>
-              <button className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-purple-50 text-purple-600 hover:text-purple-700 transition-all">
-                <Camera className="w-4 h-4" />
+              <input
+                ref={profileImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleProfileImageChange}
+              />
+              <button
+                className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-purple-50 text-purple-600 hover:text-purple-700 hover:scale-110 transition-all disabled:opacity-50"
+                onClick={() => profileImageInputRef.current?.click()}
+                disabled={isUploadingImage}
+                title="Change profile picture"
+              >
+                {isUploadingImage ? (
+                  <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Camera className="w-4 h-4" />
+                )}
               </button>
             </div>
             <h3 className="font-bold text-gray-900">{profileForm.name}</h3>
             <p className="text-xs text-gray-500 uppercase tracking-widest mt-1">{userData?.role}</p>
-            
+
             <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-2 gap-4">
               <div>
                 <p className="text-lg font-bold text-purple-600">{staffRating.average}⭐</p>
@@ -878,9 +929,9 @@ export function StaffDashboard({
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-1">
                         {[...Array(5)].map((_, i) => (
-                          <Star 
-                            key={i} 
-                            className={`w-4 h-4 ${i < review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'}`} 
+                          <Star
+                            key={i}
+                            className={`w-4 h-4 ${i < review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'}`}
                           />
                         ))}
                       </div>
@@ -931,19 +982,19 @@ export function StaffDashboard({
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                 {activeSection === 'dashboard' ? 'Dashboard Overview' :
-                 activeSection === 'appointments' ? 'My Appointments' :
-                 activeSection === 'schedule' ? 'Work Schedule' :
-                 activeSection === 'notifications' ? 'Notifications' :
-                 activeSection === 'settings' ? 'Account Settings' :
-                 activeSection.replace('-', ' ')}
+                  activeSection === 'appointments' ? 'My Appointments' :
+                    activeSection === 'schedule' ? 'Work Schedule' :
+                      activeSection === 'notifications' ? 'Notifications' :
+                        activeSection === 'settings' ? 'Account Settings' :
+                          activeSection.replace('-', ' ')}
               </h1>
               <p className="text-gray-500 text-sm">Staff Portal • Welcome back, {userData?.name || 'Staff Member'}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-             <Badge variant="outline" className="bg-purple-50 text-purple-600 border-purple-100 px-3 py-1">
-               {userData?.role === 'staff' ? 'Professional' : 'Staff'}
-             </Badge>
+            <Badge variant="outline" className="bg-purple-50 text-purple-600 border-purple-100 px-3 py-1">
+              {userData?.role === 'staff' ? 'Professional' : 'Staff'}
+            </Badge>
           </div>
         </div>
 
@@ -959,9 +1010,9 @@ export function StaffDashboard({
             <div className="h-full flex flex-col bg-white">
               <div className="p-6 bg-gradient-to-r from-purple-600 to-pink-600 text-white">
                 <div className="flex justify-between items-start mb-4">
-                   <Badge className="bg-white/20 text-white border-white/30 backdrop-blur-md uppercase text-[10px] px-2">
-                     Appointment Info
-                   </Badge>
+                  <Badge className="bg-white/20 text-white border-white/30 backdrop-blur-md uppercase text-[10px] px-2">
+                    Appointment Info
+                  </Badge>
                 </div>
                 <h3 className="text-2xl font-bold mb-1">{selectedAppointment.customer.name}</h3>
                 <p className="text-purple-100 flex items-center gap-2 text-sm">
@@ -969,7 +1020,7 @@ export function StaffDashboard({
                   {selectedAppointment.service.name}
                 </p>
               </div>
-              
+
               <div className="p-6 space-y-8 flex-1">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
@@ -989,42 +1040,42 @@ export function StaffDashboard({
                 </div>
 
                 <div className="space-y-3">
-                   <Label className="text-xs text-gray-400 uppercase tracking-widest">Status</Label>
-                   <div className="flex flex-wrap gap-2">
-                     {['pending', 'confirmed', 'in-progress', 'completed', 'cancelled'].map((s) => (
-                       <Button
-                         key={s}
-                         variant={selectedAppointment.status === s ? 'default' : 'outline'}
-                         size="sm"
-                         className={`rounded-full text-[10px] h-8 px-4 ${selectedAppointment.status === s ? 'shadow-md' : 'border-purple-100'}`}
-                         onClick={() => updateAppointmentStatus(selectedAppointment.id, s as any)}
-                       >
-                         {s.charAt(0).toUpperCase() + s.slice(1)}
-                       </Button>
-                     ))}
-                   </div>
+                  <Label className="text-xs text-gray-400 uppercase tracking-widest">Status</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {['pending', 'confirmed', 'in-progress', 'completed', 'cancelled'].map((s) => (
+                      <Button
+                        key={s}
+                        variant={selectedAppointment.status === s ? 'default' : 'outline'}
+                        size="sm"
+                        className={`rounded-full text-[10px] h-8 px-4 ${selectedAppointment.status === s ? 'shadow-md' : 'border-purple-100'}`}
+                        onClick={() => updateAppointmentStatus(selectedAppointment.id, s as any)}
+                      >
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="space-y-4 pt-4 border-t border-gray-50">
-                   <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600">
-                        <Phone className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-400">Phone</p>
-                        <p className="font-medium text-gray-900">{selectedAppointment.customer.phone}</p>
-                      </div>
-                   </div>
-                   <div className="flex items-center gap-4">
-                     <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600">
-                       <Mail className="w-5 h-5" />
-                     </div>
-                     <div>
-                       <p className="text-xs text-gray-400">Email</p>
-                       <p className="font-medium text-gray-900">{selectedAppointment.customer.email}</p>
-                     </div>
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600">
+                      <Phone className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Phone</p>
+                      <p className="font-medium text-gray-900">{selectedAppointment.customer.phone}</p>
+                    </div>
                   </div>
-                  
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600">
+                      <Mail className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Email</p>
+                      <p className="font-medium text-gray-900">{selectedAppointment.customer.email}</p>
+                    </div>
+                  </div>
+
                   {/* Financial Breakdown */}
                   <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border border-purple-100 space-y-3">
                     <Label className="text-[10px] text-gray-400 uppercase tracking-widest block mb-2">Financial Summary</Label>
@@ -1034,7 +1085,7 @@ export function StaffDashboard({
                     </div>
                     {((selectedAppointment as any).discount_amount > 0 || (selectedAppointment as any).points_redeemed > 0) && (
                       <div className="flex justify-between text-sm text-red-500">
-                        <span>Discount { (selectedAppointment as any).points_redeemed > 0 ? `(${(selectedAppointment as any).points_redeemed} pts)` : '' }:</span>
+                        <span>Discount {(selectedAppointment as any).points_redeemed > 0 ? `(${(selectedAppointment as any).points_redeemed} pts)` : ''}:</span>
                         <span>-${(selectedAppointment as any).discount_amount || 0}</span>
                       </div>
                     )}
@@ -1046,15 +1097,15 @@ export function StaffDashboard({
 
                   {/* Loyalty Status */}
                   <div className="p-4 bg-white rounded-2xl border border-purple-100 flex items-center justify-between shadow-sm">
-                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-purple-50 rounded-lg">
-                          <Star className="w-4 h-4 text-purple-500 fill-purple-500" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-gray-400 uppercase tracking-widest">Customer Loyalty Balance</p>
-                          <p className="font-bold text-gray-900">{(selectedAppointment.customer as any).loyalty_points || 0} pts</p>
-                        </div>
-                     </div>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-purple-50 rounded-lg">
+                        <Star className="w-4 h-4 text-purple-500 fill-purple-500" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-widest">Customer Loyalty Balance</p>
+                        <p className="font-bold text-gray-900">{(selectedAppointment.customer as any).loyalty_points || 0} pts</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -1065,14 +1116,14 @@ export function StaffDashboard({
                   </div>
                 )}
               </div>
-              
+
               <div className="p-6 border-t border-gray-100 flex gap-3">
-                 <Button variant="outline" className="flex-1 rounded-xl h-11" onClick={() => setIsDetailsPanelOpen(false)}>
-                   Close
-                 </Button>
-                 <Button className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0 rounded-xl h-11">
-                   Contact
-                 </Button>
+                <Button variant="outline" className="flex-1 rounded-xl h-11" onClick={() => setIsDetailsPanelOpen(false)}>
+                  Close
+                </Button>
+                <Button className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0 rounded-xl h-11">
+                  Contact
+                </Button>
               </div>
             </div>
           )}

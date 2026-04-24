@@ -14,13 +14,13 @@ import { Slider } from "./ui/slider";
 import { Textarea } from "./ui/textarea";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetFooter } from "./ui/sheet";
 import { Switch } from "./ui/switch";
-import { 
-  Calendar, 
-  Clock, 
-  User, 
-  Plus, 
-  Settings, 
-  LogOut, 
+import {
+  Calendar,
+  Clock,
+  User,
+  Plus,
+  Settings,
+  LogOut,
   MoreHorizontal,
   Search,
   Filter,
@@ -62,33 +62,70 @@ interface CustomerDashboardProps {
   toggleDark?: () => void;
 }
 
-export function CustomerDashboard({ 
-  activeSection, 
-  setActiveSection, 
-  setCurrentView, 
-  setUserRole, 
-  setPreselectedServiceId, 
-  isDark, 
-  toggleDark 
+export function CustomerDashboard({
+  activeSection,
+  setActiveSection,
+  setCurrentView,
+  setUserRole,
+  setPreselectedServiceId,
+  isDark,
+  toggleDark
 }: CustomerDashboardProps) {
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [priceRange, setPriceRange] = useState([0, 300]);
   const [isUpdating, setIsUpdating] = useState(false);
-  
+
   // Profile form state
   const [profileForm, setProfileForm] = useState({
     name: '',
     email: '',
     phone: '',
     address: '',
+    profile_image: '',
     reminders: {
       email: true,
       sms: true,
       timing: '24h'
     }
   });
+
+  const profileImageInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be smaller than 5MB');
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        setProfileForm(prev => ({ ...prev, profile_image: base64 }));
+        setIsUploadingImage(false);
+        toast.success('Profile picture selected — click Update Profile to save');
+      };
+      reader.onerror = () => {
+        toast.error('Failed to read image file');
+        setIsUploadingImage(false);
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      toast.error('Failed to process image');
+      setIsUploadingImage(false);
+    }
+  };
 
   // Reschedule state
   const [rescheduleDate, setRescheduleDate] = useState<Date>(new Date());
@@ -176,6 +213,7 @@ export function CustomerDashboard({
         email: userData.email || prev.email,
         phone: userData.phone || prev.phone,
         address: userData.address || prev.address,
+        profile_image: userData.profile_image || prev.profile_image,
         loyaltyPoints: userData.loyalty_points ?? 0,
         totalAppointments: userData.total_appointments ?? 0,
         joinDate: userData.created_at || prev.joinDate
@@ -185,7 +223,8 @@ export function CustomerDashboard({
         name: userData.name || prev.name,
         email: userData.email || prev.email,
         phone: userData.phone || prev.phone,
-        address: userData.address || prev.address
+        address: userData.address || prev.address,
+        profile_image: userData.profile_image || prev.profile_image
       }));
     } catch (error) {
       console.error('Failed to load profile:', error);
@@ -218,11 +257,11 @@ export function CustomerDashboard({
         setServices(servicesData.map((s: any) => ({
           ...s,
           image: s.image_url ? `${API_ORIGIN}${s.image_url}` : `https://picsum.photos/seed/${(s.name || 'salon').replace(/\s+/g, '')}/400/300`,
-          staff: s.assigned_staff?.length > 0 
-            ? s.assigned_staff 
+          staff: s.assigned_staff?.length > 0
+            ? s.assigned_staff
             : staffData.filter((st: any) => st.status === 'active' || st.is_available).map((st: any) => st.name)
         })));
-        setStaffMembers(staffData.filter((s:any) => s.status === 'active' || s.is_available));
+        setStaffMembers(staffData.filter((s: any) => s.status === 'active' || s.is_available));
       } catch (err) {
         console.error('Failed to load services or staff:', err);
       }
@@ -268,7 +307,7 @@ export function CustomerDashboard({
       await api.notifications.markAsRead(id);
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
     } catch (err) {
-       console.error('Failed to mark as read', err);
+      console.error('Failed to mark as read', err);
     }
   };
 
@@ -286,6 +325,7 @@ export function CustomerDashboard({
     email: api.auth.getCurrentUser()?.email || '',
     phone: api.auth.getCurrentUser()?.phone || '',
     address: api.auth.getCurrentUser()?.address || '',
+    profile_image: api.auth.getCurrentUser()?.profile_image || '',
     totalAppointments: 0,
     loyaltyPoints: 0,
     joinDate: api.auth.getCurrentUser()?.created_at || ''
@@ -298,6 +338,7 @@ export function CustomerDashboard({
       email: currentUser?.email || '',
       phone: currentUser?.phone || '',
       address: currentUser?.address || '',
+      profile_image: currentUser?.profile_image || profile.profile_image || '',
       reminders: profileForm.reminders
     });
     setIsProfileDialogOpen(true);
@@ -309,7 +350,8 @@ export function CustomerDashboard({
       await api.auth.updateProfile({
         name: profileForm.name,
         phone: profileForm.phone,
-        address: profileForm.address
+        address: profileForm.address,
+        profile_image: profileForm.profile_image
       });
       await loadProfile(); // refresh profile from DB
       setIsProfileDialogOpen(false);
@@ -377,9 +419,9 @@ export function CustomerDashboard({
     try {
       const formattedDate = format(rescheduleDate, 'yyyy-MM-dd');
       await appointmentsAPI.reschedule(appointmentToReschedule.id, formattedDate, rescheduleTime);
-      setAppointments(prev => prev.map(apt => 
-        apt.id === appointmentToReschedule.id 
-          ? { ...apt, date: formattedDate, time: rescheduleTime } 
+      setAppointments(prev => prev.map(apt =>
+        apt.id === appointmentToReschedule.id
+          ? { ...apt, date: formattedDate, time: rescheduleTime }
           : apt
       ));
       setIsRescheduleDialogOpen(false);
@@ -400,9 +442,9 @@ export function CustomerDashboard({
   const submitReview = async () => {
     try {
       await appointmentsAPI.submitReview(appointmentToReview.id, reviewRating, reviewText);
-      setAppointments(prev => prev.map(apt => 
-        apt.id === appointmentToReview.id 
-          ? { ...apt, rating: reviewRating, review: reviewText } 
+      setAppointments(prev => prev.map(apt =>
+        apt.id === appointmentToReview.id
+          ? { ...apt, rating: reviewRating, review: reviewText }
           : apt
       ));
       setIsReviewDialogOpen(false);
@@ -417,14 +459,14 @@ export function CustomerDashboard({
     try {
       const currentUser = api.auth.getCurrentUser();
       if (!currentUser) return;
-      
+
       await api.loyalty.adjust({
         user_id: currentUser.id,
         points: points,
         type: 'redeem',
         description: 'Point redemption from dashboard'
       } as any);
-      
+
       toast.success(`Redeemed ${points} points for a $10 discount!`);
       await loadProfile();
       await loadLoyaltyData();
@@ -522,7 +564,7 @@ export function CustomerDashboard({
             <div>
               <p className="text-gray-500 text-sm">Next Visit</p>
               <p className="text-xl font-bold text-gray-900">
-                {upcomingAppointments.length > 0 
+                {upcomingAppointments.length > 0
                   ? format(new Date(`${upcomingAppointments[0].date}T${upcomingAppointments[0].time}`), 'MMM d, h:mm a')
                   : 'No upcoming visits'}
               </p>
@@ -535,52 +577,52 @@ export function CustomerDashboard({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-         {/* Recent Activity */}
-         <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg">
-           <CardHeader>
-             <CardTitle className="text-lg font-bold text-gray-900">Recent Appointments</CardTitle>
-           </CardHeader>
-           <CardContent>
-              <div className="space-y-4">
-                {appointments.slice(0, 3).map((apt) => (
-                  <div key={apt.id} className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 hover:bg-purple-50/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
-                        <Scissors className="w-5 h-5 text-purple-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-gray-900">{apt.service.name}</p>
-                        <p className="text-xs text-gray-500">{format(new Date(apt.date), 'MMM d, yyyy')}</p>
-                      </div>
+        {/* Recent Activity */}
+        <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold text-gray-900">Recent Appointments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {appointments.slice(0, 3).map((apt) => (
+                <div key={apt.id} className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 hover:bg-purple-50/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                      <Scissors className="w-5 h-5 text-purple-500" />
                     </div>
-                    <Badge className={`${getStatusColor(apt.status)} border text-[10px]`}>
-                      {apt.status}
-                    </Badge>
+                    <div>
+                      <p className="text-sm font-bold text-gray-900">{apt.service.name}</p>
+                      <p className="text-xs text-gray-500">{format(new Date(apt.date), 'MMM d, yyyy')}</p>
+                    </div>
                   </div>
-                ))}
-              </div>
-           </CardContent>
-         </Card>
+                  <Badge className={`${getStatusColor(apt.status)} border text-[10px]`}>
+                    {apt.status}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
-         {/* Latest News/Promos */}
-         <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg overflow-hidden relative">
-           <div className="absolute top-0 right-0 p-6 opacity-10">
-              <Sparkles className="w-32 h-32" />
-           </div>
-           <CardHeader>
-             <CardTitle className="text-lg font-bold text-gray-900">Offers for You</CardTitle>
-           </CardHeader>
-           <CardContent className="space-y-4">
-             <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-100">
-               <h4 className="font-bold text-purple-700">Spring Special 🌸</h4>
-               <p className="text-xs text-purple-600 mt-1">Get 20% off on all Hair Spa services this month. Use code SPRING20.</p>
-             </div>
-             <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border border-blue-100">
-               <h4 className="font-bold text-blue-700">Refer a Friend</h4>
-               <p className="text-xs text-blue-600 mt-1">Earn 50 loyalty points for every friend you refer!</p>
-             </div>
-           </CardContent>
-         </Card>
+        {/* Latest News/Promos */}
+        <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg overflow-hidden relative">
+          <div className="absolute top-0 right-0 p-6 opacity-10">
+            <Sparkles className="w-32 h-32" />
+          </div>
+          <CardHeader>
+            <CardTitle className="text-lg font-bold text-gray-900">Offers for You</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-100">
+              <h4 className="font-bold text-purple-700">Spring Special 🌸</h4>
+              <p className="text-xs text-purple-600 mt-1">Get 20% off on all Hair Spa services this month. Use code SPRING20.</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border border-blue-100">
+              <h4 className="font-bold text-blue-700">Refer a Friend</h4>
+              <p className="text-xs text-blue-600 mt-1">Earn 50 loyalty points for every friend you refer!</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -590,13 +632,13 @@ export function CustomerDashboard({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <p className="text-gray-500">Find the perfect treatment for you</p>
         <div className="relative w-full sm:w-64">
-           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-           <Input 
-             placeholder="Search services..." 
-             className="pl-10 border-purple-200 rounded-xl"
-             value={searchTerm}
-             onChange={(e) => setSearchTerm(e.target.value)}
-           />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Input
+            placeholder="Search services..."
+            className="pl-10 border-purple-200 rounded-xl"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
       </div>
 
@@ -608,9 +650,9 @@ export function CustomerDashboard({
               <div className="aspect-video w-full overflow-hidden relative">
                 <img src={service.image} alt={service.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
-                   <Badge className="bg-white/20 text-white backdrop-blur-md border-white/30 uppercase text-[10px]">
-                     {service.category}
-                   </Badge>
+                  <Badge className="bg-white/20 text-white backdrop-blur-md border-white/30 uppercase text-[10px]">
+                    {service.category}
+                  </Badge>
                 </div>
               </div>
               <CardContent className="p-6">
@@ -620,18 +662,18 @@ export function CustomerDashboard({
                 </div>
                 <p className="text-sm text-gray-600 line-clamp-2 mb-4 h-10">{service.description}</p>
                 <div className="flex items-center justify-between">
-                   <span className="text-xs text-gray-400 flex items-center gap-1">
-                     <Clock className="w-3 h-3" />
-                     {service.duration} mins
-                   </span>
-                   <Button 
-                     size="sm" 
-                     className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-8 px-4"
-                     onClick={() => {
-                        setPreselectedServiceId(String(service.id));
-                        setCurrentView('booking');
-                     }}
-                   >Book</Button>
+                  <span className="text-xs text-gray-400 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {service.duration} mins
+                  </span>
+                  <Button
+                    size="sm"
+                    className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-8 px-4"
+                    onClick={() => {
+                      setPreselectedServiceId(String(service.id));
+                      setCurrentView('booking');
+                    }}
+                  >Book</Button>
                 </div>
               </CardContent>
             </Card>
@@ -645,10 +687,10 @@ export function CustomerDashboard({
       <div className="flex items-center justify-between">
         <p className="text-gray-500">Manage your upcoming and past bookings</p>
         <Button
-           variant="outline"
-           size="sm"
-           className="border-purple-200 text-purple-600 rounded-xl"
-           onClick={() => loadAppointments()}
+          variant="outline"
+          size="sm"
+          className="border-purple-200 text-purple-600 rounded-xl"
+          onClick={() => loadAppointments()}
         >
           Refresh
         </Button>
@@ -661,89 +703,89 @@ export function CustomerDashboard({
         </TabsList>
 
         <TabsContent value="upcoming" className="space-y-4">
-           {upcomingAppointments.length > 0 ? (
-             upcomingAppointments.map((apt) => (
-               <Card key={apt.id} className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg overflow-hidden group">
-                 <div className="flex flex-col md:flex-row">
-                    <div className="w-full md:w-1/4 bg-gradient-to-br from-purple-500 to-pink-500 p-6 text-white flex flex-col justify-center items-center text-center">
-                       <p className="text-sm uppercase tracking-widest opacity-80">{format(new Date(apt.date), 'MMMM')}</p>
-                       <p className="text-4xl font-bold">{format(new Date(apt.date), 'dd')}</p>
-                       <p className="font-medium mt-1">{apt.time}</p>
-                    </div>
-                    <CardContent className="flex-1 p-6">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                         <div>
-                           <Badge className={`${getStatusColor(apt.status)} border mb-2`}>{apt.status}</Badge>
-                           <h3 className="text-xl font-bold text-gray-900">{apt.service.name}</h3>
-                           <p className="text-gray-500 text-sm mt-1 flex items-center gap-2">
-                             <User className="w-4 h-4 text-purple-500" />
-                             Professional: {apt.staff.name}
-                           </p>
-                         </div>
-                         <div className="flex gap-2">
-                            <Button 
-                              variant="outline" 
-                              className="rounded-xl border-purple-200 text-purple-600"
-                              onClick={() => handleReschedule(apt)}
-                            >Reschedule</Button>
-                            <Button 
-                              variant="ghost" 
-                              className="rounded-xl text-red-500 hover:bg-red-50 hover:text-red-600"
-                              onClick={() => cancelAppointment(apt.id)}
-                            >Cancel</Button>
-                         </div>
+          {upcomingAppointments.length > 0 ? (
+            upcomingAppointments.map((apt) => (
+              <Card key={apt.id} className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg overflow-hidden group">
+                <div className="flex flex-col md:flex-row">
+                  <div className="w-full md:w-1/4 bg-gradient-to-br from-purple-500 to-pink-500 p-6 text-white flex flex-col justify-center items-center text-center">
+                    <p className="text-sm uppercase tracking-widest opacity-80">{format(new Date(apt.date), 'MMMM')}</p>
+                    <p className="text-4xl font-bold">{format(new Date(apt.date), 'dd')}</p>
+                    <p className="font-medium mt-1">{apt.time}</p>
+                  </div>
+                  <CardContent className="flex-1 p-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <Badge className={`${getStatusColor(apt.status)} border mb-2`}>{apt.status}</Badge>
+                        <h3 className="text-xl font-bold text-gray-900">{apt.service.name}</h3>
+                        <p className="text-gray-500 text-sm mt-1 flex items-center gap-2">
+                          <User className="w-4 h-4 text-purple-500" />
+                          Professional: {apt.staff.name}
+                        </p>
                       </div>
-                    </CardContent>
-                 </div>
-               </Card>
-             ))
-           ) : (
-             <div className="text-center py-12 text-gray-500">
-               <CalendarIcon className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-               <p>No upcoming appointments found.</p>
-               <Button 
-                 variant="link" 
-                 className="text-purple-600"
-                 onClick={() => setCurrentView('booking')}
-               >Book one now</Button>
-             </div>
-           )}
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          className="rounded-xl border-purple-200 text-purple-600"
+                          onClick={() => handleReschedule(apt)}
+                        >Reschedule</Button>
+                        <Button
+                          variant="ghost"
+                          className="rounded-xl text-red-500 hover:bg-red-50 hover:text-red-600"
+                          onClick={() => cancelAppointment(apt.id)}
+                        >Cancel</Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </div>
+              </Card>
+            ))
+          ) : (
+            <div className="text-center py-12 text-gray-500">
+              <CalendarIcon className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+              <p>No upcoming appointments found.</p>
+              <Button
+                variant="link"
+                className="text-purple-600"
+                onClick={() => setCurrentView('booking')}
+              >Book one now</Button>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="past" className="space-y-4">
-           {pastAppointments.map((apt) => (
-             <Card key={apt.id} className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg group opacity-80 hover:opacity-100 transition-opacity">
-               <CardContent className="p-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                       <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-400">
-                         <CheckCircle2 className="w-6 h-6" />
-                       </div>
-                       <div>
-                         <h3 className="font-bold text-gray-900">{apt.service.name}</h3>
-                         <p className="text-xs text-gray-500">{format(new Date(apt.date), 'MMM d, yyyy')} with {apt.staff.name}</p>
-                       </div>
+          {pastAppointments.map((apt) => (
+            <Card key={apt.id} className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg group opacity-80 hover:opacity-100 transition-opacity">
+              <CardContent className="p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-400">
+                      <CheckCircle2 className="w-6 h-6" />
                     </div>
-                    <div className="flex items-center gap-2">
-                       {apt.status === 'completed' && !apt.rating ? (
-                         <Button 
-                           size="sm" 
-                           className="bg-purple-600 text-white rounded-xl h-8"
-                           onClick={() => handleReview(apt)}
-                         >Leave a Review</Button>
-                       ) : apt.rating ? (
-                         <div className="flex items-center gap-1 text-yellow-500">
-                            {[...Array(5)].map((_, i) => (
-                              <Star key={i} className={`w-4 h-4 ${i < apt.rating ? 'fill-current' : 'text-gray-200'}`} />
-                            ))}
-                         </div>
-                       ) : null}
-                       <Button variant="ghost" size="sm" className="text-purple-600 hover:bg-purple-50 rounded-xl h-8">Rebook</Button>
+                    <div>
+                      <h3 className="font-bold text-gray-900">{apt.service.name}</h3>
+                      <p className="text-xs text-gray-500">{format(new Date(apt.date), 'MMM d, yyyy')} with {apt.staff.name}</p>
                     </div>
                   </div>
-               </CardContent>
-             </Card>
-           ))}
+                  <div className="flex items-center gap-2">
+                    {apt.status === 'completed' && !apt.rating ? (
+                      <Button
+                        size="sm"
+                        className="bg-purple-600 text-white rounded-xl h-8"
+                        onClick={() => handleReview(apt)}
+                      >Leave a Review</Button>
+                    ) : apt.rating ? (
+                      <div className="flex items-center gap-1 text-yellow-500">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} className={`w-4 h-4 ${i < apt.rating ? 'fill-current' : 'text-gray-200'}`} />
+                        ))}
+                      </div>
+                    ) : null}
+                    <Button variant="ghost" size="sm" className="text-purple-600 hover:bg-purple-50 rounded-xl h-8">Rebook</Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </TabsContent>
       </Tabs>
     </div>
@@ -754,36 +796,36 @@ export function CustomerDashboard({
       <div className="flex items-center justify-between">
         <p className="text-gray-500">Stay updated on your salon activity</p>
         <Button variant="ghost" size="sm" onClick={markAllAsRead} className="text-purple-600 hover:bg-purple-50 rounded-xl h-8">
-           Mark all as read
+          Mark all as read
         </Button>
       </div>
 
       <div className="space-y-3">
         {notifications.map((n) => (
-          <Card 
-            key={n.id} 
+          <Card
+            key={n.id}
             className={`border-0 rounded-2xl shadow-sm transition-all hover:shadow-md cursor-pointer ${!n.read ? 'bg-purple-50/50 border-l-4 border-l-purple-500' : 'bg-white'}`}
             onClick={() => markAsRead(n.id)}
           >
             <CardContent className="p-4 flex items-start gap-4">
-               <div className={`p-2 rounded-xl shrink-0 ${!n.read ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-400'}`}>
-                 <Bell className="w-5 h-5" />
-               </div>
-               <div className="flex-1">
-                 <div className="flex justify-between items-start mb-1">
-                    <h4 className={`text-sm font-bold ${!n.read ? 'text-purple-900' : 'text-gray-900'}`}>{n.title}</h4>
-                    <span className="text-[10px] text-gray-400">{n.timestamp}</span>
-                 </div>
-                 <p className="text-xs text-gray-600 leading-relaxed">{n.message}</p>
-               </div>
-               {!n.read && <div className="mt-2 w-2 h-2 bg-purple-500 rounded-full shrink-0" />}
+              <div className={`p-2 rounded-xl shrink-0 ${!n.read ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-400'}`}>
+                <Bell className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <div className="flex justify-between items-start mb-1">
+                  <h4 className={`text-sm font-bold ${!n.read ? 'text-purple-900' : 'text-gray-900'}`}>{n.title}</h4>
+                  <span className="text-[10px] text-gray-400">{n.timestamp}</span>
+                </div>
+                <p className="text-xs text-gray-600 leading-relaxed">{n.message}</p>
+              </div>
+              {!n.read && <div className="mt-2 w-2 h-2 bg-purple-500 rounded-full shrink-0" />}
             </CardContent>
           </Card>
         ))}
         {notifications.length === 0 && (
           <div className="text-center py-12 text-gray-400">
-             <Bell className="w-16 h-16 mx-auto mb-4 opacity-20" />
-             <p>No notifications yet</p>
+            <Bell className="w-16 h-16 mx-auto mb-4 opacity-20" />
+            <p>No notifications yet</p>
           </div>
         )}
       </div>
@@ -792,65 +834,95 @@ export function CustomerDashboard({
 
   const renderProfile = () => (
     <div className="space-y-6">
-       <div>
-         <p className="text-gray-500">Manage your account and preferences</p>
-       </div>
+      <div>
+        <p className="text-gray-500">Manage your account and preferences</p>
+      </div>
 
-       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         <Card className="lg:col-span-2 border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg">
-           <CardHeader>
-             <CardTitle className="text-lg font-bold">Personal Details</CardTitle>
-           </CardHeader>
-           <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Full Name</Label>
-                  <Input value={profileForm.name} onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))} className="rounded-xl border-purple-200" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input value={profileForm.email} disabled className="rounded-xl bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Phone</Label>
-                  <Input value={profileForm.phone} onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))} className="rounded-xl border-purple-200" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Address</Label>
-                  <Input value={profileForm.address} onChange={(e) => setProfileForm(prev => ({ ...prev, address: e.target.value }))} className="rounded-xl border-purple-200" />
-                </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2 border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold">Personal Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Full Name</Label>
+                <Input value={profileForm.name} onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))} className="rounded-xl border-purple-200" />
               </div>
-              <Button 
-                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl h-11 shadow-md border-0"
-                onClick={updateProfile}
-                disabled={isUpdating}
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input value={profileForm.email} disabled className="rounded-xl bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed" />
+              </div>
+              <div className="space-y-2">
+                <Label>Phone</Label>
+                <Input value={profileForm.phone} onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))} className="rounded-xl border-purple-200" />
+              </div>
+              <div className="space-y-2">
+                <Label>Address</Label>
+                <Input value={profileForm.address} onChange={(e) => setProfileForm(prev => ({ ...prev, address: e.target.value }))} className="rounded-xl border-purple-200" />
+              </div>
+            </div>
+            <Button
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl h-11 shadow-md border-0"
+              onClick={updateProfile}
+              disabled={isUpdating}
+            >
+              {isUpdating ? 'Saving Changes...' : 'Update Profile'}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg h-fit">
+          <CardContent className="p-6 text-center">
+            <div className="relative w-24 h-24 mx-auto mb-4">
+              <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center border-4 border-white shadow-lg overflow-hidden">
+                {profileForm.profile_image || profile.profile_image ? (
+                  <img
+                    src={profileForm.profile_image || profile.profile_image}
+                    alt={profile.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <User className="w-12 h-12 text-white" />
+                )}
+              </div>
+              <input
+                ref={profileImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleProfileImageChange}
+              />
+              <button
+                className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-purple-100 text-purple-600 hover:text-purple-700 hover:scale-110 transition-all disabled:opacity-50"
+                onClick={() => profileImageInputRef.current?.click()}
+                disabled={isUploadingImage}
+                title="Change profile picture"
               >
-                {isUpdating ? 'Saving Changes...' : 'Update Profile'}
-              </Button>
-           </CardContent>
-         </Card>
+                {isUploadingImage ? (
+                  <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Edit className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400 mb-3">Click the icon to change photo</p>
+            <h3 className="font-bold text-gray-900 text-lg">{profile.name}</h3>
+            <p className="text-sm text-gray-500">Member since {safeFormatDate(profile.joinDate, 'MMM yyyy')}</p>
 
-         <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg h-fit">
-           <CardContent className="p-6 text-center">
-              <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full mx-auto flex items-center justify-center mb-4 border-4 border-white shadow-lg">
-                <User className="w-12 h-12 text-white" />
+            <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xl font-bold text-purple-600">{profile.loyaltyPoints}</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest">Points</p>
               </div>
-              <h3 className="font-bold text-gray-900 text-lg">{profile.name}</h3>
-              <p className="text-sm text-gray-500">Member since {safeFormatDate(profile.joinDate, 'MMM yyyy')}</p>
-              
-              <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xl font-bold text-purple-600">{profile.loyaltyPoints}</p>
-                  <p className="text-[10px] text-gray-400 uppercase tracking-widest">Points</p>
-                </div>
-                <div>
-                  <p className="text-xl font-bold text-purple-600">{profile.totalAppointments}</p>
-                  <p className="text-[10px] text-gray-400 uppercase tracking-widest">Visits</p>
-                </div>
+              <div>
+                <p className="text-xl font-bold text-purple-600">{profile.totalAppointments}</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest">Visits</p>
               </div>
-           </CardContent>
-         </Card>
-       </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 
@@ -908,25 +980,25 @@ export function CustomerDashboard({
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-4">
-               {/* Fixed Cashback Reward */}
-               <div className="flex items-start gap-3">
-                 <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center shrink-0">$</div>
-                 <div>
-                   <p className="font-bold text-sm">Point Redemption</p>
-                   <p className="text-xs text-purple-100">100 pts = ${loyaltySettings ? (100 * loyaltySettings.redemption_rate).toFixed(0) : '10'} Discount</p>
-                 </div>
-               </div>
+              {/* Fixed Cashback Reward */}
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center shrink-0">$</div>
+                <div>
+                  <p className="font-bold text-sm">Point Redemption</p>
+                  <p className="text-xs text-purple-100">100 pts = ${loyaltySettings ? (100 * loyaltySettings.redemption_rate).toFixed(0) : '10'} Discount</p>
+                </div>
+              </div>
 
-               {/* Dynamic Rewards from DB */}
-               {loyaltyRewards.map((reward, idx) => (
-                 <div key={reward.id} className="flex items-start gap-3">
-                   <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center shrink-0">{idx + 1}</div>
-                   <div>
-                     <p className="font-bold text-sm">{reward.title}</p>
-                     <p className="text-xs text-purple-100">{reward.points_required} pts = {reward.description || 'Special Offer'}</p>
-                   </div>
-                 </div>
-               ))}
+              {/* Dynamic Rewards from DB */}
+              {loyaltyRewards.map((reward, idx) => (
+                <div key={reward.id} className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center shrink-0">{idx + 1}</div>
+                  <div>
+                    <p className="font-bold text-sm">{reward.title}</p>
+                    <p className="text-xs text-purple-100">{reward.points_required} pts = {reward.description || 'Special Offer'}</p>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {loyaltyRewards.length > 0 && (
@@ -972,11 +1044,11 @@ export function CustomerDashboard({
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               {activeSection === 'dashboard' ? 'My Dashboard' :
-               activeSection === 'services' ? 'Available Services' :
-               activeSection === 'appointments' ? 'My Bookings' :
-               activeSection === 'notifications' ? 'Notifications' :
-               activeSection === 'profile' ? 'My Profile' :
-               activeSection.replace('-', ' ')}
+                activeSection === 'services' ? 'Available Services' :
+                  activeSection === 'appointments' ? 'My Bookings' :
+                    activeSection === 'notifications' ? 'Notifications' :
+                      activeSection === 'profile' ? 'My Profile' :
+                        activeSection.replace('-', ' ')}
             </h1>
             <p className="text-gray-500 text-sm">Welcome back, {profile.name.split(' ')[0]} ✨</p>
           </div>
@@ -1004,51 +1076,51 @@ export function CustomerDashboard({
             <DialogDescription>Select a new date and time for your appointment.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-             <div className="space-y-2">
-               <Label>Select Date</Label>
-               <Popover>
-                 <PopoverTrigger asChild>
-                   <Button variant="outline" className="w-full justify-start text-left font-normal rounded-xl border-purple-100">
-                     <CalendarIcon className="mr-2 h-4 w-4 text-purple-500" />
-                     {format(rescheduleDate, 'PPP')}
-                   </Button>
-                 </PopoverTrigger>
-                 <PopoverContent className="w-auto p-0 rounded-2xl border-purple-50 shadow-xl">
-                   <CalendarPicker
-                     mode="single"
-                     selected={rescheduleDate}
-                     onSelect={(date) => date && setRescheduleDate(date)}
-                     disabled={(date) => date < new Date() || date > addDays(new Date(), 30)}
-                     initialFocus
-                   />
-                 </PopoverContent>
-               </Popover>
-             </div>
-             <div className="space-y-2">
-                <Label>Select Time Slot</Label>
-                {loadingSlots ? (
-                  <div className="flex justify-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500"></div>
-                  </div>
-                ) : rescheduleSlots.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-2">
-                     {rescheduleSlots.map((t) => (
-                       <Button 
-                         key={t}
-                         variant={rescheduleTime === t ? 'default' : 'outline'}
-                         className={`rounded-lg text-xs h-9 ${rescheduleTime === t ? 'bg-purple-600' : 'border-purple-50'}`}
-                         onClick={() => setRescheduleTime(t)}
-                       >{t}</Button>
-                     ))}
-                  </div>
-                ) : (
-                  <p className="text-center text-xs text-red-500 py-2">No available slots for this date.</p>
-                )}
-             </div>
+            <div className="space-y-2">
+              <Label>Select Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal rounded-xl border-purple-100">
+                    <CalendarIcon className="mr-2 h-4 w-4 text-purple-500" />
+                    {format(rescheduleDate, 'PPP')}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 rounded-2xl border-purple-50 shadow-xl">
+                  <CalendarPicker
+                    mode="single"
+                    selected={rescheduleDate}
+                    onSelect={(date) => date && setRescheduleDate(date)}
+                    disabled={(date) => date < new Date() || date > addDays(new Date(), 30)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label>Select Time Slot</Label>
+              {loadingSlots ? (
+                <div className="flex justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500"></div>
+                </div>
+              ) : rescheduleSlots.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {rescheduleSlots.map((t) => (
+                    <Button
+                      key={t}
+                      variant={rescheduleTime === t ? 'default' : 'outline'}
+                      className={`rounded-lg text-xs h-9 ${rescheduleTime === t ? 'bg-purple-600' : 'border-purple-50'}`}
+                      onClick={() => setRescheduleTime(t)}
+                    >{t}</Button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center text-xs text-red-500 py-2">No available slots for this date.</p>
+              )}
+            </div>
           </div>
           <DialogFooter>
-             <Button variant="outline" className="rounded-xl" onClick={() => setIsRescheduleDialogOpen(false)}>Cancel</Button>
-             <Button className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl" onClick={submitReschedule} disabled={loadingSlots || !rescheduleTime}>Confirm New Time</Button>
+            <Button variant="outline" className="rounded-xl" onClick={() => setIsRescheduleDialogOpen(false)}>Cancel</Button>
+            <Button className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl" onClick={submitReschedule} disabled={loadingSlots || !rescheduleTime}>Confirm New Time</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1062,26 +1134,26 @@ export function CustomerDashboard({
             <DialogDescription>How was your session at Bella Salon?</DialogDescription>
           </DialogHeader>
           <div className="space-y-6 py-4">
-             <div className="flex justify-center gap-2">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <button key={s} onClick={() => setReviewRating(s)}>
-                    <Star className={`w-10 h-10 ${s <= reviewRating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} />
-                  </button>
-                ))}
-             </div>
-             <div className="space-y-2">
-               <Label>Write a review (optional)</Label>
-               <Textarea 
-                 placeholder="Tell us what you liked about the service..."
-                 className="rounded-2xl border-purple-100 focus:border-purple-300 min-h-[100px]"
-                 value={reviewText}
-                 onChange={(e) => setReviewText(e.target.value)}
-               />
-             </div>
+            <div className="flex justify-center gap-2">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <button key={s} onClick={() => setReviewRating(s)}>
+                  <Star className={`w-10 h-10 ${s <= reviewRating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} />
+                </button>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <Label>Write a review (optional)</Label>
+              <Textarea
+                placeholder="Tell us what you liked about the service..."
+                className="rounded-2xl border-purple-100 focus:border-purple-300 min-h-[100px]"
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+              />
+            </div>
           </div>
           <DialogFooter>
-             <Button variant="outline" className="rounded-xl" onClick={() => setIsReviewDialogOpen(false)}>Maybe Later</Button>
-             <Button className="bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl" onClick={submitReview}>Submit Review</Button>
+            <Button variant="outline" className="rounded-xl" onClick={() => setIsReviewDialogOpen(false)}>Maybe Later</Button>
+            <Button className="bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl" onClick={submitReview}>Submit Review</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

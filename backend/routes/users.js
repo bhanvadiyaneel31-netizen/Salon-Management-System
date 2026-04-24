@@ -12,14 +12,15 @@ router.get('/me', verifyToken, async (req, res) => {
     const totalAppointments = await Appointment.countDocuments({ customerId: req.user.user_id });
 
     res.json({
-      id:                 user._id.toString(),
-      name:               user.name,
-      email:              user.email,
-      phone:              user.phone || '',
-      address:            user.address || '',
-      role:               user.role,
-      loyalty_points:     user.loyaltyPoints || 0,
-      created_at:         user.createdAt,
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      phone: user.phone || '',
+      address: user.address || '',
+      role: user.role,
+      profile_image: user.profileImage || '',
+      loyalty_points: user.loyaltyPoints || 0,
+      created_at: user.createdAt,
       total_appointments: totalAppointments,
     });
   } catch (error) {
@@ -31,9 +32,9 @@ router.get('/me', verifyToken, async (req, res) => {
 // PUT /api/users/update
 router.put('/update', verifyToken, async (req, res) => {
   const { id, name, email, phone, address, profile_image, role, specialty, reminders } = req.body;
-  const updaterId     = req.user.user_id;
-  const updaterRole   = req.user.role;
-  const targetUserId  = id || updaterId;
+  const updaterId = req.user.user_id;
+  const updaterRole = req.user.role;
+  const targetUserId = id || updaterId;
 
   try {
     const targetUser = await User.findById(targetUserId);
@@ -42,36 +43,36 @@ router.put('/update', verifyToken, async (req, res) => {
     if ((updaterRole === 'staff' || updaterRole === 'customer') && targetUserId !== updaterId)
       return res.status(403).json({ error: `${updaterRole.charAt(0).toUpperCase() + updaterRole.slice(1)} can only update their own profile` });
 
-    const userUpdates         = {};
+    const userUpdates = {};
     const staffProfileUpdates = {};
 
     // Reminder preferences (mapped to camelCase fields)
     if (reminders) {
       if (updaterRole === 'admin') return res.status(403).json({ error: 'You are not allowed to edit reminder preferences' });
-      if (reminders.email   !== undefined) userUpdates.reminderEmail  = reminders.email;
-      if (reminders.sms     !== undefined) userUpdates.reminderSms    = reminders.sms;
-      if (reminders.timing  !== undefined) userUpdates.reminderTiming = reminders.timing;
+      if (reminders.email !== undefined) userUpdates.reminderEmail = reminders.email;
+      if (reminders.sms !== undefined) userUpdates.reminderSms = reminders.sms;
+      if (reminders.timing !== undefined) userUpdates.reminderTiming = reminders.timing;
     }
 
     if (updaterRole === 'staff' || updaterRole === 'customer') {
       // Forbidden fields
       if (email && email !== targetUser.email) return res.status(403).json({ error: 'You are not allowed to edit the email field' });
-      if (role  && role  !== targetUser.role)  return res.status(403).json({ error: 'You are not allowed to edit the role field' });
+      if (role && role !== targetUser.role) return res.status(403).json({ error: 'You are not allowed to edit the role field' });
       if (specialty) return res.status(403).json({ error: 'You are not allowed to edit the specialty field' });
 
-      if (name)          userUpdates.name         = name;
-      if (phone)         userUpdates.phone         = phone;
-      if (address)       userUpdates.address       = address;
-      if (profile_image) userUpdates.profileImage  = profile_image;
+      if (name) userUpdates.name = name;
+      if (phone) userUpdates.phone = phone;
+      if (address) userUpdates.address = address;
+      if (profile_image) userUpdates.profileImage = profile_image;
     } else if (updaterRole === 'admin') {
       // Forbidden fields for admin
-      if (name          && name          !== targetUser.name)         return res.status(403).json({ error: 'You are not allowed to edit the name field' });
-      if (phone         && phone         !== targetUser.phone)        return res.status(403).json({ error: 'You are not allowed to edit the phone field' });
-      if (address       && address       !== targetUser.address)      return res.status(403).json({ error: 'You are not allowed to edit the address field' });
+      if (name && name !== targetUser.name) return res.status(403).json({ error: 'You are not allowed to edit the name field' });
+      if (phone && phone !== targetUser.phone) return res.status(403).json({ error: 'You are not allowed to edit the phone field' });
+      if (address && address !== targetUser.address) return res.status(403).json({ error: 'You are not allowed to edit the address field' });
       if (profile_image && profile_image !== targetUser.profileImage) return res.status(403).json({ error: 'You are not allowed to edit the profile image' });
 
-      if (email)    userUpdates.email = email;
-      if (role)     userUpdates.role  = role;
+      if (email) userUpdates.email = email;
+      if (role) userUpdates.role = role;
       if (specialty) staffProfileUpdates.specialty = specialty;
     }
 
@@ -84,20 +85,20 @@ router.put('/update', verifyToken, async (req, res) => {
     }
 
     const updatedUser = await User.findById(targetUserId);
-    const profile     = await StaffProfile.findOne({ userId: targetUserId });
+    const profile = await StaffProfile.findOne({ userId: targetUserId });
     const reviewCount = await Appointment.countDocuments({ staffId: targetUserId, status: 'completed' });
 
     res.status(200).json({
-      id:           updatedUser._id.toString(),
-      name:         updatedUser.name,
-      email:        updatedUser.email,
-      phone:        updatedUser.phone        || '',
-      role:         updatedUser.role,
-      address:      updatedUser.address      || '',
+      id: updatedUser._id.toString(),
+      name: updatedUser.name,
+      email: updatedUser.email,
+      phone: updatedUser.phone || '',
+      role: updatedUser.role,
+      address: updatedUser.address || '',
       profile_image: updatedUser.profileImage || '',
-      specialty:    profile?.specialty       || '',
+      specialty: profile?.specialty || '',
       review_count: reviewCount,
-      created_at:   updatedUser.createdAt,
+      created_at: updatedUser.createdAt,
     });
   } catch (error) {
     console.error('User update error:', error);
