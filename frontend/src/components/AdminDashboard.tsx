@@ -178,7 +178,7 @@ export function AdminDashboard({
         totalClients: 0,
         hoursWorked: 0,
         joinDate: s.created_at ? s.created_at.split('T')[0] : '',
-        avatar: '/api/placeholder/40/40'
+        profile_image: s.profile_image || null
       }));
       setStaffMembers(normalized);
     } catch (err) {
@@ -769,6 +769,27 @@ export function AdminDashboard({
       toast.error('Failed to export report.', { id: 'export-toast' });
     }
   };
+  // Helper: renders a staff avatar — real photo when available, initials gradient otherwise
+  const StaffAvatar = ({ staff, size = 'md' }: { staff: any; size?: 'sm' | 'md' | 'lg' }) => {
+    const dims = size === 'sm' ? 'w-8 h-8 text-xs' : size === 'lg' ? 'w-20 h-20 text-2xl' : 'w-10 h-10 text-sm';
+    const initials = staff.name.split(' ').map((n: string) => n[0]).join('');
+    if (staff.profile_image) {
+      return (
+        <img
+          src={staff.profile_image}
+          alt={staff.name}
+          className={`${dims} rounded-full object-cover flex-shrink-0 border-2 border-purple-100`}
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget.nextSibling as HTMLElement | null)?.style?.removeProperty('display'); }}
+        />
+      );
+    }
+    return (
+      <div className={`${dims} bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0`}>
+        <span className="text-white font-bold">{initials}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="py-4 lg:py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto space-y-6 lg:space-y-8">
@@ -1312,11 +1333,7 @@ export function AdminDashboard({
                               <TableCell className="font-medium">#{staff.id.toString().padStart(3, '0')}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                                    <span className="text-white text-sm font-bold">
-                                      {staff.name.split(' ').map(n => n[0]).join('')}
-                                    </span>
-                                  </div>
+                                  <StaffAvatar staff={staff} size="sm" />
                                   <div>
                                     <div className="font-medium">{staff.name}</div>
                                     <div className="text-sm text-gray-500">{staff.specialty}</div>
@@ -1400,11 +1417,7 @@ export function AdminDashboard({
                         <Card key={staff.id} className="p-4 border-purple-100">
                           <div className="flex justify-between items-start mb-3">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                <span className="text-white font-bold">
-                                  {staff.name.split(' ').map(n => n[0]).join('')}
-                                </span>
-                              </div>
+                              <StaffAvatar staff={staff} size="md" />
                               <div>
                                 <div className="font-medium text-gray-900">{staff.name}</div>
                                 <div className="text-sm text-gray-500">#{staff.id.toString().padStart(3, '0')}</div>
@@ -2337,11 +2350,7 @@ export function AdminDashboard({
                             <TableRow key={staff.id}>
                               <TableCell>
                                 <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                                    <span className="text-white text-sm font-bold">
-                                      {staff.name.split(' ').map(n => n[0]).join('')}
-                                    </span>
-                                  </div>
+                                  <StaffAvatar staff={staff} size="sm" />
                                   <div>
                                     <div className="font-medium">{staff.name}</div>
                                     <div className="text-sm text-gray-500">{staff.role}</div>
@@ -2381,11 +2390,7 @@ export function AdminDashboard({
                         <Card key={staff.id} className="p-4 border-purple-100">
                           <div className="flex justify-between items-start mb-3">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                <span className="text-white font-bold">
-                                  {staff.name.split(' ').map(n => n[0]).join('')}
-                                </span>
-                              </div>
+                              <StaffAvatar staff={staff} size="md" />
                               <div>
                                 <div className="font-medium text-gray-900">{staff.name}</div>
                                 <div className="text-sm text-gray-500">{staff.role}</div>
@@ -2863,10 +2868,8 @@ export function AdminDashboard({
 
                   {/* Profile Hero Card */}
                   <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 text-center border border-purple-100">
-                    <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mx-auto flex items-center justify-center mb-4 shadow-md">
-                      <span className="text-white text-2xl font-bold">
-                        {selectedStaff.name.split(' ').map((n: string) => n[0]).join('')}
-                      </span>
+                    <div className="flex justify-center mb-4">
+                      <StaffAvatar staff={selectedStaff} size="lg" />
                     </div>
                     <h3 className="text-xl font-bold text-gray-900 mb-1">{selectedStaff.name}</h3>
                     <p className="text-sm text-gray-500 mb-3">{selectedStaff.role}</p>
@@ -3134,11 +3137,7 @@ export function AdminDashboard({
                             onClick={() => assignStaffToAppointment(selectedAppointment.id, staff.id)}
                           >
                             <div className="flex items-center gap-3 w-full">
-                              <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
-                                <span className="text-white text-sm font-bold">
-                                  {staff.name.split(' ').map((n: string) => n[0]).join('')}
-                                </span>
-                              </div>
+                              <StaffAvatar staff={staff} size="md" />
                               <div className="text-left flex-1 min-w-0">
                                 <div className="font-semibold text-gray-900 truncate">{staff.name}</div>
                                 <div className="text-xs text-gray-500 truncate">{staff.role}</div>
