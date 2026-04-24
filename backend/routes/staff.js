@@ -28,6 +28,7 @@ router.get('/', async (req, res) => {
         name: u.name,
         email: u.email,
         phone: u.phone || '',
+        role: u.role || 'staff',
         category: p?.category || '',
         specialty: p?.specialty || '',
         rating: p?.rating || 0,

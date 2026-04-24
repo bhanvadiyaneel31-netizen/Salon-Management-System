@@ -168,7 +168,7 @@ export function AdminDashboard({
         name: s.name,
         email: s.email,
         phone: s.phone || '',
-        role: s.category || 'Staff',
+        role: s.role || 'staff',
         category: s.category || 'Hair',
         status: s.is_available ? 'active' : 'inactive',
         specialty: s.specialty || '',
