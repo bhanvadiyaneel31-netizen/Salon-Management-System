@@ -68,11 +68,19 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
   }, []);
 
   // Load staff when service is selected
+  // FIX: Also depends on `services` and `loadingServices` to handle the race condition
+  // where initialServiceId is set before services have finished loading from the API.
   useEffect(() => {
     if (!selectedService) {
       setStaffList([]);
       return;
     }
+
+    // Wait until services have finished loading before attempting staff lookup
+    if (loadingServices) {
+      return;
+    }
+
     const loadStaff = async () => {
       setLoadingStaff(true);
       try {
@@ -83,7 +91,7 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
         console.log("Selected Service:", selectedServiceData);
 
         if (!selectedServiceData) {
-          console.error("Service not found");
+          console.error("Service not found in loaded services list");
           setStaffList([]);
           return;
         }
@@ -101,7 +109,7 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
       }
     };
     loadStaff();
-  }, [selectedService]);
+  }, [selectedService, services, loadingServices]);
 
   // Load slots when step 3 is reached and date is selected
   useEffect(() => {
