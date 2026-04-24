@@ -35,6 +35,7 @@ import {
   Heart,
   Eye,
   Edit,
+  Trash2,
   CheckCircle2,
   AlertCircle,
   XCircle,
@@ -123,6 +124,25 @@ export function CustomerDashboard({
       reader.readAsDataURL(file);
     } catch {
       toast.error('Failed to process image');
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleRemoveProfileImage = async () => {
+    if (!profileForm.profile_image && !profile.profile_image) return;
+    if (!window.confirm('Remove your profile picture?')) return;
+    setIsUploadingImage(true);
+    try {
+      await api.auth.updateProfile({ profile_image: '' });
+      setProfileForm(prev => ({ ...prev, profile_image: '' }));
+      setProfile(prev => ({ ...prev, profile_image: '' }));
+      // Sync to localStorage so header avatar updates immediately
+      const stored = api.auth.getCurrentUser();
+      if (stored) localStorage.setItem('user', JSON.stringify({ ...stored, profile_image: '' }));
+      toast.success('Profile picture removed');
+    } catch {
+      toast.error('Failed to remove profile picture');
+    } finally {
       setIsUploadingImage(false);
     }
   };
@@ -906,7 +926,18 @@ export function CustomerDashboard({
                 )}
               </button>
             </div>
-            <p className="text-[10px] text-gray-400 mb-3">Click the icon to change photo</p>
+            <p className="text-[10px] text-gray-400 mb-1">Click the icon to change photo</p>
+            {(profileForm.profile_image || profile.profile_image) && (
+              <button
+                onClick={handleRemoveProfileImage}
+                disabled={isUploadingImage}
+                className="text-[10px] text-red-400 hover:text-red-600 flex items-center gap-1 mx-auto mb-2 disabled:opacity-40 transition-colors"
+                title="Remove profile picture"
+              >
+                <Trash2 className="w-3 h-3" />
+                Remove photo
+              </button>
+            )}
             <h3 className="font-bold text-gray-900 text-lg">{profile.name}</h3>
             <p className="text-sm text-gray-500">Member since {safeFormatDate(profile.joinDate, 'MMM yyyy')}</p>
 

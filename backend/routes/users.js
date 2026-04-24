@@ -63,7 +63,7 @@ router.put('/update', verifyToken, async (req, res) => {
       if (name) userUpdates.name = name;
       if (phone) userUpdates.phone = phone;
       if (address) userUpdates.address = address;
-      if (profile_image) userUpdates.profileImage = profile_image;
+      if (profile_image !== undefined) userUpdates.profileImage = profile_image; // allow '' to clear
     } else if (updaterRole === 'admin') {
       // Forbidden fields for admin
       if (name && name !== targetUser.name) return res.status(403).json({ error: 'You are not allowed to edit the name field' });

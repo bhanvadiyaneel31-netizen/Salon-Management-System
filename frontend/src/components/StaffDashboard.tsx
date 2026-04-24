@@ -19,6 +19,7 @@ import {
   Menu,
   Star,
   Camera,
+  Trash2,
   MapPin,
   Phone,
   Mail,
@@ -177,6 +178,24 @@ export function StaffDashboard({
       reader.readAsDataURL(file);
     } catch {
       toast.error('Failed to process image');
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleRemoveProfileImage = async () => {
+    if (!profileForm.profile_image) return;
+    if (!window.confirm('Remove your profile picture?')) return;
+    setIsUploadingImage(true);
+    try {
+      await staffAPI.updateProfile({ profile_image: '' });
+      const updatedUser = { ...userData, profile_image: '' };
+      setUserData(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setProfileForm(prev => ({ ...prev, profile_image: '' }));
+      toast.success('Profile picture removed');
+    } catch {
+      toast.error('Failed to remove profile picture');
+    } finally {
       setIsUploadingImage(false);
     }
   };
@@ -873,6 +892,17 @@ export function StaffDashboard({
                 )}
               </button>
             </div>
+            {profileForm.profile_image && (
+              <button
+                onClick={handleRemoveProfileImage}
+                disabled={isUploadingImage}
+                className="text-[10px] text-red-400 hover:text-red-600 flex items-center gap-1 mx-auto mt-1 mb-2 disabled:opacity-40 transition-colors"
+                title="Remove profile picture"
+              >
+                <Trash2 className="w-3 h-3" />
+                Remove photo
+              </button>
+            )}
             <h3 className="font-bold text-gray-900">{profileForm.name}</h3>
             <p className="text-xs text-gray-500 uppercase tracking-widest mt-1">{userData?.role}</p>
 
