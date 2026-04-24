@@ -407,6 +407,13 @@ export const staffAPI = {
 
   async getRating(id: string): Promise<{ average: number; count: number }> {
     return apiRequest<{ average: number; count: number }>(`/staff/${id}/rating`);
+  },
+
+  async assignServices(staffId: string, serviceIds: string[]): Promise<{ id: string; name: string; assigned_service_ids: string[] }> {
+    return apiRequest(`/staff/${staffId}/services`, {
+      method: 'PATCH',
+      body: JSON.stringify({ service_ids: serviceIds }),
+    });
   }
 };
 

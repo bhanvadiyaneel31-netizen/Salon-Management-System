@@ -9,7 +9,7 @@ const { requireAdmin, verifyToken } = require('../middleware/authMiddleware');
 router.get('/', async (req, res) => {
   try {
     const staffUsers = await User.find({ role: 'staff' });
-    const profiles   = await StaffProfile.find({ userId: { $in: staffUsers.map(u => u._id) } });
+    const profiles = await StaffProfile.find({ userId: { $in: staffUsers.map(u => u._id) } });
 
     const profileMap = {};
     profiles.forEach(p => { profileMap[p.userId.toString()] = p; });
@@ -24,18 +24,18 @@ router.get('/', async (req, res) => {
     const formatted = staffUsers.map(u => {
       const p = profileMap[u._id.toString()];
       return {
-        id:                    u._id.toString(),
-        name:                  u.name,
-        email:                 u.email,
-        phone:                 u.phone || '',
-        category:              p?.category || '',
-        specialty:             p?.specialty || '',
-        rating:                p?.rating || 0,
-        is_available:          p?.isAvailable ?? true,
-        created_at:            p?.createdAt || u.createdAt,
+        id: u._id.toString(),
+        name: u.name,
+        email: u.email,
+        phone: u.phone || '',
+        category: p?.category || '',
+        specialty: p?.specialty || '',
+        rating: p?.rating || 0,
+        is_available: p?.isAvailable ?? true,
+        created_at: p?.createdAt || u.createdAt,
         completed_appointments: countMap[u._id.toString()] || 0,
-        services:              (p?.services || []).map(id => id.toString()),
-        assigned_service_ids:  (p?.services || []).map(id => id.toString()),
+        services: (p?.services || []).map(id => id.toString()),
+        assigned_service_ids: (p?.services || []).map(id => id.toString()),
       };
     });
 
@@ -80,14 +80,14 @@ router.get('/available', async (req, res) => {
       const u = userMap[p.userId.toString()];
       if (!u) return null;
       return {
-        id:           u._id.toString(),
-        name:         u.name,
-        email:        u.email,
-        category:     p.category || '',
-        specialty:    p.specialty || '',
-        rating:       p.rating || 0,
+        id: u._id.toString(),
+        name: u.name,
+        email: u.email,
+        category: p.category || '',
+        specialty: p.specialty || '',
+        rating: p.rating || 0,
         is_available: p.isAvailable,
-        services:     p.services.map(id => id.toString()),
+        services: p.services.map(id => id.toString()),
       };
     }).filter(Boolean);
 
@@ -104,7 +104,7 @@ router.get('/:id', async (req, res) => {
   const staffId = req.params.id;
   try {
     if (!mongoose.Types.ObjectId.isValid(staffId)) return res.status(400).json({ error: 'Invalid staff ID' });
-    
+
     const user = await User.findOne({ _id: staffId, role: 'staff' });
     if (!user) return res.status(404).json({ error: 'Staff member not found' });
 
@@ -112,18 +112,18 @@ router.get('/:id', async (req, res) => {
     const appointmentCount = await Appointment.countDocuments({ staffId, status: 'completed' });
 
     res.json({
-      id:           user._id.toString(),
-      name:         user.name,
-      email:        user.email,
-      phone:        user.phone || '',
-      category:     profile?.category || '',
-      specialty:    profile?.specialty || '',
-      rating:       profile?.rating || 0,
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      phone: user.phone || '',
+      category: profile?.category || '',
+      specialty: profile?.specialty || '',
+      rating: profile?.rating || 0,
       is_available: profile?.isAvailable ?? true,
-      services:     (profile?.services || []).map(s => ({ id: s._id.toString(), name: s.name })),
+      services: (profile?.services || []).map(s => ({ id: s._id.toString(), name: s.name })),
       assigned_service_ids: (profile?.services || []).map(s => s._id.toString()),
       completed_appointments: appointmentCount,
-      created_at:   user.createdAt,
+      created_at: user.createdAt,
     });
   } catch (error) {
     console.error('[STAFF] Failed to fetch staff detail:', error.message);
@@ -138,7 +138,7 @@ router.get('/:id/services', async (req, res) => {
     const staffUser = await User.findOne({ _id: req.params.id, role: 'staff' });
     if (!staffUser) return res.status(404).json({ error: 'Staff not found' });
 
-    const profile  = await StaffProfile.findOne({ userId: req.params.id }).populate('services', 'id name category');
+    const profile = await StaffProfile.findOne({ userId: req.params.id }).populate('services', 'id name category');
     const services = profile ? profile.services : [];
 
     res.json({
@@ -156,7 +156,7 @@ router.patch('/profile', verifyToken, async (req, res) => {
   if (req.user.role !== 'staff') return res.status(403).json({ error: 'Only staff members can update their profile here' });
 
   const staffId = req.user.user_id;
-  
+
   // Rule: Staff cannot update role or primary category
   const restrictedFields = ['role', 'category'];
   for (const field of restrictedFields) {
@@ -170,7 +170,7 @@ router.patch('/profile', verifyToken, async (req, res) => {
   try {
     const updates = {};
 
-    if (name)  updates.name  = name.trim();
+    if (name) updates.name = name.trim();
     if (phone !== undefined) updates.phone = phone.trim() || null;
     if (address !== undefined) updates.address = address.trim() || null;
     if (profile_image !== undefined) updates.profileImage = profile_image || null;
@@ -185,11 +185,11 @@ router.patch('/profile', verifyToken, async (req, res) => {
       if (!currentPassword) return res.status(400).json({ error: 'Current password is required to set a new password' });
       const user = await User.findById(staffId).select('+passwordHash');
       if (!user) return res.status(404).json({ error: 'User not found' });
-      
+
       const rawUser = await User.findById(staffId).lean().select('+passwordHash');
       const isMatch = await bcrypt.compare(currentPassword, rawUser.passwordHash);
       if (!isMatch) return res.status(401).json({ error: 'Incorrect current password' });
-      
+
       const salt = await bcrypt.genSalt(10);
       updates.passwordHash = await bcrypt.hash(password, salt);
     }
@@ -199,17 +199,17 @@ router.patch('/profile', verifyToken, async (req, res) => {
     }
 
     const updatedUser = await User.findById(staffId);
-    const profile     = await StaffProfile.findOne({ userId: staffId });
+    const profile = await StaffProfile.findOne({ userId: staffId });
 
     res.json({
-      id:           updatedUser._id.toString(),
-      name:         updatedUser.name,
-      email:        updatedUser.email,
-      phone:        updatedUser.phone || '',
-      address:      updatedUser.address || '',
+      id: updatedUser._id.toString(),
+      name: updatedUser.name,
+      email: updatedUser.email,
+      phone: updatedUser.phone || '',
+      address: updatedUser.address || '',
       profile_image: updatedUser.profileImage || '',
-      category:     profile?.category || '',
-      specialty:    profile?.specialty || '',
+      category: profile?.category || '',
+      specialty: profile?.specialty || '',
       is_available: profile?.isAvailable ?? true,
     });
   } catch (error) {
@@ -232,13 +232,13 @@ router.post('/', requireAdmin, async (req, res) => {
     const profile = await StaffProfile.create({ userId: newUser._id, category, specialty: '', rating: 0, isAvailable: true });
 
     res.status(201).json({
-      id:           newUser._id.toString(),
-      name:         newUser.name,
-      email:        newUser.email,
-      phone:        newUser.phone || '',
-      category:     profile.category,
-      specialty:    profile.specialty,
-      rating:       profile.rating,
+      id: newUser._id.toString(),
+      name: newUser.name,
+      email: newUser.email,
+      phone: newUser.phone || '',
+      category: profile.category,
+      specialty: profile.specialty,
+      rating: profile.rating,
       is_available: profile.isAvailable,
     });
   } catch (error) {
@@ -251,7 +251,7 @@ router.post('/', requireAdmin, async (req, res) => {
 // ---------- PATCH /api/staff/:id (admin updates staff category/status/role) ----------
 router.patch('/:id', requireAdmin, async (req, res) => {
   const staffId = req.params.id;
-  
+
   // Rule: Admins cannot update personal details
   const restrictedFields = ['name', 'email', 'phone', 'password', 'address', 'profile_image'];
   for (const field of restrictedFields) {
@@ -287,15 +287,15 @@ router.patch('/:id', requireAdmin, async (req, res) => {
 
     const profile = await StaffProfile.findOne({ userId: staffId });
     const freshUser = await User.findById(staffId);
-    
+
     res.json({
-      id:           freshUser._id.toString(),
-      name:         freshUser.name,
-      email:        freshUser.email,
-      phone:        freshUser.phone || '',
-      category:     profile?.category || '',
-      specialty:    profile?.specialty || '',
-      rating:       profile?.rating || 0,
+      id: freshUser._id.toString(),
+      name: freshUser.name,
+      email: freshUser.email,
+      phone: freshUser.phone || '',
+      category: profile?.category || '',
+      specialty: profile?.specialty || '',
+      rating: profile?.rating || 0,
       is_available: profile?.isAvailable ?? true,
     });
   } catch (error) {
@@ -318,6 +318,57 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('[STAFF DELETE ERROR]', { id: staffId, error: error.message });
     res.status(500).json({ error: 'Failed to delete staff member' });
+  }
+});
+
+// ---------- PATCH /api/staff/:id/services (admin assigns services to staff) ----------
+router.patch('/:id/services', requireAdmin, async (req, res) => {
+  const staffId = req.params.id;
+  const { service_ids } = req.body;
+
+  if (!Array.isArray(service_ids)) {
+    return res.status(400).json({ error: 'service_ids must be an array' });
+  }
+
+  try {
+    if (!mongoose.Types.ObjectId.isValid(staffId)) {
+      return res.status(400).json({ error: 'Invalid staff ID' });
+    }
+
+    const user = await User.findOne({ _id: staffId, role: 'staff' });
+    if (!user) return res.status(404).json({ error: 'Staff member not found' });
+
+    // Validate all service_ids are valid ObjectIds and exist
+    const validIds = service_ids.filter(id => mongoose.Types.ObjectId.isValid(id));
+    const objectIds = validIds.map(id => new mongoose.Types.ObjectId(id));
+
+    // Verify services exist
+    const foundServices = await Service.find({ _id: { $in: objectIds } });
+    if (foundServices.length !== objectIds.length) {
+      return res.status(400).json({ error: 'One or more service IDs are invalid or do not exist' });
+    }
+
+    // Update the StaffProfile services array
+    const updatedProfile = await StaffProfile.findOneAndUpdate(
+      { userId: staffId },
+      { $set: { services: objectIds } },
+      { new: true }
+    );
+
+    if (!updatedProfile) {
+      return res.status(404).json({ error: 'Staff profile not found' });
+    }
+
+    console.log(`[STAFF] Updated services for staff ${staffId}:`, objectIds);
+
+    res.json({
+      id: user._id.toString(),
+      name: user.name,
+      assigned_service_ids: updatedProfile.services.map(id => id.toString()),
+    });
+  } catch (error) {
+    console.error('[STAFF] Failed to update staff services:', error.message);
+    res.status(500).json({ error: 'Failed to update staff services' });
   }
 });
 

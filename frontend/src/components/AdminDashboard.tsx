@@ -2759,98 +2759,115 @@ export function AdminDashboard({
 
           {/* Staff Details Sheet */}
           <Sheet open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-            <SheetContent className="w-full sm:max-w-md">
-              <SheetHeader>
-                <SheetTitle>Staff Details</SheetTitle>
-                <SheetDescription>
-                  Complete profile and performance information
-                </SheetDescription>
-              </SheetHeader>
+            <SheetContent className="w-full sm:max-w-md overflow-y-auto p-0">
+              {/* Header */}
+              <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+                <SheetHeader>
+                  <SheetTitle className="text-lg font-bold text-gray-900">Staff Details</SheetTitle>
+                  <SheetDescription className="text-sm text-gray-500">
+                    Complete profile and performance information
+                  </SheetDescription>
+                </SheetHeader>
+              </div>
+
               {selectedStaff && (
-                <div className="space-y-6 mt-6">
-                  {/* Profile Section */}
-                  <div className="text-center">
-                    <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mx-auto flex items-center justify-center mb-4">
+                <div className="px-6 py-6 space-y-6">
+
+                  {/* Profile Hero Card */}
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 text-center border border-purple-100">
+                    <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mx-auto flex items-center justify-center mb-4 shadow-md">
                       <span className="text-white text-2xl font-bold">
                         {selectedStaff.name.split(' ').map((n: string) => n[0]).join('')}
                       </span>
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900">{selectedStaff.name}</h3>
-                    <p className="text-gray-600">{selectedStaff.role}</p>
+                    <h3 className="text-xl font-bold text-gray-900 mb-1">{selectedStaff.name}</h3>
+                    <p className="text-sm text-gray-500 mb-3">{selectedStaff.role}</p>
                     <Badge className={getStaffStatusColor(selectedStaff.status)} variant="secondary">
                       {selectedStaff.status.charAt(0).toUpperCase() + selectedStaff.status.slice(1)}
                     </Badge>
                   </div>
 
-                  {/* Contact Info */}
-                  <div className="space-y-3">
-                    <h4 className="font-semibold text-gray-900">Contact Information</h4>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-3">
-                        <Mail className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm">{selectedStaff.email}</span>
+                  {/* Contact Information */}
+                  <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">Contact Information</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Mail className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs text-gray-400 mb-0.5">Email</p>
+                          <p className="text-sm font-medium text-gray-800 truncate">{selectedStaff.email}</p>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <Phone className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm">{selectedStaff.phone}</span>
+                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                        <div className="w-8 h-8 bg-pink-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Phone className="w-4 h-4 text-pink-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs text-gray-400 mb-0.5">Phone</p>
+                          <p className="text-sm font-medium text-gray-800">{selectedStaff.phone || '—'}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Performance Metrics */}
-                  <div className="space-y-3">
-                    <h4 className="font-semibold text-gray-900">Performance Metrics</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-purple-50 p-3 rounded-xl text-center">
-                        <div className="text-2xl font-bold text-purple-600">{selectedStaff.appointments}</div>
-                        <div className="text-xs text-purple-600">Total Completed</div>
+                  <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">Performance Metrics</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-purple-50 border border-purple-100 rounded-xl p-4 text-center">
+                        <div className="text-3xl font-bold text-purple-600 mb-1">{selectedStaff.appointments}</div>
+                        <div className="text-xs font-medium text-purple-500">Total Completed</div>
                       </div>
-                      <div className="bg-pink-50 p-3 rounded-xl text-center">
-                        <div className="text-2xl font-bold text-pink-600">{selectedStaff.rating.toFixed(1)}</div>
-                        <div className="text-xs text-pink-600">Avg Rating</div>
+                      <div className="bg-pink-50 border border-pink-100 rounded-xl p-4 text-center">
+                        <div className="text-3xl font-bold text-pink-600 mb-1">{selectedStaff.rating.toFixed(1)}</div>
+                        <div className="text-xs font-medium text-pink-500">Avg Rating</div>
                       </div>
                     </div>
                   </div>
 
                   {/* Assigned Services */}
-                  <div className="space-y-3">
-                    <h4 className="font-semibold text-gray-900">Assigned Services</h4>
+                  <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">Assigned Services</h4>
                     <div className="flex flex-wrap gap-2">
                       {selectedStaff.assigned_service_ids?.length > 0 ? (
                         selectedStaff.assigned_service_ids.map((id: number) => {
                           const service = services.find(s => s.id === id);
                           return (
-                            <Badge key={id} variant="outline" className="border-purple-200 text-purple-600">
+                            <Badge key={id} variant="outline" className="border-purple-200 text-purple-700 bg-purple-50 px-3 py-1 text-xs font-medium rounded-lg">
                               {service ? service.name : `Service #${id}`}
                             </Badge>
                           );
                         })
                       ) : (
-                        <span className="text-sm text-gray-500 italic">No services assigned</span>
+                        <p className="text-sm text-gray-400 italic">No services assigned yet</p>
                       )}
                     </div>
                   </div>
 
-                  {/* Additional Info */}
-                  <div className="space-y-3">
-                    <h4 className="font-semibold text-gray-900">Additional Information</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Specialty:</span>
-                        <span className="font-medium">{selectedStaff.specialty}</span>
+                  {/* Additional Information */}
+                  <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">Additional Information</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between py-2 border-b border-gray-50">
+                        <span className="text-sm text-gray-500">Specialty</span>
+                        <span className="text-sm font-semibold text-gray-800">{selectedStaff.specialty || '—'}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Join Date:</span>
-                        <span className="font-medium">{new Date(selectedStaff.joinDate).toLocaleDateString()}</span>
+                      <div className="flex items-center justify-between py-2">
+                        <span className="text-sm text-gray-500">Join Date</span>
+                        <span className="text-sm font-semibold text-gray-800">
+                          {selectedStaff.joinDate ? new Date(selectedStaff.joinDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
+                        </span>
                       </div>
                     </div>
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex gap-2 pt-4">
+                  <div className="flex gap-3 pb-2">
                     <Button
                       variant="outline"
-                      className="flex-1"
+                      className="flex-1 border-2 border-gray-200 hover:border-purple-300 hover:bg-purple-50 text-gray-700 rounded-xl py-2.5"
                       onClick={() => {
                         setIsDetailsOpen(false);
                         openEditStaff(selectedStaff);
@@ -2859,11 +2876,12 @@ export function AdminDashboard({
                       <Edit className="w-4 h-4 mr-2" />
                       Edit Profile
                     </Button>
-                    <Button className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+                    <Button className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl py-2.5 shadow-sm">
                       <Calendar className="w-4 h-4 mr-2" />
                       View Schedule
                     </Button>
                   </div>
+
                 </div>
               )}
             </SheetContent>
