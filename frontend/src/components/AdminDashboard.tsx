@@ -287,6 +287,7 @@ export function AdminDashboard({
     specialty: '',
     role: 'staff'
   });
+  const [selectedServiceIds, setSelectedServiceIds] = useState<number[]>([]);
 
   const handleLogout = () => {
     setUserRole(null);
@@ -476,6 +477,7 @@ export function AdminDashboard({
       specialty: '',
       role: 'staff'
     });
+    setSelectedServiceIds([]);
   };
 
   const handleAddStaff = async () => {
@@ -484,13 +486,13 @@ export function AdminDashboard({
       return;
     }
     try {
-      // Admins can only set Name, Email, Password, and Category on creation
       await staffAPI.create({
         name: staffForm.name,
         email: staffForm.email,
         password: staffForm.password,
         category: staffForm.category,
-        status: staffForm.status || 'active'
+        status: staffForm.status || 'active',
+        service_ids: selectedServiceIds
       } as any);
       toast.success(`${staffForm.name} has been added to the team!`);
       resetForm();
@@ -512,11 +514,12 @@ export function AdminDashboard({
 
     setIsLoading(true);
     try {
-      // Admins can update Role, Primary Service Category, and Status
+      // Admins can update Role, Primary Service Category, Status, and Services
       await staffAPI.update(editingStaff.id, {
         category: staffForm.category,
         status: staffForm.status,
-        role: staffForm.role
+        role: staffForm.role,
+        service_ids: selectedServiceIds
       });
 
       toast.success('Staff details updated successfully!');
@@ -556,6 +559,7 @@ export function AdminDashboard({
       specialty: staff.specialty || '',
       role: staff.role || 'staff'
     });
+    setSelectedServiceIds(staff.assigned_service_ids || []);
     setIsEditStaffOpen(true);
   };
 
@@ -1106,7 +1110,10 @@ export function AdminDashboard({
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="category">Primary Service Category *</Label>
-                        <Select value={staffForm.category} onValueChange={(value) => setStaffForm(prev => ({ ...prev, category: value }))}>
+                        <Select value={staffForm.category} onValueChange={(value) => {
+                          setStaffForm(prev => ({ ...prev, category: value }));
+                          setSelectedServiceIds([]);
+                        }}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select category" />
                           </SelectTrigger>
@@ -1128,6 +1135,45 @@ export function AdminDashboard({
                         />
                         <Label htmlFor="active">Active Status</Label>
                       </div>
+                      {services.length > 0 && (
+                        <div className="space-y-2">
+                          <Label>Assign Services <span className="text-xs text-gray-400 font-normal">(filtered by category)</span></Label>
+                          {(() => {
+                            const filtered = services.filter((s: any) =>
+                              s.category?.toLowerCase() === staffForm.category?.toLowerCase()
+                            );
+                            if (filtered.length === 0) return (
+                              <p className="text-xs text-gray-400 italic px-1">No services found for "{staffForm.category}" category.</p>
+                            );
+                            return (
+                              <>
+                                <div className="border border-purple-100 rounded-xl p-3 max-h-40 overflow-y-auto space-y-2 bg-purple-50/30">
+                                  {filtered.map((service: any) => (
+                                    <label key={service.id} className="flex items-center gap-2 cursor-pointer hover:bg-purple-50 p-1.5 rounded-lg transition-colors">
+                                      <input
+                                        type="checkbox"
+                                        className="accent-purple-500 w-4 h-4"
+                                        checked={selectedServiceIds.includes(service.id)}
+                                        onChange={(e) => {
+                                          setSelectedServiceIds(prev =>
+                                            e.target.checked
+                                              ? [...prev, service.id]
+                                              : prev.filter(id => id !== service.id)
+                                          );
+                                        }}
+                                      />
+                                      <span className="text-sm text-gray-700">{service.name}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                                {selectedServiceIds.length > 0 && (
+                                  <p className="text-xs text-purple-600">{selectedServiceIds.length} service(s) selected</p>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )}
                     </div>
                     <DialogFooter className="gap-2">
                       <Button variant="outline" onClick={() => {
@@ -2708,7 +2754,10 @@ export function AdminDashboard({
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-category">Primary Service Category *</Label>
-                  <Select value={staffForm.category} onValueChange={(value) => setStaffForm(prev => ({ ...prev, category: value }))}>
+                  <Select value={staffForm.category} onValueChange={(value) => {
+                    setStaffForm(prev => ({ ...prev, category: value }));
+                    setSelectedServiceIds([]);
+                  }}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
@@ -2730,6 +2779,45 @@ export function AdminDashboard({
                   />
                   <Label htmlFor="edit-active">Active Status</Label>
                 </div>
+                {services.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Assign Services <span className="text-xs text-gray-400 font-normal">(filtered by category)</span></Label>
+                    {(() => {
+                      const filtered = services.filter((s: any) =>
+                        s.category?.toLowerCase() === staffForm.category?.toLowerCase()
+                      );
+                      if (filtered.length === 0) return (
+                        <p className="text-xs text-gray-400 italic px-1">No services found for "{staffForm.category}" category.</p>
+                      );
+                      return (
+                        <>
+                          <div className="border border-purple-100 rounded-xl p-3 max-h-40 overflow-y-auto space-y-2 bg-purple-50/30">
+                            {filtered.map((service: any) => (
+                              <label key={service.id} className="flex items-center gap-2 cursor-pointer hover:bg-purple-50 p-1.5 rounded-lg transition-colors">
+                                <input
+                                  type="checkbox"
+                                  className="accent-purple-500 w-4 h-4"
+                                  checked={selectedServiceIds.includes(service.id)}
+                                  onChange={(e) => {
+                                    setSelectedServiceIds(prev =>
+                                      e.target.checked
+                                        ? [...prev, service.id]
+                                        : prev.filter(id => id !== service.id)
+                                    );
+                                  }}
+                                />
+                                <span className="text-sm text-gray-700">{service.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                          {selectedServiceIds.length > 0 && (
+                            <p className="text-xs text-purple-600">{selectedServiceIds.length} service(s) selected</p>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
               <DialogFooter className="gap-2">
                 <Button variant="outline" onClick={() => {
