@@ -60,7 +60,7 @@ router.get('/available', async (req, res) => {
         return res.status(400).json({ error: 'Invalid service_id format' });
       }
       // Query staff who have this specific service in their services array
-      profileQuery.services = new mongoose.Types.ObjectId(service_id);
+      profileQuery.services = { $in: [new mongoose.Types.ObjectId(service_id)] };
     }
 
     console.log(`[STAFF] Querying StaffProfile with:`, profileQuery);
@@ -220,7 +220,7 @@ router.patch('/profile', verifyToken, async (req, res) => {
 
 // ---------- POST /api/staff (admin creates staff) ----------
 router.post('/', requireAdmin, async (req, res) => {
-  const { name, email, category, password } = req.body;
+  const { name, email, category, password, service_ids = [] } = req.body;
   if (!name || !email || !password || !category)
     return res.status(400).json({ error: 'name, email, password, and category are required' });
 
@@ -228,8 +228,20 @@ router.post('/', requireAdmin, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    // Validate and convert service_ids to ObjectIds
+    const validServiceIds = service_ids
+      .filter(id => mongoose.Types.ObjectId.isValid(id))
+      .map(id => new mongoose.Types.ObjectId(id));
+
     const newUser = await User.create({ name, email, passwordHash, role: 'staff' });
-    const profile = await StaffProfile.create({ userId: newUser._id, category, specialty: '', rating: 0, isAvailable: true });
+    const profile = await StaffProfile.create({
+      userId: newUser._id,
+      category,
+      services: validServiceIds,
+      specialty: '',
+      rating: 0,
+      isAvailable: true
+    });
 
     res.status(201).json({
       id: newUser._id.toString(),
@@ -240,6 +252,7 @@ router.post('/', requireAdmin, async (req, res) => {
       specialty: profile.specialty,
       rating: profile.rating,
       is_available: profile.isAvailable,
+      assigned_service_ids: profile.services.map(id => id.toString()),
     });
   } catch (error) {
     console.error('[STAFF CREATE ERROR]', { email, error: error.message, stack: error.stack });
@@ -259,7 +272,7 @@ router.patch('/:id', requireAdmin, async (req, res) => {
       return res.status(403).json({ error: `Admins are not allowed to update staff ${field.replace('_', ' ')}` });
   }
 
-  const { category, role, status, is_available } = req.body;
+  const { category, role, status, is_available, service_ids } = req.body;
 
   try {
     const user = await User.findOne({ _id: staffId, role: 'staff' });
@@ -280,6 +293,11 @@ router.patch('/:id', requireAdmin, async (req, res) => {
     if (status !== undefined || is_available !== undefined) {
       profileUpdates.isAvailable = (status === 'active' || is_available === true || is_available === 1);
     }
+    if (Array.isArray(service_ids)) {
+      profileUpdates.services = service_ids
+        .filter(id => mongoose.Types.ObjectId.isValid(id))
+        .map(id => new mongoose.Types.ObjectId(id));
+    }
 
     if (Object.keys(profileUpdates).length > 0) {
       await StaffProfile.findOneAndUpdate({ userId: staffId }, profileUpdates);
@@ -297,6 +315,7 @@ router.patch('/:id', requireAdmin, async (req, res) => {
       specialty: profile?.specialty || '',
       rating: profile?.rating || 0,
       is_available: profile?.isAvailable ?? true,
+      assigned_service_ids: (profile?.services || []).map(id => id.toString()),
     });
   } catch (error) {
     console.error('[STAFF UPDATE ERROR]', { id: staffId, error: error.message, stack: error.stack });
@@ -385,6 +404,44 @@ router.get('/:id/rating', async (req, res) => {
   } catch (error) {
     console.error('[STAFF RATING ERROR]', { id: staffId, error: error.message });
     res.status(500).json({ error: 'Failed to fetch rating' });
+  }
+});
+
+// ---------- POST /api/staff/migrate-services (admin one-time fix for existing staff) ----------
+// Run once to fix any existing staff who were created before service_ids were saved.
+// After running, this endpoint can be removed.
+router.post('/migrate-services', requireAdmin, async (req, res) => {
+  try {
+    const { staff_id, service_ids } = req.body;
+
+    if (!staff_id || !Array.isArray(service_ids)) {
+      return res.status(400).json({ error: 'staff_id and service_ids array are required' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(staff_id)) {
+      return res.status(400).json({ error: 'Invalid staff_id' });
+    }
+
+    const objectIds = service_ids
+      .filter(id => mongoose.Types.ObjectId.isValid(id))
+      .map(id => new mongoose.Types.ObjectId(id));
+
+    const updated = await StaffProfile.findOneAndUpdate(
+      { userId: staff_id },
+      { $set: { services: objectIds } },
+      { new: true }
+    );
+
+    if (!updated) return res.status(404).json({ error: 'Staff profile not found' });
+
+    res.json({
+      message: 'Services migrated successfully',
+      staff_id,
+      assigned_service_ids: updated.services.map(id => id.toString()),
+    });
+  } catch (error) {
+    console.error('[STAFF MIGRATE ERROR]', error.message);
+    res.status(500).json({ error: 'Migration failed' });
   }
 });
 
