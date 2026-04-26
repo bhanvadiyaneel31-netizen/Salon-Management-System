@@ -1888,15 +1888,15 @@ export function AdminDashboard({
                                 </TableCell>
                                 <TableCell>{appointment.assignedStaff?.name}</TableCell>
                                 <TableCell>
-                                  <span className="text-gray-500">${appointment.original_amount}</span>
+                                  <span className="text-gray-500">${Number(appointment.original_amount).toFixed(2)}</span>
                                 </TableCell>
                                 <TableCell>
                                   <span className="text-red-500">
-                                    {appointment.discount_amount > 0 ? `-$${appointment.discount_amount}` : '-'}
+                                    {appointment.discount_amount > 0 ? `-$${Number(appointment.discount_amount).toFixed(2)}` : '-'}
                                   </span>
                                 </TableCell>
                                 <TableCell>
-                                  <span className="font-bold text-green-600">${appointment.final_amount}</span>
+                                  <span className="font-bold text-green-600">${Number(appointment.final_amount).toFixed(2)}</span>
                                 </TableCell>
                                 <TableCell>
                                   <Button
@@ -1924,7 +1924,7 @@ export function AdminDashboard({
                                 <div className="font-medium text-gray-900">{appointment.customer.name}</div>
                                 <div className="text-sm text-gray-500">{appointment.id}</div>
                               </div>
-                              <span className="font-bold text-green-600">${appointment.final_amount}</span>
+                              <span className="font-bold text-green-600">${Number(appointment.final_amount).toFixed(2)}</span>
                             </div>
                             <div className="grid grid-cols-2 gap-2 text-sm mb-3">
                               <div className="col-span-2">
@@ -3058,17 +3058,17 @@ export function AdminDashboard({
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Original Price:</span>
-                        <span className="font-medium">${selectedAppointment.original_amount}</span>
+                        <span className="font-medium">${Number(selectedAppointment.original_amount).toFixed(2)}</span>
                       </div>
                       {selectedAppointment.discount_amount > 0 && (
                         <div className="flex justify-between text-sm text-red-600">
                           <span>Loyalty Discount ({selectedAppointment.discount_type || 'loyalty'}):</span>
-                          <span>-${selectedAppointment.discount_amount}</span>
+                          <span>-${Number(selectedAppointment.discount_amount).toFixed(2)}</span>
                         </div>
                       )}
                       <div className="flex justify-between text-base font-bold pt-2 border-t border-purple-100">
                         <span className="text-purple-900">Final Payable:</span>
-                        <span className="text-purple-600">${selectedAppointment.final_amount}</span>
+                        <span className="text-purple-600">${Number(selectedAppointment.final_amount).toFixed(2)}</span>
                       </div>
                     </div>
                   </div>

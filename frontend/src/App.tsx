@@ -40,7 +40,7 @@ export default function App() {
       // Store token and clean URL
       localStorage.setItem('auth_token', token);
       window.history.replaceState({}, document.title, "/");
-      
+
       // Fetch user data with the new token
       api.auth.getMe().then(user => {
         localStorage.setItem('user', JSON.stringify(user));
@@ -132,8 +132,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-white dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors duration-300">
-      <Navigation 
-        currentView={currentView} 
+      <Navigation
+        currentView={currentView}
         setCurrentView={setCurrentView}
         userRole={userRole}
         setUserRole={setUserRole}
@@ -143,15 +143,15 @@ export default function App() {
         onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
         setActiveSection={setActiveSection}
       />
-      
+
       <div className="flex">
         {isDashboard && (
           <>
             {/* Desktop Sidebar */}
-            <aside className="hidden lg:block w-64 fixed left-0 top-16 bottom-0 p-4 overflow-y-auto">
-              <Sidebar 
-                role={userRole} 
-                activeSection={activeSection} 
+            <aside className="hidden lg:block w-64 fixed left-0 top-16 bottom-0 p-4 overflow-y-auto z-10">
+              <Sidebar
+                role={userRole}
+                activeSection={activeSection}
                 setActiveSection={setActiveSection}
                 handleLogout={handleLogout}
               />
@@ -161,9 +161,9 @@ export default function App() {
             <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
               <SheetContent side="left" className="w-72 p-0 border-0 bg-transparent shadow-none">
                 <div className="h-full bg-white dark:bg-gray-950 p-4">
-                  <Sidebar 
-                    role={userRole} 
-                    activeSection={activeSection} 
+                  <Sidebar
+                    role={userRole}
+                    activeSection={activeSection}
                     setActiveSection={setActiveSection}
                     handleLogout={handleLogout}
                     onNavigate={() => setIsMobileSidebarOpen(false)}
@@ -173,8 +173,8 @@ export default function App() {
             </Sheet>
           </>
         )}
-        
-        <main className={`flex-1 transition-all duration-300 ${isDashboard ? 'lg:ml-64' : ''}`}>
+
+        <main className={`flex-1 min-w-0 transition-all duration-300 ${isDashboard ? 'lg:ml-64' : ''}`}>
           {renderView()}
         </main>
       </div>
