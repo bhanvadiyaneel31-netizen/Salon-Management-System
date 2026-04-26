@@ -13,14 +13,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Switch } from './ui/switch';
 import { Slider } from './ui/slider';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  Eye, 
-  Edit, 
-  Trash2, 
-  Scissors, 
+import {
+  Plus,
+  Search,
+  Filter,
+  Eye,
+  Edit,
+  Trash2,
+  Scissors,
   Grid,
   List,
   DollarSign,
@@ -108,13 +108,13 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showInactiveServices, setShowInactiveServices] = useState(false);
-  
+
   // Data states
   const [services, setServices] = useState<Service[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [stats, setStats] = useState<ServiceStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Dialog states
   const [isServiceDialogOpen, setIsServiceDialogOpen] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
@@ -122,7 +122,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
   const [isEditingService, setIsEditingService] = useState<Service | null>(null);
   const [isEditingCategory, setIsEditingCategory] = useState<ServiceCategory | null>(null);
   const [serviceDetails, setServiceDetails] = useState<any>(null);
-  
+
   // Form states
   const [serviceForm, setServiceForm] = useState({
     name: '',
@@ -134,14 +134,14 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
     is_active: true,
     is_available: true
   });
-  
+
   const [categoryForm, setCategoryForm] = useState({
     name: '',
     description: '',
     icon: 'folder',
     color: '#8B5CF6'
   });
-  
+
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
 
@@ -170,16 +170,16 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
     setIsLoading(true);
     const cats = currentCategories || categories;
     const defaultCategory: ServiceCategory = { id: 0, name: 'Other', description: 'General service', icon: 'scissors', color: '#9CA3AF', service_count: 0 };
-    
+
     // Helper to get consistent category name
     const getCatName = (s: any) => s.category?.name || s.category || 'Other';
-    
+
     try {
       const data = await servicesAPI.getAll({ includeInactive: true });
       const mappedServices: Service[] = data.map((s: any) => {
         // Find matching category object
         const catMatch = cats.find(c => c.name.toLowerCase() === (s.category || '').toLowerCase());
-        
+
         return {
           id: s.id,
           name: s.name,
@@ -202,7 +202,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
       // Fetch performance data for revenue metrics
       try {
         const perf = await analyticsAPI.getServicePerformance();
-        
+
         setStats({
           overview: {
             total_services: mappedServices.length,
@@ -220,10 +220,10 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
               price: s.price
             })),
           revenue_services: perf
-            .map((p: any) => ({ 
-              id: p.service_id, 
-              name: p.service_name, 
-              total_revenue: p.total_revenue || 0 
+            .map((p: any) => ({
+              id: p.service_id,
+              name: p.service_name,
+              total_revenue: p.total_revenue || 0
             }))
             .sort((a: any, b: any) => b.total_revenue - a.total_revenue)
             .slice(0, 5),
@@ -326,19 +326,6 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
     });
   };
 
-  // Image handling
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedImage(file);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   // Service management functions
   const handleAddService = async () => {
     if (!serviceForm.name || !serviceForm.category_id || serviceForm.price <= 0) {
@@ -355,17 +342,14 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
         return;
       }
 
-      const formData = new FormData();
-      formData.append('name', serviceForm.name);
-      formData.append('description', serviceForm.description);
-      formData.append('duration', serviceForm.duration.toString());
-      formData.append('price', serviceForm.price.toString());
-      formData.append('category', category.name);
-      if (selectedImage) {
-        formData.append('image', selectedImage);
-      }
-
-      await servicesAPI.create(formData);
+      await servicesAPI.create({
+        name: serviceForm.name,
+        description: serviceForm.description,
+        duration: serviceForm.duration,
+        price: serviceForm.price,
+        category: category.name,
+        image_url: serviceForm.image_url,
+      });
 
       await loadServices();
       resetServiceForm();
@@ -393,19 +377,16 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
         return;
       }
 
-      const formData = new FormData();
-      formData.append('name', serviceForm.name);
-      formData.append('description', serviceForm.description);
-      formData.append('duration', serviceForm.duration.toString());
-      formData.append('price', serviceForm.price.toString());
-      formData.append('category', category.name);
-      formData.append('is_active', serviceForm.is_active ? 'true' : 'false');
-      if (selectedImage) {
-        formData.append('image', selectedImage);
-      }
+      await servicesAPI.update(isEditingService.id, {
+        name: serviceForm.name,
+        description: serviceForm.description,
+        duration: serviceForm.duration,
+        price: serviceForm.price,
+        category: category.name,
+        is_active: serviceForm.is_active,
+        image_url: serviceForm.image_url,
+      });
 
-      await servicesAPI.update(isEditingService.id, formData);
-      
       await loadServices();
       resetServiceForm();
       setIsEditingService(null);
@@ -424,13 +405,13 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
 
     try {
       const response: any = await servicesAPI.delete(serviceId);
-      
+
       // Update local state immediately for better UX
       setServices(prev => prev.filter(s => s.id !== serviceId));
-      
+
       // Re-fetch to ensure sync with backend (e.g. if it was only deactivated)
       await loadServices();
-      
+
       const message = response?.message || `${service.name} has been processed successfully`;
       toast.success(message);
     } catch (error: any) {
@@ -519,19 +500,19 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
   // Filter functions
   const filteredServices = services.filter(service => {
     const matchesSearch = service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         service.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         service.category.name.toLowerCase().includes(searchTerm.toLowerCase());
-    
+      service.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      service.category.name.toLowerCase().includes(searchTerm.toLowerCase());
+
     const matchesCategory = selectedCategory === 'all' || service.category.id === parseInt(selectedCategory);
-    
+
     const matchesPrice = service.price >= priceRange[0] && service.price <= priceRange[1];
-    
+
     const matchesStatus = showInactiveServices || service.is_active;
-    
+
     return matchesSearch && matchesCategory && matchesPrice && matchesStatus;
   }).sort((a, b) => {
     let aValue, bValue;
-    
+
     switch (sortBy) {
       case 'price':
         aValue = a.price;
@@ -553,7 +534,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
         aValue = a.name.toLowerCase();
         bValue = b.name.toLowerCase();
     }
-    
+
     if (sortOrder === 'desc') {
       return aValue < bValue ? 1 : -1;
     }
@@ -574,7 +555,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
             <ImageIcon className="w-16 h-16 text-gray-400" />
           )}
         </div>
-        
+
         <div className="absolute top-3 right-3 flex gap-2">
           <Badge className={service.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
             {service.is_active ? 'Active' : 'Inactive'}
@@ -585,32 +566,32 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
             className="h-8 w-8 p-0 bg-white/90 hover:bg-white"
             onClick={() => toggleServiceAvailability(service.id)}
           >
-            {service.is_available ? 
-              <ToggleRight className="h-4 w-4 text-green-600" /> : 
+            {service.is_available ?
+              <ToggleRight className="h-4 w-4 text-green-600" /> :
               <ToggleLeft className="h-4 w-4 text-red-600" />
             }
           </Button>
         </div>
       </div>
-      
+
       <CardContent className="p-6">
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
             <h3 className="font-semibold text-lg text-gray-900 mb-1">{service.name}</h3>
             <p className="text-gray-600 text-sm line-clamp-2 mb-2">{service.description}</p>
-            <Badge 
-              variant="outline" 
+            <Badge
+              variant="outline"
               className="text-xs"
-              style={{ 
-                borderColor: service.category.color, 
-                color: service.category.color 
+              style={{
+                borderColor: service.category.color,
+                color: service.category.color
               }}
             >
               {service.category.name}
             </Badge>
           </div>
         </div>
-        
+
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4 text-sm text-gray-600">
             <div className="flex items-center gap-1">
@@ -627,14 +608,14 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
             <span>{service.average_rating}</span>
           </div>
         </div>
-        
+
         <div className="flex items-center justify-between mb-4 text-sm text-gray-600">
           <div className="flex items-center gap-1">
             <Users className="w-4 h-4" />
             <span>{service.booking_count} bookings</span>
           </div>
         </div>
-        
+
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -734,7 +715,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                   <List className="h-4 w-4" />
                 </Button>
               </div>
-              
+
               <Dialog open={isServiceDialogOpen} onOpenChange={setIsServiceDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl">
@@ -753,9 +734,9 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="service-name">Service Name *</Label>
-                        <Input 
-                          id="service-name" 
-                          placeholder="Enter service name" 
+                        <Input
+                          id="service-name"
+                          placeholder="Enter service name"
                           value={serviceForm.name}
                           onChange={(e) => setServiceForm(prev => ({ ...prev, name: e.target.value }))}
                         />
@@ -776,111 +757,73 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                         </Select>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor="service-description">Description</Label>
-                      <Textarea 
-                        id="service-description" 
-                        placeholder="Enter service description" 
+                      <Textarea
+                        id="service-description"
+                        placeholder="Enter service description"
                         value={serviceForm.description}
                         onChange={(e) => setServiceForm(prev => ({ ...prev, description: e.target.value }))}
                         rows={3}
                       />
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="service-duration">Duration (minutes) *</Label>
-                        <Input 
-                          id="service-duration" 
-                          type="number" 
-                          placeholder="60" 
+                        <Input
+                          id="service-duration"
+                          type="number"
+                          placeholder="60"
                           value={serviceForm.duration}
                           onChange={(e) => setServiceForm(prev => ({ ...prev, duration: parseInt(e.target.value) || 0 }))}
                         />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="service-price">Price ($) *</Label>
-                        <Input 
-                          id="service-price" 
-                          type="number" 
-                          placeholder="85" 
+                        <Input
+                          id="service-price"
+                          type="number"
+                          placeholder="85"
                           value={serviceForm.price}
                           onChange={(e) => setServiceForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
                         />
                       </div>
                     </div>
-                    
+
                     <div className="space-y-2">
-                      <Label>Service Image</Label>
-                      {/* Hidden file input always present in DOM */}
-                      <input
-                        type="file"
-                        id="service-image-upload"
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={handleImageSelect}
-                        className="hidden"
+                      <Label>Image URL</Label>
+                      <Input
+                        placeholder="https://example.com/image.jpg"
+                        value={serviceForm.image_url}
+                        onChange={(e) => {
+                          setServiceForm(prev => ({ ...prev, image_url: e.target.value }));
+                          setImagePreview(e.target.value);
+                        }}
                       />
-                      <div className="border-2 border-dashed border-purple-200 rounded-lg p-6 text-center">
-                        {imagePreview ? (
-                          <div className="relative">
-                            <img src={imagePreview} alt="Preview" className="max-h-40 mx-auto rounded-lg mb-3" />
-                            <div className="flex gap-2 justify-center">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => document.getElementById('service-image-upload')?.click()}
-                              >
-                                <Upload className="w-4 h-4 mr-2" />
-                                Change Image
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-red-500 hover:text-red-700"
-                                onClick={() => {
-                                  setImagePreview('');
-                                  setSelectedImage(null);
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4 mr-1" />
-                                Remove
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div>
-                            <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                            <p className="text-gray-600 mb-2">Click to upload or drag and drop</p>
-                            <p className="text-sm text-gray-500">PNG, JPG, JPEG, WEBP up to 5MB</p>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="mt-3"
-                              onClick={() => document.getElementById('service-image-upload')?.click()}
-                            >
-                              <Upload className="w-4 h-4 mr-2" />
-                              Choose File
-                            </Button>
-                          </div>
-                        )}
-                      </div>
+                      {imagePreview && (
+                        <img
+                          src={imagePreview}
+                          alt="Preview"
+                          className="w-full h-40 object-cover rounded-xl mt-2"
+                          onError={(e) => (e.currentTarget.style.display = 'none')}
+                        />
+                      )}
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <Switch 
-                          id="service-active" 
+                        <Switch
+                          id="service-active"
                           checked={serviceForm.is_active}
                           onCheckedChange={(checked) => setServiceForm(prev => ({ ...prev, is_active: checked }))}
                         />
                         <Label htmlFor="service-active">Active Service</Label>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <Switch 
-                          id="service-available" 
+                        <Switch
+                          id="service-available"
                           checked={serviceForm.is_available}
                           onCheckedChange={(checked) => setServiceForm(prev => ({ ...prev, is_available: checked }))}
                         />
@@ -896,8 +839,8 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                     }}>
                       Cancel
                     </Button>
-                    <Button 
-                      onClick={isEditingService ? handleEditService : handleAddService} 
+                    <Button
+                      onClick={isEditingService ? handleEditService : handleAddService}
                       className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
                       disabled={isLoading}
                     >
@@ -956,7 +899,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                     {sortOrder === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </Button>
                 </div>
-                
+
                 <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
                   <div className="flex-1">
                     <Label className="text-sm mb-2 block">Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
@@ -969,8 +912,8 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                     />
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Switch 
-                      id="show-inactive" 
+                    <Switch
+                      id="show-inactive"
                       checked={showInactiveServices}
                       onCheckedChange={setShowInactiveServices}
                     />
@@ -1003,141 +946,141 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                 <CardContent className="p-0 overflow-x-auto">
                   <Table>
                     <TableHeader>
-                    <TableRow>
-                      <TableHead>Service</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Bookings</TableHead>
-                      <TableHead>Rating</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredServices.map((service) => (
-                      <TableRow key={service.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center">
-                              {service.image_url ? (
-                                <ImageWithFallback
-                                  src={getFullImageUrl(service.image_url)}
-                                  alt={service.name}
-                                  className="w-full h-full object-cover rounded-lg"
-                                />
-                              ) : (
-                                <ImageIcon className="w-6 h-6 text-gray-400" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="font-medium">{service.name}</div>
-                              <div className="text-sm text-gray-500 line-clamp-1">{service.description}</div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant="outline" 
-                            style={{ 
-                              borderColor: service.category.color, 
-                              color: service.category.color 
-                            }}
-                          >
-                            {service.category.name}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{service.duration} min</TableCell>
-                        <TableCell>${service.price}</TableCell>
-                        <TableCell>{service.booking_count}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                            <span>{service.average_rating}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Badge className={service.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-                              {service.is_active ? 'Active' : 'Inactive'}
-                            </Badge>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => toggleServiceAvailability(service.id)}
-                            >
-                              {service.is_available ? 
-                                <ToggleRight className="h-4 w-4 text-green-600" /> : 
-                                <ToggleLeft className="h-4 w-4 text-red-600" />
-                              }
-                            </Button>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-purple-600 hover:bg-purple-50"
-                              onClick={() => openViewDetails(service.id)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-purple-600 hover:bg-purple-50"
-                              onClick={() => openEditService(service)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0 text-red-600 hover:bg-red-50"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Service</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete {service.name}? This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeleteService(service.id)}
-                                    className="bg-red-600 hover:bg-red-700"
-                                  >
-                                    Delete Service
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </TableCell>
+                      <TableRow>
+                        <TableHead>Service</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead>Duration</TableHead>
+                        <TableHead>Price</TableHead>
+                        <TableHead>Bookings</TableHead>
+                        <TableHead>Rating</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                {filteredServices.length === 0 && (
-                  <div className="text-center py-12 text-gray-500">
-                    <Scissors className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-lg">No services found</p>
-                    <p className="text-sm">Try adjusting your search criteria</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                    </TableHeader>
+                    <TableBody>
+                      {filteredServices.map((service) => (
+                        <TableRow key={service.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center">
+                                {service.image_url ? (
+                                  <ImageWithFallback
+                                    src={getFullImageUrl(service.image_url)}
+                                    alt={service.name}
+                                    className="w-full h-full object-cover rounded-lg"
+                                  />
+                                ) : (
+                                  <ImageIcon className="w-6 h-6 text-gray-400" />
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-medium">{service.name}</div>
+                                <div className="text-sm text-gray-500 line-clamp-1">{service.description}</div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              style={{
+                                borderColor: service.category.color,
+                                color: service.category.color
+                              }}
+                            >
+                              {service.category.name}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{service.duration} min</TableCell>
+                          <TableCell>${service.price}</TableCell>
+                          <TableCell>{service.booking_count}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                              <span>{service.average_rating}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Badge className={service.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
+                                {service.is_active ? 'Active' : 'Inactive'}
+                              </Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => toggleServiceAvailability(service.id)}
+                              >
+                                {service.is_available ?
+                                  <ToggleRight className="h-4 w-4 text-green-600" /> :
+                                  <ToggleLeft className="h-4 w-4 text-red-600" />
+                                }
+                              </Button>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-purple-600 hover:bg-purple-50"
+                                onClick={() => openViewDetails(service.id)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-purple-600 hover:bg-purple-50"
+                                onClick={() => openEditService(service)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-red-600 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Service</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete {service.name}? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteService(service.id)}
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      Delete Service
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {filteredServices.length === 0 && (
+                    <div className="text-center py-12 text-gray-500">
+                      <Scissors className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-lg">No services found</p>
+                      <p className="text-sm">Try adjusting your search criteria</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
-          
+
           {viewMode === 'list' && (
             <div className="md:hidden">
               {filteredServices.length === 0 ? (
@@ -1198,18 +1141,18 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="category-name">Category Name *</Label>
-                    <Input 
-                      id="category-name" 
-                      placeholder="Enter category name" 
+                    <Input
+                      id="category-name"
+                      placeholder="Enter category name"
                       value={categoryForm.name}
                       onChange={(e) => setCategoryForm(prev => ({ ...prev, name: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="category-description">Description</Label>
-                    <Textarea 
-                      id="category-description" 
-                      placeholder="Enter category description" 
+                    <Textarea
+                      id="category-description"
+                      placeholder="Enter category description"
                       value={categoryForm.description}
                       onChange={(e) => setCategoryForm(prev => ({ ...prev, description: e.target.value }))}
                       rows={3}
@@ -1234,14 +1177,14 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                     <div className="space-y-2">
                       <Label htmlFor="category-color">Color</Label>
                       <div className="flex items-center gap-2">
-                        <Input 
-                          id="category-color" 
-                          type="color" 
+                        <Input
+                          id="category-color"
+                          type="color"
                           value={categoryForm.color}
                           onChange={(e) => setCategoryForm(prev => ({ ...prev, color: e.target.value }))}
                           className="w-16 h-10 rounded-lg border-purple-200"
                         />
-                        <Input 
+                        <Input
                           value={categoryForm.color}
                           onChange={(e) => setCategoryForm(prev => ({ ...prev, color: e.target.value }))}
                           placeholder="#8B5CF6"
@@ -1259,8 +1202,8 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                   }}>
                     Cancel
                   </Button>
-                  <Button 
-                    onClick={isEditingCategory ? handleEditCategory : handleAddCategory} 
+                  <Button
+                    onClick={isEditingCategory ? handleEditCategory : handleAddCategory}
                     className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
                   >
                     {isEditingCategory ? 'Update Category' : 'Add Category'}
@@ -1275,7 +1218,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
               <Card key={category.id} className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg hover:shadow-xl transition-all duration-300">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
-                    <div 
+                    <div
                       className="w-12 h-12 rounded-full flex items-center justify-center text-white text-xl"
                       style={{ backgroundColor: category.color }}
                     >
@@ -1303,16 +1246,16 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                  
+
                   <h3 className="font-semibold text-lg text-gray-900 mb-2">{category.name}</h3>
                   <p className="text-gray-600 text-sm mb-4 line-clamp-2">{category.description}</p>
-                  
+
                   <div className="flex items-center justify-between">
-                    <Badge 
-                      variant="outline" 
-                      style={{ 
-                        borderColor: category.color, 
-                        color: category.color 
+                    <Badge
+                      variant="outline"
+                      style={{
+                        borderColor: category.color,
+                        color: category.color
                       }}
                     >
                       {category.service_count || 0} services
@@ -1402,10 +1345,10 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                   <CardContent>
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={stats.popular_services}>
-                        <XAxis 
-                          dataKey="name" 
-                          angle={-45} 
-                          textAnchor="end" 
+                        <XAxis
+                          dataKey="name"
+                          angle={-45}
+                          textAnchor="end"
                           height={100}
                           fontSize={12}
                         />
@@ -1446,8 +1389,8 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                           ))}
                         </Pie>
                         <Tooltip />
-                        <Legend 
-                          verticalAlign="bottom" 
+                        <Legend
+                          verticalAlign="bottom"
                           height={36}
                           formatter={(value, entry: any) => (
                             <span className="text-gray-700 text-sm">
@@ -1501,7 +1444,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
           <DialogHeader>
             <DialogTitle>Service Details: {serviceDetails?.service?.name || 'Loading...'}</DialogTitle>
           </DialogHeader>
-          
+
           {serviceDetails && (
             <div className="space-y-6">
               <div className="grid md:grid-cols-2 gap-6">
@@ -1569,8 +1512,8 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                           <TableCell>
                             <Badge className={
                               booking.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                              booking.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                              'bg-yellow-100 text-yellow-700'
+                                booking.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                  'bg-yellow-100 text-yellow-700'
                             }>
                               {booking.status}
                             </Badge>
@@ -1589,7 +1532,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
               </div>
             </div>
           )}
-          
+
           <DialogFooter>
             <Button onClick={() => setIsDetailsDialogOpen(false)}>Close</Button>
           </DialogFooter>

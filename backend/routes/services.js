@@ -1,39 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
-const multer = require('multer');
 const { Service, StaffProfile, Appointment } = require('../db');
 const { requireAdmin, verifyToken } = require('../middleware/authMiddleware');
 
 // ---------- Multer setup ----------
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadsDir = path.join(__dirname, '../uploads');
-    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, 'service-' + uniqueSuffix + path.extname(file.originalname));
-  },
-});
-const validateImageFile = (req, file, cb) => {
-  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif'];
-  allowed.includes(file.mimetype) ? cb(null, true) : cb(new Error('Invalid file type. Only JPEG, PNG, WEBP, AVIF, and GIF images are allowed.'), false);
-};
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: validateImageFile });
+
 
 // ---------- GET /api/services/categories ----------
 router.get('/categories', async (req, res) => {
   try {
     const CATEGORIES = [
-      { id: 1, name: 'Hair',     description: 'All hair-related treatments',          icon: 'scissors', color: '#8B5CF6' },
-      { id: 2, name: 'Facial',   description: 'Skin care and facial services',         icon: 'star',     color: '#EC4899' },
-      { id: 3, name: 'Nails',    description: 'Manicure and pedicure services',        icon: 'palette',  color: '#10B981' },
-      { id: 4, name: 'Massage',  description: 'Relaxation and therapeutic massages',   icon: 'activity', color: '#F59E0B' },
-      { id: 5, name: 'Wellness', description: 'Holistic wellness treatments',          icon: 'activity', color: '#10B981' },
-      { id: 6, name: 'Beauty',   description: 'General beauty services',               icon: 'star',     color: '#EC4899' },
+      { id: 1, name: 'Hair', description: 'All hair-related treatments', icon: 'scissors', color: '#8B5CF6' },
+      { id: 2, name: 'Facial', description: 'Skin care and facial services', icon: 'star', color: '#EC4899' },
+      { id: 3, name: 'Nails', description: 'Manicure and pedicure services', icon: 'palette', color: '#10B981' },
+      { id: 4, name: 'Massage', description: 'Relaxation and therapeutic massages', icon: 'activity', color: '#F59E0B' },
+      { id: 5, name: 'Wellness', description: 'Holistic wellness treatments', icon: 'activity', color: '#10B981' },
+      { id: 6, name: 'Beauty', description: 'General beauty services', icon: 'star', color: '#EC4899' },
     ];
 
     const counts = await Service.aggregate([
@@ -56,7 +38,7 @@ router.get('/', async (req, res) => {
   try {
     const filter = {};
     if (!include_inactive) filter.isActive = true;
-    if (category)  filter.category = category;
+    if (category) filter.category = category;
     if (min_price) filter.price = { ...(filter.price || {}), $gte: parseFloat(min_price) };
     if (max_price) filter.price = { ...(filter.price || {}), $lte: parseFloat(max_price) };
 
@@ -86,15 +68,15 @@ router.get('/', async (req, res) => {
         return true;
       })
       .map(s => ({
-        id:            s._id.toString(),
-        name:          s.name,
-        description:   s.description,
-        duration:      s.duration,
-        price:         s.price,
-        category:      s.category,
-        is_active:     s.isActive,
-        image_url:     s.imageUrl,
-        created_at:    s.createdAt,
+        id: s._id.toString(),
+        name: s.name,
+        description: s.description,
+        duration: s.duration,
+        price: s.price,
+        category: s.category,
+        is_active: s.isActive,
+        image_url: s.imageUrl,
+        created_at: s.createdAt,
         booking_count: bookingMap[s._id.toString()] || 0,
         assigned_staff: staffByCat[s.category] || [],
       }));
@@ -106,14 +88,14 @@ router.get('/', async (req, res) => {
 });
 
 // ---------- POST /api/services ----------
-router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
-  const { name, description, duration, price, category } = req.body;
+router.post('/', requireAdmin, async (req, res) => {
+  const { name, description, duration, price, category, image_url } = req.body;
   if (!name || !duration || !price || !category)
     return res.status(400).json({ error: 'Name, duration, price, and category are required' });
 
   try {
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
-    const service  = await Service.create({ name, description, duration: +duration, price: +price, category, imageUrl, isActive: true });
+    const imageUrl = image_url || null;
+    const service = await Service.create({ name, description, duration: +duration, price: +price, category, imageUrl, isActive: true });
     res.status(201).json({
       id: service._id.toString(), name: service.name, description: service.description,
       duration: service.duration, price: service.price, category: service.category,
@@ -126,18 +108,18 @@ router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
 });
 
 // ---------- PUT /api/services/:id ----------
-router.put('/:id', requireAdmin, upload.single('image'), async (req, res) => {
-  const { price, duration, description, name, category, is_active } = req.body;
+router.put('/:id', requireAdmin, async (req, res) => {
+  const { price, duration, description, name, category, is_active, image_url } = req.body;
   try {
     const service = await Service.findById(req.params.id);
     if (!service) return res.status(404).json({ error: 'Service not found' });
 
-    if (name)        service.name        = name;
+    if (name) service.name = name;
     if (description) service.description = description;
-    if (duration)    service.duration    = +duration;
-    if (price)       service.price       = +price;
-    if (category)    service.category    = category;
-    if (req.file)    service.imageUrl    = `/uploads/${req.file.filename}`;
+    if (duration) service.duration = +duration;
+    if (price) service.price = +price;
+    if (category) service.category = category;
+    if (image_url !== undefined) service.imageUrl = image_url;
 
     if (is_active !== undefined) {
       service.isActive = (is_active === 'true' || is_active === '1' || is_active === true);
@@ -195,7 +177,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     const service = await Service.findById(req.params.id);
     if (!service) return res.status(404).json({ error: 'Service not found' });
 
-    const totalCount  = await Appointment.countDocuments({ serviceId: req.params.id });
+    const totalCount = await Appointment.countDocuments({ serviceId: req.params.id });
     if (totalCount > 0) {
       service.isActive = false;
       await service.save();
