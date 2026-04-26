@@ -32,6 +32,12 @@ async function getReportData(reportType, staffId, startDate, endDate) {
     const s = new Date(startDate), e = new Date(endDate);
     if (isNaN(s.getTime()) || isNaN(e.getTime())) throw new Error('Invalid date format provided');
     if (s > e) throw new Error('Start date must be before or equal to end date');
+
+    // ✅ FIX STB-009: cap range at 366 days to prevent OOM crash
+    const MAX_DAYS = 366;
+    const diffDays = Math.ceil((e - s) / (1000 * 60 * 60 * 24));
+    if (diffDays > MAX_DAYS) throw new Error(`Date range too large. Maximum allowed range is ${MAX_DAYS} days.`);
+
     start = startDate; end = endDate;
   } else {
     throw new Error('Invalid report parameters');
@@ -46,30 +52,30 @@ async function getReportData(reportType, staffId, startDate, endDate) {
   const docs = await Appointment.find(filter)
     .sort({ appointmentDate: -1, appointmentTime: -1 })
     .populate('customerId', 'name')
-    .populate('staffId',    'name')
-    .populate('serviceId',  'name');
+    .populate('staffId', 'name')
+    .populate('serviceId', 'name');
 
   const rows = docs.map(a => ({
-    id:              a._id.toString(),
+    id: a._id.toString(),
     appointment_date: a.appointmentDate,
     appointment_time: a.appointmentTime,
-    status:          a.status,
-    price:           a.price,
-    notes:           a.notes,
+    status: a.status,
+    price: a.price,
+    notes: a.notes,
     original_amount: a.originalAmount ?? a.price ?? 0,
     discount_amount: a.discountAmount ?? 0,
-    final_amount:    a.finalAmount    ?? a.price ?? 0,
-    discount_type:   a.discountType,
-    customer_name:   a.customerId?.name || 'Unknown',
-    staff_name:      a.staffId?.name    || null,
-    service_name:    a.serviceId?.name  || 'Unknown',
+    final_amount: a.finalAmount ?? a.price ?? 0,
+    discount_type: a.discountType,
+    customer_name: a.customerId?.name || 'Unknown',
+    staff_name: a.staffId?.name || null,
+    service_name: a.serviceId?.name || 'Unknown',
   }));
 
-  const completed  = rows.filter(r => r.status === 'completed');
-  const cancelled  = rows.filter(r => r.status === 'cancelled');
-  const totalRevenue  = completed.reduce((s, r) => s + Number(r.final_amount    || 0), 0);
+  const completed = rows.filter(r => r.status === 'completed');
+  const cancelled = rows.filter(r => r.status === 'cancelled');
+  const totalRevenue = completed.reduce((s, r) => s + Number(r.final_amount || 0), 0);
   const totalDiscount = completed.reduce((s, r) => s + Number(r.discount_amount || 0), 0);
-  const grossRevenue  = completed.reduce((s, r) => s + Number(r.original_amount || 0), 0);
+  const grossRevenue = completed.reduce((s, r) => s + Number(r.original_amount || 0), 0);
   const avgServiceValue = completed.length > 0 ? totalRevenue / completed.length : 0;
 
   const serviceCounts = {};
@@ -92,9 +98,6 @@ async function getReportData(reportType, staffId, startDate, endDate) {
   };
 }
 
-// GET /api/reports/test
-router.get('/test', (req, res) => res.json({ message: 'Reports route is working' }));
-
 // POST /api/reports/generate
 router.post('/generate', requireAdmin, async (req, res) => {
   const { reportType, staffId, startDate, endDate } = req.body;
@@ -108,38 +111,38 @@ router.post('/generate', requireAdmin, async (req, res) => {
 });
 
 // POST /api/reports/export
-router.post('/export', verifyToken, requireAdmin, async (req, res) => {
+router.post('/export', requireAdmin, async (req, res) => {
   const { format: exportFormat, reportType, staffId, startDate, endDate } = req.body;
   try {
     const reportData = await getReportData(reportType, staffId, startDate, endDate);
     const { appointments, summary } = reportData;
 
     if (exportFormat === 'excel') {
-      const workbook  = new ExcelJS.Workbook();
+      const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Appointments');
       worksheet.columns = [
-        { header: 'Booking ID',    key: 'id',              width: 26 },
-        { header: 'Customer',      key: 'customer',         width: 20 },
-        { header: 'Service',       key: 'service',          width: 20 },
-        { header: 'Staff',         key: 'staff',            width: 20 },
-        { header: 'Date',          key: 'date',             width: 15 },
-        { header: 'Time',          key: 'time',             width: 10 },
-        { header: 'Status',        key: 'status',           width: 15 },
-        { header: 'Original',      key: 'original_amount',  width: 10 },
-        { header: 'Discount',      key: 'discount_amount',  width: 10 },
-        { header: 'Final Revenue', key: 'final_amount',     width: 15 },
+        { header: 'Booking ID', key: 'id', width: 26 },
+        { header: 'Customer', key: 'customer', width: 20 },
+        { header: 'Service', key: 'service', width: 20 },
+        { header: 'Staff', key: 'staff', width: 20 },
+        { header: 'Date', key: 'date', width: 15 },
+        { header: 'Time', key: 'time', width: 10 },
+        { header: 'Status', key: 'status', width: 15 },
+        { header: 'Original', key: 'original_amount', width: 10 },
+        { header: 'Discount', key: 'discount_amount', width: 10 },
+        { header: 'Final Revenue', key: 'final_amount', width: 15 },
       ];
       appointments.forEach(a => worksheet.addRow({
-        id:              a.id,
-        customer:        a.customer_name,
-        service:         a.service_name,
-        staff:           a.staff_name || 'Unassigned',
-        date:            a.appointment_date,
-        time:            a.appointment_time,
-        status:          a.status,
+        id: a.id,
+        customer: a.customer_name,
+        service: a.service_name,
+        staff: a.staff_name || 'Unassigned',
+        date: a.appointment_date,
+        time: a.appointment_time,
+        status: a.status,
         original_amount: a.original_amount,
         discount_amount: a.discount_amount,
-        final_amount:    a.final_amount,
+        final_amount: a.final_amount,
       }));
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -187,7 +190,10 @@ router.post('/export', verifyToken, requireAdmin, async (req, res) => {
     }
   } catch (error) {
     console.error('[EXPORT] ERROR:', error);
-    res.status(500).json({ error: 'Failed to export report', details: error.message });
+    res.status(500).json({
+      error: 'Failed to export report',
+      details: process.env.NODE_ENV === 'production' ? undefined : error.message
+    });
   }
 });
 

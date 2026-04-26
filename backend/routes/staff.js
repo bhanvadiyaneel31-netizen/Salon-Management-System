@@ -4,9 +4,10 @@ const bcrypt = require('bcrypt');
 const mongoose = require('mongoose');
 const { User, StaffProfile, Appointment, Service } = require('../db');
 const { requireAdmin, verifyToken } = require('../middleware/authMiddleware');
+const { verify } = require('jsonwebtoken');
 
 // ---------- GET /api/staff ----------
-router.get('/', async (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
   try {
     const staffUsers = await User.find({ role: 'staff' });
     const profiles = await StaffProfile.find({ userId: { $in: staffUsers.map(u => u._id) } });
@@ -49,9 +50,8 @@ router.get('/', async (req, res) => {
 });
 
 // ---------- GET /api/staff/available ----------
-router.get('/available', async (req, res) => {
+router.get('/available', verifyToken, async (req, res) => {
   const { service_id } = req.query;
-  console.log(`[STAFF] Fetching available staff for service_id: ${service_id}`);
 
   try {
     const profileQuery = { isAvailable: true };
@@ -65,9 +65,7 @@ router.get('/available', async (req, res) => {
       profileQuery.services = { $in: [new mongoose.Types.ObjectId(service_id)] };
     }
 
-    console.log(`[STAFF] Querying StaffProfile with:`, profileQuery);
     const profiles = await StaffProfile.find(profileQuery).sort({ rating: -1 });
-    console.log(`[STAFF] Found ${profiles.length} profiles`);
 
     if (profiles.length === 0) {
       return res.json([]);
@@ -93,7 +91,6 @@ router.get('/available', async (req, res) => {
       };
     }).filter(Boolean);
 
-    console.log(`[STAFF] Returning ${formatted.length} formatted staff members`);
     res.json(formatted);
   } catch (error) {
     console.error('[STAFF] Failed to fetch available staff:', error.message);
@@ -102,7 +99,7 @@ router.get('/available', async (req, res) => {
 });
 
 // ---------- GET /api/staff/:id ----------
-router.get('/:id', async (req, res) => {
+router.get('/:id', verifyToken, async (req, res) => {
   const staffId = req.params.id;
   try {
     if (!mongoose.Types.ObjectId.isValid(staffId)) return res.status(400).json({ error: 'Invalid staff ID' });
@@ -112,12 +109,13 @@ router.get('/:id', async (req, res) => {
 
     const profile = await StaffProfile.findOne({ userId: staffId }).populate('services');
     const appointmentCount = await Appointment.countDocuments({ staffId, status: 'completed' });
-
+    const isAdmin = req.user.role === 'admin';
     res.json({
       id: user._id.toString(),
       name: user.name,
-      email: user.email,
-      phone: user.phone || '',
+      // ✅ only expose PII to admins
+      email: isAdmin ? user.email : undefined,
+      phone: isAdmin ? (user.phone || '') : undefined,
       profile_image: user.profileImage || '',
       category: profile?.category || '',
       specialty: profile?.specialty || '',
@@ -126,7 +124,7 @@ router.get('/:id', async (req, res) => {
       services: (profile?.services || []).map(s => ({ id: s._id.toString(), name: s.name })),
       assigned_service_ids: (profile?.services || []).map(s => s._id.toString()),
       completed_appointments: appointmentCount,
-      created_at: user.createdAt,
+      created_at: isAdmin ? user.createdAt : undefined,
     });
   } catch (error) {
     console.error('[STAFF] Failed to fetch staff detail:', error.message);
@@ -135,7 +133,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ---------- GET /api/staff/:id/services ----------
-router.get('/:id/services', async (req, res) => {
+router.get('/:id/services', verifyToken, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid staff ID' });
     const staffUser = await User.findOne({ _id: req.params.id, role: 'staff' });
@@ -186,10 +184,8 @@ router.patch('/profile', verifyToken, async (req, res) => {
 
     if (password) {
       if (!currentPassword) return res.status(400).json({ error: 'Current password is required to set a new password' });
-      const user = await User.findById(staffId).select('+passwordHash');
-      if (!user) return res.status(404).json({ error: 'User not found' });
-
       const rawUser = await User.findById(staffId).lean().select('+passwordHash');
+      if (!rawUser) return res.status(404).json({ error: 'User not found' });
       const isMatch = await bcrypt.compare(currentPassword, rawUser.passwordHash);
       if (!isMatch) return res.status(401).json({ error: 'Incorrect current password' });
 
@@ -334,6 +330,20 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     const user = await User.findOne({ _id: staffId, role: 'staff' });
     if (!user) return res.status(404).json({ error: 'Staff member not found' });
 
+    // ✅ FIX STB-006: block deletion if future appointments exist
+    const today = new Date().toISOString().split('T')[0];
+    const futureCount = await Appointment.countDocuments({
+      staffId: new mongoose.Types.ObjectId(staffId),
+      appointmentDate: { $gte: today },
+      status: { $in: ['pending', 'confirmed', 'in-progress'] }
+    });
+
+    if (futureCount > 0) {
+      return res.status(409).json({
+        error: `Cannot delete staff member. They have ${futureCount} upcoming appointment(s). Please reassign or cancel them first.`
+      });
+    }
+
     await StaffProfile.findOneAndDelete({ userId: staffId });
     await User.findByIdAndDelete(staffId);
 
@@ -396,7 +406,7 @@ router.patch('/:id/services', requireAdmin, async (req, res) => {
 });
 
 // ---------- GET /api/staff/:id/rating ----------
-router.get('/:id/rating', async (req, res) => {
+router.get('/:id/rating', verifyToken, async (req, res) => {
   const staffId = req.params.id;
   try {
     if (!mongoose.Types.ObjectId.isValid(staffId)) return res.status(400).json({ error: 'Invalid staff ID' });
@@ -414,39 +424,5 @@ router.get('/:id/rating', async (req, res) => {
 // ---------- POST /api/staff/migrate-services (admin one-time fix for existing staff) ----------
 // Run once to fix any existing staff who were created before service_ids were saved.
 // After running, this endpoint can be removed.
-router.post('/migrate-services', requireAdmin, async (req, res) => {
-  try {
-    const { staff_id, service_ids } = req.body;
-
-    if (!staff_id || !Array.isArray(service_ids)) {
-      return res.status(400).json({ error: 'staff_id and service_ids array are required' });
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(staff_id)) {
-      return res.status(400).json({ error: 'Invalid staff_id' });
-    }
-
-    const objectIds = service_ids
-      .filter(id => mongoose.Types.ObjectId.isValid(id))
-      .map(id => new mongoose.Types.ObjectId(id));
-
-    const updated = await StaffProfile.findOneAndUpdate(
-      { userId: staff_id },
-      { $set: { services: objectIds } },
-      { new: true }
-    );
-
-    if (!updated) return res.status(404).json({ error: 'Staff profile not found' });
-
-    res.json({
-      message: 'Services migrated successfully',
-      staff_id,
-      assigned_service_ids: updated.services.map(id => id.toString()),
-    });
-  } catch (error) {
-    console.error('[STAFF MIGRATE ERROR]', error.message);
-    res.status(500).json({ error: 'Migration failed' });
-  }
-});
 
 module.exports = router;

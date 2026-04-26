@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose'); // ✅ added for ObjectId validation
 const { User, StaffProfile, Appointment } = require('../db');
 const { verifyToken } = require('../middleware/authMiddleware');
 
@@ -36,6 +37,11 @@ router.put('/update', verifyToken, async (req, res) => {
   const updaterRole = req.user.role;
   const targetUserId = id || updaterId;
 
+  // ✅ validate targetUserId is a real ObjectId before hitting DB
+  if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+    return res.status(400).json({ error: 'Invalid user ID' });
+  }
+
   try {
     const targetUser = await User.findById(targetUserId);
     if (!targetUser) return res.status(404).json({ error: 'User not found' });
@@ -46,7 +52,6 @@ router.put('/update', verifyToken, async (req, res) => {
     const userUpdates = {};
     const staffProfileUpdates = {};
 
-    // Reminder preferences (mapped to camelCase fields)
     if (reminders) {
       if (updaterRole === 'admin') return res.status(403).json({ error: 'You are not allowed to edit reminder preferences' });
       if (reminders.email !== undefined) userUpdates.reminderEmail = reminders.email;
@@ -55,7 +60,6 @@ router.put('/update', verifyToken, async (req, res) => {
     }
 
     if (updaterRole === 'staff' || updaterRole === 'customer') {
-      // Forbidden fields
       if (email && email !== targetUser.email) return res.status(403).json({ error: 'You are not allowed to edit the email field' });
       if (role && role !== targetUser.role) return res.status(403).json({ error: 'You are not allowed to edit the role field' });
       if (specialty) return res.status(403).json({ error: 'You are not allowed to edit the specialty field' });
@@ -63,16 +67,27 @@ router.put('/update', verifyToken, async (req, res) => {
       if (name) userUpdates.name = name;
       if (phone) userUpdates.phone = phone;
       if (address) userUpdates.address = address;
-      if (profile_image !== undefined) userUpdates.profileImage = profile_image; // allow '' to clear
+      if (profile_image !== undefined) userUpdates.profileImage = profile_image;
+
     } else if (updaterRole === 'admin') {
-      // Forbidden fields for admin
       if (name && name !== targetUser.name) return res.status(403).json({ error: 'You are not allowed to edit the name field' });
       if (phone && phone !== targetUser.phone) return res.status(403).json({ error: 'You are not allowed to edit the phone field' });
       if (address && address !== targetUser.address) return res.status(403).json({ error: 'You are not allowed to edit the address field' });
       if (profile_image && profile_image !== targetUser.profileImage) return res.status(403).json({ error: 'You are not allowed to edit the profile image' });
 
       if (email) userUpdates.email = email;
-      if (role) userUpdates.role = role;
+
+      // ✅ FIX SEV-006: strict role allowlist — admin cannot promote anyone to admin
+      if (role) {
+        const ALLOWED_ROLES = ['customer', 'staff'];
+        if (!ALLOWED_ROLES.includes(role)) {
+          return res.status(400).json({ error: `Invalid role. Allowed values: ${ALLOWED_ROLES.join(', ')}` });
+        }
+        userUpdates.role = role;
+        // ✅ audit log every role change
+        console.log(`[AUDIT] Role change: user ${targetUserId} → '${role}' by admin ${updaterId} at ${new Date().toISOString()}`);
+      }
+
       if (specialty) staffProfileUpdates.specialty = specialty;
     }
 

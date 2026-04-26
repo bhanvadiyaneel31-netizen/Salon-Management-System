@@ -1,5 +1,11 @@
 const jwt = require('jsonwebtoken');
-const SECRET_KEY = process.env.JWT_SECRET_KEY || 'development-secret-key-do-not-use-in-prod';
+
+// ✅ FIX 1 — Crash on startup if secret is missing, no silent fallback
+if (!process.env.JWT_SECRET_KEY) {
+  throw new Error('FATAL: JWT_SECRET_KEY environment variable is not set');
+}
+
+const SECRET_KEY = process.env.JWT_SECRET_KEY;
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -13,6 +19,10 @@ const verifyToken = (req, res, next) => {
     req.user = decoded; // { user_id, role }
     next();
   } catch (error) {
+    // ✅ FIX 2 — Distinguish expired vs invalid for better client handling
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Token expired, please log in again' });
+    }
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 };
@@ -35,4 +45,5 @@ const requireAdminOrStaff = (req, res, next) => {
   });
 };
 
-module.exports = { verifyToken, requireAdmin, requireAdminOrStaff, SECRET_KEY };
+// ✅ FIX 3 — SECRET_KEY removed from exports (no route file should ever sign tokens directly)
+module.exports = { verifyToken, requireAdmin, requireAdminOrStaff };

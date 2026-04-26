@@ -90,12 +90,12 @@ router.get('/', verifyToken, async (req, res) => {
       query: req.query,
       error: error.message
     });
-    res.status(500).json({ error: 'Failed to fetch appointments: ' + error.message });
+    res.status(500).json({ error: 'Failed to fetch appointments' });
   }
 });
 
 // GET /api/appointments/slots
-router.get('/slots', async (req, res) => {
+router.get('/slots', verifyToken, async (req, res) => {
   const { date, staff_id, service_id, exclude_appointment_id } = req.query;
   if (!date || !staff_id || !service_id)
     return res.status(400).json({ error: 'Valid date, staff_id, and service_id are required' });
@@ -178,6 +178,14 @@ router.post('/', verifyToken, async (req, res) => {
   if (!service_id || !appointment_date || !appointment_time)
     return res.status(400).json({ error: 'Service ID, date, and time are required' });
 
+  // ✅ FIX STB-008: validate date format strictly
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(appointment_date))
+    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+
+  // ✅ FIX STB-020: validate time format strictly
+  if (!/^\d{2}:\d{2}$/.test(appointment_time))
+    return res.status(400).json({ error: 'Invalid time format. Use HH:MM' });
+
   const now = new Date();
   const [hours, minutes] = appointment_time.split(':').map(Number);
   const bookingDate = new Date(appointment_date);
@@ -185,59 +193,57 @@ router.post('/', verifyToken, async (req, res) => {
   if (bookingDate.getTime() < now.getTime() - 5 * 60 * 1000)
     return res.status(400).json({ error: 'Cannot book appointment in the past' });
 
-  try {
-    const service = await Service.findById(service_id);
-    if (!service || !service.isActive)
-      return res.status(404).json({ error: 'Service not found or inactive' });
+  // ✅ FIX STB-003: wrap entire booking + loyalty in a MongoDB transaction
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-    const requestedDuration = service.duration || 30;
+  try {
+    const service = await Service.findById(service_id).session(session);
+    if (!service || !service.isActive)
+      throw Object.assign(new Error('Service not found or inactive'), { status: 404 });
+
+    // ✅ FIX SEV-008: validate price and duration are positive
+    if (service.price <= 0) throw Object.assign(new Error('Service has invalid price'), { status: 400 });
+    if (service.duration <= 0) throw Object.assign(new Error('Service has invalid duration'), { status: 400 });
+
+    const requestedDuration = service.duration;
     const startHour = 10, endHour = 21;
     const reqMinutes = hours * 60 + minutes;
 
     if (reqMinutes < startHour * 60 || reqMinutes + requestedDuration > endHour * 60)
-      return res.status(400).json({ error: 'Selected time is outside business hours (10:00 - 21:00) or service overflows closing time.' });
+      throw Object.assign(new Error('Selected time is outside business hours (10:00 - 21:00)'), { status: 400 });
 
     if ((reqMinutes - startHour * 60) % requestedDuration !== 0)
-      return res.status(400).json({ error: `Invalid time slot for this service. Slots for ${service.name} (${requestedDuration} min) must start at ${requestedDuration} minute intervals from 10:00.` });
+      throw Object.assign(new Error(`Invalid time slot. Slots must start at ${requestedDuration} minute intervals from 10:00`), { status: 400 });
 
     if (staff_id) {
-      const staffProfile = await StaffProfile.findOne({ userId: staff_id });
+      const staffProfile = await StaffProfile.findOne({ userId: staff_id }).session(session);
       if (!staffProfile || !staffProfile.isAvailable)
-        return res.status(400).json({ error: 'This staff member is currently inactive' });
+        throw Object.assign(new Error('This staff member is currently inactive'), { status: 400 });
 
       if (service.category && staffProfile.category && staffProfile.category !== service.category)
-        return res.status(400).json({ error: `This staff member handles ${staffProfile.category} services, not ${service.category}` });
-
-      const reqEnd = reqMinutes + service.duration;
-      const existing = await Appointment.find({ staffId: staff_id, appointmentDate: appointment_date, status: { $ne: 'cancelled' } }).populate('serviceId', 'duration');
-      for (const b of existing) {
-        const [h, m] = b.appointmentTime.substring(0, 5).split(':').map(Number);
-        const es = h * 60 + m, ee = es + (b.serviceId?.duration || 30);
-        if (reqMinutes < ee && reqEnd > es) return res.status(409).json({ error: 'This staff is already booked during this time slot' });
-      }
+        throw Object.assign(new Error(`This staff member handles ${staffProfile.category} services, not ${service.category}`), { status: 400 });
     }
 
     const customer_id = req.user.role === 'customer' ? req.user.user_id : req.body.customer_id;
 
-    // Loyalty point redemption
+    // ✅ FIX SEV-007: validate customer_id refers to a real customer
+    const customer = await User.findById(customer_id).session(session);
+    if (!customer) throw Object.assign(new Error('Customer not found'), { status: 404 });
+    if (customer.role !== 'customer') throw Object.assign(new Error('Provided customer_id is not a customer account'), { status: 400 });
+
+    const settings = await LoyaltySetting.findOne().sort({ _id: -1 }).session(session);
+
+    const { reward_id, points_redeemed, use_all_points } = req.body;
     let discountAmount = 0;
     let pointsToRedeem = 0;
-    const { reward_id, points_redeemed, use_all_points } = req.body;
 
-    const customer = await User.findById(customer_id);
-    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+    if (reward_id && (points_redeemed || use_all_points))
+      throw Object.assign(new Error('Cannot use both a fixed reward and custom points at the same time'), { status: 400 });
 
-    const settings = await LoyaltySetting.findOne().sort({ _id: -1 });
-
-    // Ensure exclusive selection
-    if (reward_id && (points_redeemed || use_all_points)) {
-      return res.status(400).json({ error: 'Cannot use both a fixed reward and custom points at the same time' });
-    }
-
-    // Determine points to redeem based on selection
     if (reward_id) {
-      const reward = await LoyaltyReward.findById(reward_id);
-      if (!reward || !reward.isActive) return res.status(400).json({ error: 'Invalid or inactive reward selected' });
+      const reward = await LoyaltyReward.findById(reward_id).session(session);
+      if (!reward || !reward.isActive) throw Object.assign(new Error('Invalid or inactive reward selected'), { status: 400 });
       pointsToRedeem = reward.pointsRequired;
     } else if (use_all_points) {
       pointsToRedeem = customer.loyaltyPoints || 0;
@@ -246,43 +252,62 @@ router.post('/', verifyToken, async (req, res) => {
     }
 
     if (pointsToRedeem > 0) {
-      if (customer.loyaltyPoints < pointsToRedeem)
-        return res.status(400).json({ error: `Insufficient loyalty points. Available: ${customer.loyaltyPoints}, Required: ${pointsToRedeem}` });
-
       if (service.price < (settings?.minBookingAmount || 0))
-        return res.status(400).json({ error: `Minimum booking amount for point redemption is $${settings.minBookingAmount}` });
+        throw Object.assign(new Error(`Minimum booking amount for point redemption is $${settings.minBookingAmount}`), { status: 400 });
 
       const redemptionRate = settings?.redemptionRate || 0.1;
       discountAmount = pointsToRedeem * redemptionRate;
-
       const maxDiscountPercent = settings?.maxDiscountPercent || 30;
       const maxAllowed = service.price * (maxDiscountPercent / 100);
 
       if (discountAmount > maxAllowed) {
         discountAmount = maxAllowed;
-        // Recalculate points to match the capped discount exactly
         pointsToRedeem = Math.ceil(discountAmount / redemptionRate);
       }
 
-      // FIFO deduction
+      // ✅ FIX STB-004: atomic loyalty deduction — only succeeds if balance is sufficient
+      const updatedCustomer = await User.findOneAndUpdate(
+        { _id: customer_id, loyaltyPoints: { $gte: pointsToRedeem } }, // atomic check + deduct
+        { $inc: { loyaltyPoints: -pointsToRedeem } },
+        { new: true, session }
+      );
+
+      // if null → concurrent request already used the points
+      if (!updatedCustomer)
+        throw Object.assign(new Error(`Insufficient loyalty points. Required: ${pointsToRedeem}`), { status: 400 });
+
+      // FIFO deduction of earn history
       let remaining = pointsToRedeem;
-      const earnHistory = await LoyaltyPointsHistory.find({ userId: customer_id, type: 'earn', pointsRemaining: { $gt: 0 } }).sort({ createdAt: 1 });
+      const earnHistory = await LoyaltyPointsHistory.find(
+        { userId: customer_id, type: 'earn', pointsRemaining: { $gt: 0 } }
+      ).sort({ createdAt: 1 }).session(session);
+
       for (const entry of earnHistory) {
         if (remaining <= 0) break;
         const deduct = Math.min(entry.pointsRemaining, remaining);
-        await LoyaltyPointsHistory.findByIdAndUpdate(entry._id, { $inc: { pointsRemaining: -deduct } });
+        await LoyaltyPointsHistory.findByIdAndUpdate(
+          entry._id,
+          { $inc: { pointsRemaining: -deduct } },
+          { session }
+        );
         remaining -= deduct;
       }
 
-      await User.findByIdAndUpdate(customer_id, { $inc: { loyaltyPoints: -pointsToRedeem } });
-      await LoyaltyPointsHistory.create({ userId: customer_id, points: pointsToRedeem, pointsRemaining: 0, type: 'redeem', reason: 'Redeemed for appointment booking' });
+      await LoyaltyPointsHistory.create([{
+        userId: customer_id, points: pointsToRedeem, pointsRemaining: 0,
+        type: 'redeem', reason: 'Redeemed for appointment booking'
+      }], { session });
     }
 
     const originalAmount = service.price;
-    const finalAmount = originalAmount - discountAmount;
-    const discountType = (pointsToRedeem > 0 || req.body.reward_id) ? 'loyalty' : null;
+    const finalAmount = Math.max(0, originalAmount - discountAmount);
+    const discountType = pointsToRedeem > 0 ? 'loyalty' : null;
 
-    const apt = await Appointment.create({
+    // ✅ FIX STB-002: Appointment.create inside transaction
+    // If a duplicate booking slips through the race window, the unique index
+    // on {staffId, appointmentDate, appointmentTime} throws a duplicate key
+    // error here, which aborts the whole transaction cleanly.
+    const [apt] = await Appointment.create([{
       customerId: new mongoose.Types.ObjectId(customer_id),
       staffId: staff_id ? new mongoose.Types.ObjectId(staff_id) : null,
       serviceId: new mongoose.Types.ObjectId(service_id),
@@ -296,8 +321,11 @@ router.post('/', verifyToken, async (req, res) => {
       originalAmount,
       finalAmount,
       discountType,
-      rewardId: req.body.reward_id ? new mongoose.Types.ObjectId(req.body.reward_id) : null,
-    });
+      rewardId: reward_id ? new mongoose.Types.ObjectId(reward_id) : null,
+    }], { session });
+
+    await session.commitTransaction();
+    session.endSession();
 
     if (staff_id) await notify(staff_id, 'New Appointment', `New booking for ${service.name} on ${appointment_date} at ${appointment_time}`, 'new_appointment', apt._id);
 
@@ -312,9 +340,19 @@ router.post('/', verifyToken, async (req, res) => {
     }).catch(err => console.error('[EMAIL ERROR]', err.message));
 
     res.status(201).json(mapped);
+
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    // ✅ FIX STB-002: handle duplicate key = double booking attempt
+    if (error.code === 11000) {
+      return res.status(409).json({ error: 'This time slot was just booked. Please choose another slot.' });
+    }
+
     console.error('[APPOINTMENT BOOKING ERROR]', { body: req.body, user: req.user, error: error.message });
-    res.status(500).json({ error: 'Failed to book appointment: ' + (error.message || String(error)) });
+    const status = error.status || 500;
+    res.status(status).json({ error: status === 500 ? 'Failed to book appointment' : error.message });
   }
 });
 
@@ -398,7 +436,7 @@ router.post('/:id/review', verifyToken, async (req, res) => {
 
   const ratingNum = Number(rating);
   if (!Number.isFinite(ratingNum) || ratingNum < 1 || ratingNum > 5)
-    return res.status(400).json({ error: 'Rating must be a number between 1 and 5' });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Failed to submit review' : error.message });
   const ratingInt = Math.round(ratingNum);
 
   try {
@@ -556,11 +594,18 @@ router.patch('/:id/reschedule', verifyToken, async (req, res) => {
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const apt = await Appointment.findById(req.params.id);
-    if (!apt) return res.status(404).json({ error: 'Appointment not found' });
-    await Appointment.findByIdAndDelete(req.params.id);
+    if (!apt || apt.isDeleted) return res.status(404).json({ error: 'Appointment not found' });
+
+    // ✅ FIX STB-021: soft delete — preserve financial history
+    await Appointment.findByIdAndUpdate(req.params.id, {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: new mongoose.Types.ObjectId(req.user.user_id),
+    });
+
     res.json({ message: 'Appointment deleted successfully' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete' });
+    res.status(500).json({ error: 'Failed to delete appointment' });
   }
 });
 

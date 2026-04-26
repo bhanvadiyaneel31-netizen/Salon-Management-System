@@ -29,12 +29,12 @@ const cleanupExpiredPoints = async (userId) => {
         const amountToDeduct = entry.pointsRemaining;
 
         // Create expiration record
-        await LoyaltyPointsHistory.create({ 
-          userId, 
-          points: amountToDeduct, 
-          pointsRemaining: 0, 
-          type: 'redeem', 
-          reason: `Points expired (from entry #${entry._id})` 
+        await LoyaltyPointsHistory.create({
+          userId,
+          points: amountToDeduct,
+          pointsRemaining: 0,
+          type: 'redeem',
+          reason: `Points expired (from entry #${entry._id})`
         });
 
         // Decrement user's points and clamp to 0 minimum
@@ -61,7 +61,7 @@ router.get('/history', verifyToken, async (req, res) => {
 });
 
 // ---------- GET /api/loyalty/settings ----------
-router.get('/settings', async (req, res) => {
+router.get('/settings', verifyToken, async (req, res) => {
   try {
     const settings = await LoyaltySetting.findOne().sort({ _id: -1 });
     res.json(settings);
@@ -75,11 +75,11 @@ router.patch('/settings', verifyToken, requireAdmin, async (req, res) => {
   const { points_per_dollar, redemption_rate, max_discount_percent, min_booking_amount, points_expiry_days } = req.body;
   try {
     const update = {};
-    if (points_per_dollar    != null) update.pointsPerDollar    = points_per_dollar;
-    if (redemption_rate      != null) update.redemptionRate      = redemption_rate;
+    if (points_per_dollar != null) update.pointsPerDollar = points_per_dollar;
+    if (redemption_rate != null) update.redemptionRate = redemption_rate;
     if (max_discount_percent != null) update.maxDiscountPercent = max_discount_percent;
-    if (min_booking_amount   != null) update.minBookingAmount   = min_booking_amount;
-    if (points_expiry_days   != null) update.pointsExpiryDays   = points_expiry_days;
+    if (min_booking_amount != null) update.minBookingAmount = min_booking_amount;
+    if (points_expiry_days != null) update.pointsExpiryDays = points_expiry_days;
 
     await LoyaltySetting.findOneAndUpdate({}, update, { sort: { _id: -1 }, upsert: true });
     res.json({ message: 'Settings updated successfully' });
@@ -115,10 +115,10 @@ router.patch('/rewards/:id', verifyToken, requireAdmin, async (req, res) => {
   const { title, description, points_required, is_active } = req.body;
   try {
     const update = {};
-    if (title           != null) update.title          = title;
-    if (description     != null) update.description    = description;
+    if (title != null) update.title = title;
+    if (description != null) update.description = description;
     if (points_required != null) update.pointsRequired = points_required;
-    if (is_active       != null) update.isActive       = is_active;
+    if (is_active != null) update.isActive = is_active;
 
     await LoyaltyReward.findByIdAndUpdate(req.params.id, update);
     res.json({ message: 'Reward updated successfully' });
@@ -167,7 +167,7 @@ router.post('/adjust', verifyToken, requireAdmin, async (req, res) => {
     }
 
     const pointValue = type === 'earn' ? Math.abs(points) : -Math.abs(points);
-    
+
     // Update loyalty points using $inc and get the updated document
     const updatedUser = await User.findOneAndUpdate(
       { _id: targetUser._id },
@@ -176,15 +176,15 @@ router.post('/adjust', verifyToken, requireAdmin, async (req, res) => {
     );
 
     // Create history record
-    await LoyaltyPointsHistory.create({ 
-      userId: targetUser._id, 
-      points: Math.abs(points), 
+    await LoyaltyPointsHistory.create({
+      userId: targetUser._id,
+      points: Math.abs(points),
       pointsRemaining: type === 'earn' ? Math.abs(points) : 0,
-      type, 
-      reason: finalReason 
+      type,
+      reason: finalReason
     });
 
-    res.json({ 
+    res.json({
       message: 'Points adjusted successfully',
       user: {
         email: updatedUser.email,

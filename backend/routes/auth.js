@@ -4,7 +4,7 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { User, StaffProfile, Appointment } = require('../db');
-const { verifyToken, SECRET_KEY } = require('../middleware/authMiddleware');
+const { verifyToken } = require('../middleware/authMiddleware'); // ✅ removed SECRET_KEY import
 const { sendPasswordResetEmail } = require('../services/emailService');
 
 // ---------- Helpers ----------
@@ -35,8 +35,13 @@ const formatUserResponse = (user, profile = null, reviewCount = 0) => ({
   created_at: user.createdAt,
 });
 
+// ✅ uses process.env directly — no imported SECRET_KEY
 const generateToken = (user) =>
-  jwt.sign({ user_id: user._id.toString(), role: user.role }, SECRET_KEY, { expiresIn: '24h' });
+  jwt.sign(
+    { user_id: user._id.toString(), role: user.role },
+    process.env.JWT_SECRET_KEY,
+    { expiresIn: '24h' }
+  );
 
 // ---------- Routes ----------
 
@@ -46,6 +51,12 @@ router.post('/register', async (req, res) => {
   if (!name || !email || !password)
     return res.status(400).json({ error: 'Name, email, and password are required' });
 
+  // ✅ same password rules as reset-password (consistency)
+  if (password.length < 8)
+    return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+  if (!/\d/.test(password))
+    return res.status(400).json({ error: 'Password must contain at least one number' });
+
   try {
     const existing = await User.findOne({ email: email.toLowerCase().trim() });
     if (existing) return res.status(400).json({ error: 'Email already registered' });
@@ -53,7 +64,7 @@ router.post('/register', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    const newUser = await User.create({ name, email, passwordHash, phone: phone || null, role: 'customer' });
+    const newUser = await User.create({ name, email: email.toLowerCase().trim(), passwordHash, phone: phone || null, role: 'customer' });
     const token = generateToken(newUser);
 
     res.status(201).json({ user: formatUserResponse(newUser), token });
@@ -180,15 +191,6 @@ router.post('/reset-password/:token', async (req, res) => {
   }
 });
 
-// GET /api/auth/me
-router.get('/me', verifyToken, async (req, res) => {
-  try {
-    const { user, profile, reviewCount } = await getUserDetails(req.user.user_id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.status(200).json(formatUserResponse(user, profile, reviewCount));
-  } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+// ✅ duplicate /me route at line 184 REMOVED (SEV-015)
 
 module.exports = router;
