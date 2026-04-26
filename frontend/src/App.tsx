@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component, ReactNode } from 'react';
 import { Toaster } from './components/ui/sonner';
 import { Navigation } from './components/Navigation';
 import { HomePage } from './components/HomePage';
@@ -15,6 +15,47 @@ import { ResetPasswordPage } from './components/ResetPasswordPage';
 import { api } from './services/api';
 import { initializeSampleAppointments } from './services/appointmentStore';
 
+// ✅ FIX STB-018: Error Boundary prevents one crash from killing the entire app
+class ErrorBoundary extends Component { children: ReactNode; },
+{ hasError: boolean; error: Error | null }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: any) {
+    console.error('[ErrorBoundary] Caught error:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-white text-center p-8">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h1>
+          <p className="text-gray-600 mb-6">An unexpected error occurred. Please reload the page.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700"
+          >
+            Reload Page
+          </button>
+          {process.env.NODE_ENV !== 'production' && (
+            <pre className="mt-6 text-left text-xs text-red-500 max-w-xl overflow-auto">
+              {this.state.error?.message}
+            </pre>
+          )}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [currentView, setCurrentView] = useState('home');
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -27,49 +68,55 @@ export default function App() {
     return saved === 'true';
   });
 
-  // Check for existing authentication on app load
+  // ✅ useEffect 1 — auth check on app load
   useEffect(() => {
     initializeSampleAppointments();
 
-    // Check for Google Auth success redirect
     const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
+    const code = urlParams.get('code');
     const path = window.location.pathname;
 
-    if (path === '/auth-success' && token) {
-      // Store token and clean URL
-      localStorage.setItem('auth_token', token);
-      window.history.replaceState({}, document.title, "/");
+    // Google OAuth code exchange
+    if (path === '/auth-success' && code) {
+      window.history.replaceState({}, document.title, '/');
 
-      // Fetch user data with the new token
-      api.auth.getMe().then(user => {
-        localStorage.setItem('user', JSON.stringify(user));
-        setUserRole(user.role);
-
-        // Set view based on role
-        if (user.role === 'customer') setCurrentView('customer-dashboard');
-        else if (user.role === 'admin') setCurrentView('admin-dashboard');
-        else if (user.role === 'staff') setCurrentView('staff-dashboard');
-      }).catch(err => {
-        console.error('Failed to fetch user after Google Auth:', err);
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('user');
-        setCurrentView('login');
-      });
+      fetch(`${import.meta.env.VITE_API_URL}/api/auth/google/exchange`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+        .then(res => res.json())
+        .then(async ({ token, error }) => {
+          if (!token || error) throw new Error(error || 'Exchange failed');
+          localStorage.setItem('auth_token', token);
+          const user = await api.auth.getMe();
+          localStorage.setItem('user', JSON.stringify(user));
+          setUserRole(user.role);
+          if (user.role === 'customer') setCurrentView('customer-dashboard');
+          else if (user.role === 'admin') setCurrentView('admin-dashboard');
+          else if (user.role === 'staff') setCurrentView('staff-dashboard');
+        })
+        .catch(err => {
+          console.error('Failed Google Auth exchange:', err);
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user');
+          setCurrentView('login');
+        });
       return;
     }
 
-    // Check for Password Reset token in URL
+    // Password reset token in URL
     if (path.startsWith('/reset-password/')) {
       const token = path.split('/').pop();
       if (token) {
         setResetToken(token);
         setCurrentView('reset-password');
-        window.history.replaceState({}, document.title, "/");
+        window.history.replaceState({}, document.title, '/');
         return;
       }
     }
 
+    // ✅ FIX STB-013: use localStorage for instant UI, verify with server
     const currentUser = api.auth.getCurrentUser();
     if (currentUser) {
       setUserRole(currentUser.role);
@@ -80,10 +127,29 @@ export default function App() {
           case 'customer': setCurrentView('customer-dashboard'); break;
         }
       }
+
+      api.auth.getMe()
+        .then(freshUser => {
+          localStorage.setItem('user', JSON.stringify(freshUser));
+          if (freshUser.role !== currentUser.role) {
+            setUserRole(freshUser.role);
+            switch (freshUser.role) {
+              case 'admin': setCurrentView('admin-dashboard'); break;
+              case 'staff': setCurrentView('staff-dashboard'); break;
+              case 'customer': setCurrentView('customer-dashboard'); break;
+            }
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user');
+          setUserRole(null);
+          setCurrentView('home');
+        });
     }
-  }, []);
+  }, []); // ✅ closed correctly here — nothing below is inside this useEffect
 
-
+  // ✅ useEffect 2 — dark mode (separate, at correct scope)
   useEffect(() => {
     const html = document.documentElement;
     if (isDark) html.classList.add('dark');
@@ -92,6 +158,7 @@ export default function App() {
   }, [isDark]);
 
   const toggleDark = () => setIsDark(prev => !prev);
+
   const handleLogout = () => {
     api.auth.logout();
     setUserRole(null);
@@ -130,55 +197,56 @@ export default function App() {
     }
   };
 
+  // ✅ FIX STB-018: wrapped in ErrorBoundary
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-white dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors duration-300">
-      <Navigation
-        currentView={currentView}
-        setCurrentView={setCurrentView}
-        userRole={userRole}
-        setUserRole={setUserRole}
-        isDark={isDark}
-        toggleDark={toggleDark}
-        isDashboard={isDashboard}
-        onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
-        setActiveSection={setActiveSection}
-      />
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-white dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors duration-300">
+        <Navigation
+          currentView={currentView}
+          setCurrentView={setCurrentView}
+          userRole={userRole}
+          setUserRole={setUserRole}
+          isDark={isDark}
+          toggleDark={toggleDark}
+          isDashboard={isDashboard}
+          onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          setActiveSection={setActiveSection}
+        />
 
-      <div className="flex">
-        {isDashboard && (
-          <>
-            {/* Desktop Sidebar */}
-            <aside className="hidden lg:block w-64 fixed left-0 top-16 bottom-0 p-4 overflow-y-auto z-10">
-              <Sidebar
-                role={userRole}
-                activeSection={activeSection}
-                setActiveSection={setActiveSection}
-                handleLogout={handleLogout}
-              />
-            </aside>
+        <div className="flex">
+          {isDashboard && (
+            <>
+              <aside className="hidden lg:block w-64 fixed left-0 top-16 bottom-0 p-4 overflow-y-auto z-10">
+                <Sidebar
+                  role={userRole}
+                  activeSection={activeSection}
+                  setActiveSection={setActiveSection}
+                  handleLogout={handleLogout}
+                />
+              </aside>
 
-            {/* Mobile Sidebar */}
-            <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
-              <SheetContent side="left" className="w-72 p-0 border-0 bg-transparent shadow-none">
-                <div className="h-full bg-white dark:bg-gray-950 p-4">
-                  <Sidebar
-                    role={userRole}
-                    activeSection={activeSection}
-                    setActiveSection={setActiveSection}
-                    handleLogout={handleLogout}
-                    onNavigate={() => setIsMobileSidebarOpen(false)}
-                  />
-                </div>
-              </SheetContent>
-            </Sheet>
-          </>
-        )}
+              <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
+                <SheetContent side="left" className="w-72 p-0 border-0 bg-transparent shadow-none">
+                  <div className="h-full bg-white dark:bg-gray-950 p-4">
+                    <Sidebar
+                      role={userRole}
+                      activeSection={activeSection}
+                      setActiveSection={setActiveSection}
+                      handleLogout={handleLogout}
+                      onNavigate={() => setIsMobileSidebarOpen(false)}
+                    />
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </>
+          )}
 
-        <main className={`flex-1 min-w-0 transition-all duration-300 ${isDashboard ? 'lg:ml-64' : ''}`}>
-          {renderView()}
-        </main>
+          <main className={`flex-1 min-w-0 transition-all duration-300 ${isDashboard ? 'lg:ml-64' : ''}`}>
+            {renderView()}
+          </main>
+        </div>
+        <Toaster />
       </div>
-      <Toaster />
-    </div>
+    </ErrorBoundary>
   );
 }

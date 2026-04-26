@@ -27,7 +27,6 @@ import {
   Clock,
   Star,
   BarChart3,
-  Upload,
   Image as ImageIcon,
   Tag,
   TrendingUp,
@@ -171,15 +170,10 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
     const cats = currentCategories || categories;
     const defaultCategory: ServiceCategory = { id: 0, name: 'Other', description: 'General service', icon: 'scissors', color: '#9CA3AF', service_count: 0 };
 
-    // Helper to get consistent category name
-    const getCatName = (s: any) => s.category?.name || s.category || 'Other';
-
     try {
       const data = await servicesAPI.getAll({ includeInactive: true });
       const mappedServices: Service[] = data.map((s: any) => {
-        // Find matching category object
         const catMatch = cats.find(c => c.name.toLowerCase() === (s.category || '').toLowerCase());
-
         return {
           id: s.id,
           name: s.name,
@@ -199,32 +193,20 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
 
       setServices(mappedServices);
 
-      // Fetch performance data for revenue metrics
       try {
         const perf = await analyticsAPI.getServicePerformance();
-
         setStats({
           overview: {
             total_services: mappedServices.length,
             active_services: mappedServices.filter(s => s.is_active).length,
             inactive_services: mappedServices.filter(s => !s.is_active).length
           },
-          // Real popular services based on booking count
           popular_services: [...mappedServices]
             .sort((a, b) => b.booking_count - a.booking_count)
             .slice(0, 5)
-            .map(s => ({
-              id: s.id,
-              name: s.name,
-              booking_count: s.booking_count,
-              price: s.price
-            })),
+            .map(s => ({ id: s.id, name: s.name, booking_count: s.booking_count, price: s.price })),
           revenue_services: perf
-            .map((p: any) => ({
-              id: p.service_id,
-              name: p.service_name,
-              total_revenue: p.total_revenue || 0
-            }))
+            .map((p: any) => ({ id: p.service_id, name: p.service_name, total_revenue: p.total_revenue || 0 }))
             .sort((a: any, b: any) => b.total_revenue - a.total_revenue)
             .slice(0, 5),
           category_stats: [
@@ -234,7 +216,6 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
               service_count: mappedServices.filter(s => s.category?.name === c.name).length,
               total_bookings: mappedServices.filter(s => s.category?.name === c.name).reduce((sum, s) => sum + s.booking_count, 0)
             })),
-            // Add any services that have a category NOT in the 'cats' list
             ...Array.from(new Set(mappedServices
               .filter(s => !cats.find(c => c.name === s.category?.name))
               .map(s => s.category?.name || 'Other')))
@@ -248,7 +229,6 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
         });
       } catch (e) {
         console.error('Performance data fetch failed:', e);
-        // Fallback using just the services data
         setStats({
           overview: {
             total_services: mappedServices.length,
@@ -258,12 +238,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
           popular_services: [...mappedServices]
             .sort((a, b) => b.booking_count - a.booking_count)
             .slice(0, 5)
-            .map(s => ({
-              id: s.id,
-              name: s.name,
-              booking_count: s.booking_count,
-              price: s.price
-            })),
+            .map(s => ({ id: s.id, name: s.name, booking_count: s.booking_count, price: s.price })),
           revenue_services: [],
           category_stats: [
             ...cats.map(c => ({
@@ -291,15 +266,15 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
     }
   };
 
-  // Add polling for real-time analytics sync
+  // ✅ FIX STB-016: pass categories explicitly to avoid stale closure
+  // categories added to dependency array so interval always has fresh data
   useEffect(() => {
-    if (activeTab === 'analytics') {
-      const interval = setInterval(() => {
-        loadServices();
-      }, 30000); // 30s polling for analytics
-      return () => clearInterval(interval);
-    }
-  }, [activeTab]);
+    if (activeTab !== 'analytics') return;
+    const interval = setInterval(() => {
+      loadServices(categories);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [activeTab, categories]);
 
   // Utility functions
   const resetServiceForm = () => {
@@ -324,6 +299,13 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
       icon: 'folder',
       color: '#8B5CF6'
     });
+  };
+
+  // ✅ FIX STB-017: centralised dialog close handler — always resets state
+  const closeServiceDialog = () => {
+    setIsServiceDialogOpen(false);
+    setIsEditingService(null);
+    resetServiceForm();
   };
 
   // Service management functions
@@ -352,8 +334,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
       });
 
       await loadServices();
-      resetServiceForm();
-      setIsServiceDialogOpen(false);
+      closeServiceDialog();
       toast.success(`${serviceForm.name} has been added successfully!`);
     } catch (error) {
       toast.error('Failed to add service');
@@ -388,9 +369,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
       });
 
       await loadServices();
-      resetServiceForm();
-      setIsEditingService(null);
-      setIsServiceDialogOpen(false);
+      closeServiceDialog();
       toast.success('Service updated successfully!');
     } catch (error) {
       toast.error('Failed to update service');
@@ -405,38 +384,31 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
 
     try {
       const response: any = await servicesAPI.delete(serviceId);
-
-      // Update local state immediately for better UX
       setServices(prev => prev.filter(s => s.id !== serviceId));
-
-      // Re-fetch to ensure sync with backend (e.g. if it was only deactivated)
       await loadServices();
-
       const message = response?.message || `${service.name} has been processed successfully`;
       toast.success(message);
     } catch (error: any) {
       console.error('Delete error:', error);
       toast.error(error?.message || 'Failed to delete service');
-      // Re-fetch on error to ensure UI matches reality
       await loadServices();
     }
   };
 
+  // ✅ FIX: replaced FormData with JSON — backend now accepts JSON for service updates
   const toggleServiceAvailability = async (serviceId: string) => {
     try {
       const service = services.find(s => s.id === serviceId);
       if (!service) return;
 
-      // Must use FormData because the PUT route uses multer (multipart/form-data)
-      const formData = new FormData();
-      formData.append('name', service.name);
-      formData.append('description', service.description || '');
-      formData.append('duration', service.duration.toString());
-      formData.append('price', service.price.toString());
-      formData.append('category', service.category.name);
-      formData.append('is_active', service.is_active ? 'false' : 'true');
-
-      await servicesAPI.update(serviceId, formData);
+      await servicesAPI.update(serviceId, {
+        name: service.name,
+        description: service.description || '',
+        duration: service.duration,
+        price: service.price,
+        category: service.category.name,
+        is_active: !service.is_active,  // toggle directly
+      });
 
       await loadServices();
       toast.success(`${service.name} ${!service.is_active ? 'enabled' : 'disabled'} successfully`);
@@ -474,7 +446,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
     }
   };
 
-  // Category management functions (Read-only for now due to database CHECK constraints)
+  // Category management functions
   const handleAddCategory = async () => {
     toast.info('Category management is restricted to predefined database categories for stability.');
     setIsCategoryDialogOpen(false);
@@ -502,42 +474,20 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
     const matchesSearch = service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       service.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       service.category.name.toLowerCase().includes(searchTerm.toLowerCase());
-
     const matchesCategory = selectedCategory === 'all' || service.category.id === parseInt(selectedCategory);
-
     const matchesPrice = service.price >= priceRange[0] && service.price <= priceRange[1];
-
     const matchesStatus = showInactiveServices || service.is_active;
-
     return matchesSearch && matchesCategory && matchesPrice && matchesStatus;
   }).sort((a, b) => {
-    let aValue, bValue;
-
+    let aValue: any, bValue: any;
     switch (sortBy) {
-      case 'price':
-        aValue = a.price;
-        bValue = b.price;
-        break;
-      case 'duration':
-        aValue = a.duration;
-        bValue = b.duration;
-        break;
-      case 'booking_count':
-        aValue = a.booking_count;
-        bValue = b.booking_count;
-        break;
-      case 'rating':
-        aValue = a.average_rating;
-        bValue = b.average_rating;
-        break;
-      default:
-        aValue = a.name.toLowerCase();
-        bValue = b.name.toLowerCase();
+      case 'price': aValue = a.price; bValue = b.price; break;
+      case 'duration': aValue = a.duration; bValue = b.duration; break;
+      case 'booking_count': aValue = a.booking_count; bValue = b.booking_count; break;
+      case 'rating': aValue = a.average_rating; bValue = b.average_rating; break;
+      default: aValue = a.name.toLowerCase(); bValue = b.name.toLowerCase();
     }
-
-    if (sortOrder === 'desc') {
-      return aValue < bValue ? 1 : -1;
-    }
+    if (sortOrder === 'desc') return aValue < bValue ? 1 : -1;
     return aValue > bValue ? 1 : -1;
   });
 
@@ -579,14 +529,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
           <div className="flex-1">
             <h3 className="font-semibold text-lg text-gray-900 mb-1">{service.name}</h3>
             <p className="text-gray-600 text-sm line-clamp-2 mb-2">{service.description}</p>
-            <Badge
-              variant="outline"
-              className="text-xs"
-              style={{
-                borderColor: service.category.color,
-                color: service.category.color
-              }}
-            >
+            <Badge variant="outline" className="text-xs" style={{ borderColor: service.category.color, color: service.category.color }}>
               {service.category.name}
             </Badge>
           </div>
@@ -617,31 +560,17 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
         </div>
 
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 border-purple-200 text-purple-600 hover:bg-purple-50"
-            onClick={() => openViewDetails(service.id)}
-          >
+          <Button variant="outline" size="sm" className="flex-1 border-purple-200 text-purple-600 hover:bg-purple-50" onClick={() => openViewDetails(service.id)}>
             <Eye className="w-4 h-4 mr-2" />
             Details
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 border-purple-200 text-purple-600 hover:bg-purple-50"
-            onClick={() => openEditService(service)}
-          >
+          <Button variant="outline" size="sm" className="flex-1 border-purple-200 text-purple-600 hover:bg-purple-50" onClick={() => openEditService(service)}>
             <Edit className="w-4 h-4 mr-2" />
             Edit
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-red-200 text-red-600 hover:bg-red-50"
-              >
+              <Button variant="outline" size="sm" className="border-red-200 text-red-600 hover:bg-red-50">
                 <Trash2 className="w-4 h-4" />
               </Button>
             </AlertDialogTrigger>
@@ -654,10 +583,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => handleDeleteService(service.id)}
-                  className="bg-red-600 hover:bg-red-700"
-                >
+                <AlertDialogAction onClick={() => handleDeleteService(service.id)} className="bg-red-600 hover:bg-red-700">
                   Delete Service
                 </AlertDialogAction>
               </AlertDialogFooter>
@@ -670,9 +596,6 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
 
   return (
     <div className="space-y-6">
-
-
-      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="flex flex-col sm:grid sm:grid-cols-3 w-full h-auto gap-1 bg-purple-50 border border-purple-100 rounded-xl p-1">
           <TabsTrigger value="services" className="flex w-full items-center justify-center gap-2 data-[state=active]:bg-white data-[state=active]:text-purple-600">
@@ -698,27 +621,27 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1 bg-white rounded-lg border border-purple-200 p-1">
-                <Button
-                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  onClick={() => setViewMode('grid')}
-                >
+                <Button variant={viewMode === 'grid' ? 'default' : 'ghost'} size="sm" className="h-8 w-8 p-0" onClick={() => setViewMode('grid')}>
                   <Grid className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant={viewMode === 'list' ? 'default' : 'ghost'}
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  onClick={() => setViewMode('list')}
-                >
+                <Button variant={viewMode === 'list' ? 'default' : 'ghost'} size="sm" className="h-8 w-8 p-0" onClick={() => setViewMode('list')}>
                   <List className="h-4 w-4" />
                 </Button>
               </div>
 
-              <Dialog open={isServiceDialogOpen} onOpenChange={setIsServiceDialogOpen}>
+              {/* ✅ FIX STB-017: onOpenChange calls closeServiceDialog so state always resets on close */}
+              <Dialog
+                open={isServiceDialogOpen}
+                onOpenChange={(open) => {
+                  if (!open) closeServiceDialog();
+                  else setIsServiceDialogOpen(true);
+                }}
+              >
                 <DialogTrigger asChild>
-                  <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl">
+                  <Button
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl"
+                    onClick={() => { setIsEditingService(null); resetServiceForm(); }}
+                  >
                     <Plus className="w-4 h-4 mr-2" />
                     Add Service
                   </Button>
@@ -832,11 +755,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                     </div>
                   </div>
                   <DialogFooter className="gap-2">
-                    <Button variant="outline" onClick={() => {
-                      setIsServiceDialogOpen(false);
-                      setIsEditingService(null);
-                      resetServiceForm();
-                    }}>
+                    <Button variant="outline" onClick={closeServiceDialog}>
                       Cancel
                     </Button>
                     <Button
@@ -903,20 +822,10 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                 <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
                   <div className="flex-1">
                     <Label className="text-sm mb-2 block">Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
-                    <Slider
-                      value={priceRange}
-                      onValueChange={setPriceRange}
-                      max={500}
-                      step={5}
-                      className="w-full"
-                    />
+                    <Slider value={priceRange} onValueChange={setPriceRange} max={500} step={5} className="w-full" />
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Switch
-                      id="show-inactive"
-                      checked={showInactiveServices}
-                      onCheckedChange={setShowInactiveServices}
-                    />
+                    <Switch id="show-inactive" checked={showInactiveServices} onCheckedChange={setShowInactiveServices} />
                     <Label htmlFor="show-inactive" className="text-sm">Show inactive services</Label>
                   </div>
                 </div>
@@ -964,11 +873,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                             <div className="flex items-center gap-3">
                               <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center">
                                 {service.image_url ? (
-                                  <ImageWithFallback
-                                    src={getFullImageUrl(service.image_url)}
-                                    alt={service.name}
-                                    className="w-full h-full object-cover rounded-lg"
-                                  />
+                                  <ImageWithFallback src={getFullImageUrl(service.image_url)} alt={service.name} className="w-full h-full object-cover rounded-lg" />
                                 ) : (
                                   <ImageIcon className="w-6 h-6 text-gray-400" />
                                 )}
@@ -980,13 +885,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              variant="outline"
-                              style={{
-                                borderColor: service.category.color,
-                                color: service.category.color
-                              }}
-                            >
+                            <Badge variant="outline" style={{ borderColor: service.category.color, color: service.category.color }}>
                               {service.category.name}
                             </Badge>
                           </TableCell>
@@ -1004,12 +903,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                               <Badge className={service.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
                                 {service.is_active ? 'Active' : 'Inactive'}
                               </Badge>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() => toggleServiceAvailability(service.id)}
-                              >
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => toggleServiceAvailability(service.id)}>
                                 {service.is_available ?
                                   <ToggleRight className="h-4 w-4 text-green-600" /> :
                                   <ToggleLeft className="h-4 w-4 text-red-600" />
@@ -1019,29 +913,15 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 text-purple-600 hover:bg-purple-50"
-                                onClick={() => openViewDetails(service.id)}
-                              >
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-purple-600 hover:bg-purple-50" onClick={() => openViewDetails(service.id)}>
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 text-purple-600 hover:bg-purple-50"
-                                onClick={() => openEditService(service)}
-                              >
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-purple-600 hover:bg-purple-50" onClick={() => openEditService(service)}>
                                 <Edit className="h-4 w-4" />
                               </Button>
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 text-red-600 hover:bg-red-50"
-                                  >
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50">
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </AlertDialogTrigger>
@@ -1054,10 +934,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleDeleteService(service.id)}
-                                      className="bg-red-600 hover:bg-red-700"
-                                    >
+                                    <AlertDialogAction onClick={() => handleDeleteService(service.id)} className="bg-red-600 hover:bg-red-700">
                                       Delete Service
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
@@ -1195,17 +1072,10 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                   </div>
                 </div>
                 <DialogFooter className="gap-2">
-                  <Button variant="outline" onClick={() => {
-                    setIsCategoryDialogOpen(false);
-                    setIsEditingCategory(null);
-                    resetCategoryForm();
-                  }}>
+                  <Button variant="outline" onClick={() => { setIsCategoryDialogOpen(false); setIsEditingCategory(null); resetCategoryForm(); }}>
                     Cancel
                   </Button>
-                  <Button
-                    onClick={isEditingCategory ? handleEditCategory : handleAddCategory}
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                  >
+                  <Button onClick={isEditingCategory ? handleEditCategory : handleAddCategory} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
                     {isEditingCategory ? 'Update Category' : 'Add Category'}
                   </Button>
                 </DialogFooter>
@@ -1218,10 +1088,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
               <Card key={category.id} className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg hover:shadow-xl transition-all duration-300">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
-                    <div
-                      className="w-12 h-12 rounded-full flex items-center justify-center text-white text-xl"
-                      style={{ backgroundColor: category.color }}
-                    >
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-white text-xl" style={{ backgroundColor: category.color }}>
                       {category.icon === 'scissors' && '✂️'}
                       {category.icon === 'star' && '⭐'}
                       {category.icon === 'palette' && '🎨'}
@@ -1246,29 +1113,13 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-
                   <h3 className="font-semibold text-lg text-gray-900 mb-2">{category.name}</h3>
                   <p className="text-gray-600 text-sm mb-4 line-clamp-2">{category.description}</p>
-
                   <div className="flex items-center justify-between">
-                    <Badge
-                      variant="outline"
-                      style={{
-                        borderColor: category.color,
-                        color: category.color
-                      }}
-                    >
+                    <Badge variant="outline" style={{ borderColor: category.color, color: category.color }}>
                       {category.service_count || 0} services
                     </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-purple-600 hover:bg-purple-50"
-                      onClick={() => {
-                        setSelectedCategory(category.id.toString());
-                        setActiveTab('services');
-                      }}
-                    >
+                    <Button variant="ghost" size="sm" className="text-purple-600 hover:bg-purple-50" onClick={() => { setSelectedCategory(category.id.toString()); setActiveTab('services'); }}>
                       View Services
                     </Button>
                   </div>
@@ -1287,7 +1138,6 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
 
           {stats && (
             <>
-              {/* Overview Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card className="border-0 bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl shadow-lg">
                   <CardContent className="p-6">
@@ -1332,9 +1182,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                 </Card>
               </div>
 
-              {/* Charts Row */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Popular Services */}
                 <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -1345,13 +1193,7 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                   <CardContent>
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={stats.popular_services}>
-                        <XAxis
-                          dataKey="name"
-                          angle={-45}
-                          textAnchor="end"
-                          height={100}
-                          fontSize={12}
-                        />
+                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} fontSize={12} />
                         <YAxis />
                         <Tooltip />
                         <Bar dataKey="booking_count" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
@@ -1360,7 +1202,6 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                   </CardContent>
                 </Card>
 
-                {/* Category Distribution */}
                 <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -1404,7 +1245,6 @@ export function ManageServicePanel({ defaultTab }: ManageServicePanelProps) {
                 </Card>
               </div>
 
-              {/* Revenue Analytics */}
               <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">

@@ -106,7 +106,9 @@ export interface Notification {
   created_at: string;
 }
 
-// API utility functions
+// ✅ FIX STB-015: timeout constant — all requests abort after 15s
+const REQUEST_TIMEOUT_MS = 15_000;
+
 async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -122,16 +124,22 @@ async function apiRequest<T>(
     (headers as any)['Content-Type'] = 'application/json';
   }
 
+  // ✅ FIX STB-015: AbortController gives every request a 15s timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   const config: RequestInit = {
     ...options,
     headers,
+    signal: controller.signal,
   };
 
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+    clearTimeout(timeoutId);
 
-    const contentType = response.headers.get("content-type");
-    const isJson = contentType && contentType.includes("application/json");
+    const contentType = response.headers.get('content-type');
+    const isJson = contentType && contentType.includes('application/json');
 
     if (!response.ok) {
       if (isJson) {
@@ -140,18 +148,23 @@ async function apiRequest<T>(
       } else {
         const text = await response.text();
         if (response.status === 404) {
-          throw new Error("Backend route not found. Did you restart the server?");
+          throw new Error('Backend route not found. Did you restart the server?');
         }
         throw new Error(`Server Error (${response.status}): ${text.substring(0, 100)}...`);
       }
     }
 
-    if (!isJson) {
-      return null as any;
+    if (!isJson) return null as any;
+    return await response.json();
+
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+
+    // ✅ FIX STB-015: friendly timeout message instead of cryptic AbortError
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your connection and try again.');
     }
 
-    return await response.json();
-  } catch (error) {
     console.error('API Error:', error);
     throw error;
   }
@@ -204,7 +217,15 @@ export const authAPI = {
 
   getCurrentUser(): User | null {
     const userStr = localStorage.getItem('user');
-    return userStr ? JSON.parse(userStr) : null;
+    if (!userStr) return null;
+    // ✅ FIX STB-014: corrupted localStorage crashes the entire app without this
+    try {
+      return JSON.parse(userStr);
+    } catch {
+      localStorage.removeItem('user');
+      localStorage.removeItem('auth_token');
+      return null;
+    }
   },
 
   isAuthenticated(): boolean {

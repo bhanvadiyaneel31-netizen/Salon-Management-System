@@ -31,7 +31,7 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
 
     const now = new Date();
     const thisMonthPrefix = fmtMonth(now);
-    const lastMonthDate   = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthPrefix = fmtMonth(lastMonthDate);
 
     const thisMonth = await Appointment.countDocuments({ appointmentDate: { $regex: `^${thisMonthPrefix}` } });
@@ -54,7 +54,7 @@ router.get('/weekly-data', requireAdmin, async (req, res) => {
     const sixDaysAgo = new Date(now);
     sixDaysAgo.setDate(now.getDate() - 6);
     const fromDate = fmtDate(sixDaysAgo);
-    const toDate   = fmtDate(now);
+    const toDate = fmtDate(now);
 
     const raw = await Appointment.find({ appointmentDate: { $gte: fromDate, $lte: toDate } });
 
@@ -70,7 +70,7 @@ router.get('/weekly-data', requireAdmin, async (req, res) => {
     ];
 
     raw.forEach(a => {
-      const d    = new Date(a.appointmentDate + 'T00:00:00');
+      const d = new Date(a.appointmentDate + 'T00:00:00');
       const name = dayNames[d.getDay()];
       const slot = weeklyFormat.find(w => w.day === name);
       if (slot) {
@@ -89,7 +89,7 @@ router.get('/weekly-data', requireAdmin, async (req, res) => {
 router.get('/service-distribution', requireAdmin, async (req, res) => {
   try {
     const CATEGORIES = ['Hair', 'Facial', 'Nails', 'Massage', 'Wellness', 'Beauty'];
-    const COLORS     = ['#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#06b6d4', '#3b82f6'];
+    const COLORS = ['#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#06b6d4', '#3b82f6'];
 
     const { Service } = require('../db');
     const agg = await Service.aggregate([{ $group: { _id: '$category', value: { $sum: 1 } } }]);
@@ -103,39 +103,92 @@ router.get('/service-distribution', requireAdmin, async (req, res) => {
 });
 
 // GET /api/analytics/staff-performance
+// ✅ FIX STB-007: replaced 3 separate DB round-trips with a single $lookup aggregation pipeline
 router.get('/staff-performance', requireAdmin, async (req, res) => {
   try {
-    const staffUsers = await User.find({ role: 'staff' });
-    const profiles   = await StaffProfile.find({ userId: { $in: staffUsers.map(u => u._id) } });
-    const profileMap = {};
-    profiles.forEach(p => { profileMap[p.userId.toString()] = p; });
+    const results = await User.aggregate([
+      // Step 1: only staff users
+      { $match: { role: 'staff' } },
 
-    const agg = await Appointment.aggregate([
-      { $match: { staffId: { $in: staffUsers.map(u => u._id) } } },
-      { $group: {
-        _id:         '$staffId',
-        appointments: { $sum: 1 },
-        completed:   { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
-        revenue:     { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$finalAmount', 0] } },
-      }},
+      // Step 2: join their StaffProfile
+      {
+        $lookup: {
+          from: 'staffprofiles',
+          localField: '_id',
+          foreignField: 'userId',
+          as: 'profile',
+        },
+      },
+      // preserveNullAndEmpty keeps staff without a profile in results
+      { $unwind: { path: '$profile', preserveNullAndEmpty: true } },
+
+      // Step 3: join their Appointments
+      {
+        $lookup: {
+          from: 'appointments',
+          localField: '_id',
+          foreignField: 'staffId',
+          as: 'appointments',
+        },
+      },
+
+      // Step 4: compute stats inline — no extra round-trip
+      {
+        $addFields: {
+          total_appointments: { $size: '$appointments' },
+          completed: {
+            $size: {
+              $filter: {
+                input: '$appointments',
+                as: 'a',
+                cond: { $eq: ['$$a.status', 'completed'] },
+              },
+            },
+          },
+          revenue: {
+            $sum: {
+              $map: {
+                input: {
+                  $filter: {
+                    input: '$appointments',
+                    as: 'a',
+                    cond: { $eq: ['$$a.status', 'completed'] },
+                  },
+                },
+                as: 'a',
+                in: { $ifNull: ['$$a.finalAmount', 0] },
+              },
+            },
+          },
+        },
+      },
+
+      // Step 5: project only the fields we need — drop raw appointments array
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          specialty: '$profile.specialty',
+          rating: '$profile.rating',
+          total_appointments: 1,
+          completed: 1,
+          revenue: 1,
+        },
+      },
     ]);
-    const aggMap = {};
-    agg.forEach(r => { aggMap[r._id.toString()] = r; });
 
-    const formatted = staffUsers.map(u => {
-      const p    = profileMap[u._id.toString()] || {};
-      const stats = aggMap[u._id.toString()]    || { appointments: 0, completed: 0, revenue: 0 };
-      return {
-        id:              u._id.toString(),
-        name:            u.name,
-        role:            p.specialty || '',
-        rating:          p.rating    || 0,
-        appointments:    stats.appointments,
-        completed:       stats.completed,
-        revenue:         stats.revenue || 0,
-        completion_rate: stats.appointments > 0 ? parseFloat(((stats.completed / stats.appointments) * 100).toFixed(1)) : 0,
-      };
-    });
+    const formatted = results.map(u => ({
+      id: u._id.toString(),
+      name: u.name,
+      role: u.specialty || '',
+      rating: u.rating || 0,
+      appointments: u.total_appointments,
+      completed: u.completed,
+      revenue: u.revenue || 0,
+      completion_rate: u.total_appointments > 0
+        ? parseFloat(((u.completed / u.total_appointments) * 100).toFixed(1))
+        : 0,
+    }));
 
     res.json(formatted);
   } catch (error) {
@@ -152,12 +205,14 @@ router.get('/service-performance', requireAdmin, async (req, res) => {
 
     const agg = await Appointment.aggregate([
       { $match: { serviceId: { $in: services.map(s => s._id) } } },
-      { $group: {
-        _id:               '$serviceId',
-        total_bookings:    { $sum: 1 },
-        completed_bookings: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
-        total_revenue:     { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$finalAmount', 0] } },
-      }},
+      {
+        $group: {
+          _id: '$serviceId',
+          total_bookings: { $sum: 1 },
+          completed_bookings: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+          total_revenue: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$finalAmount', 0] } },
+        },
+      },
     ]);
     const aggMap = {};
     agg.forEach(r => { aggMap[r._id.toString()] = r; });
@@ -165,15 +220,19 @@ router.get('/service-performance', requireAdmin, async (req, res) => {
     const formatted = services.map(s => {
       const stats = aggMap[s._id.toString()] || { total_bookings: 0, completed_bookings: 0, total_revenue: 0 };
       return {
-        service_id:        s._id.toString(),
-        service_name:      s.name,
-        category:          s.category,
-        base_price:        s.price,
-        total_bookings:    stats.total_bookings,
+        service_id: s._id.toString(),
+        service_name: s.name,
+        category: s.category,
+        base_price: s.price,
+        total_bookings: stats.total_bookings,
         completed_bookings: stats.completed_bookings,
-        total_revenue:     stats.total_revenue || 0,
-        average_revenue:   stats.completed_bookings > 0 ? parseFloat((stats.total_revenue / stats.completed_bookings).toFixed(2)) : 0,
-        completion_rate:   stats.total_bookings > 0 ? parseFloat(((stats.completed_bookings / stats.total_bookings) * 100).toFixed(1)) : 0,
+        total_revenue: stats.total_revenue || 0,
+        average_revenue: stats.completed_bookings > 0
+          ? parseFloat((stats.total_revenue / stats.completed_bookings).toFixed(2))
+          : 0,
+        completion_rate: stats.total_bookings > 0
+          ? parseFloat(((stats.completed_bookings / stats.total_bookings) * 100).toFixed(1))
+          : 0,
       };
     }).sort((a, b) => b.total_bookings - a.total_bookings);
 
@@ -187,13 +246,13 @@ router.get('/service-performance', requireAdmin, async (req, res) => {
 // GET /api/analytics/monthly-revenue
 router.get('/monthly-revenue', requireAdmin, async (req, res) => {
   try {
-    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const now = new Date();
 
     // Build scaffold for last 6 months
     const months = [];
     for (let i = 5; i >= 0; i--) {
-      const d   = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = fmtMonth(d);
       months.push({ month: monthNames[d.getMonth()], month_key: key, appointments: 0, revenue: 0 });
     }
@@ -202,7 +261,7 @@ router.get('/monthly-revenue', requireAdmin, async (req, res) => {
     const raw = await Appointment.find({ appointmentDate: { $gte: fromKey + '-01' } });
 
     raw.forEach(a => {
-      const key  = a.appointmentDate.substring(0, 7);
+      const key = a.appointmentDate.substring(0, 7);
       const slot = months.find(m => m.month_key === key);
       if (slot) {
         slot.appointments++;
