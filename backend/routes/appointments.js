@@ -276,63 +276,63 @@ router.post('/', verifyToken, async (req, res) => {
           pointsToRedeem = Math.ceil(discountAmount / redemptionRate);
         }
       }
-
-      const originalAmount = service.price;
-      const finalAmount = Math.max(0, originalAmount - discountAmount);
-      const discountType = pointsToRedeem > 0 ? 'loyalty' : null;
-
-      // ✅ FIX STB-002: Appointment.create inside transaction
-      // If a duplicate booking slips through the race window, the unique index
-      // on {staffId, appointmentDate, appointmentTime} throws a duplicate key
-      // error here, which aborts the whole transaction cleanly.
-      const [apt] = await Appointment.create([{
-        customerId: new mongoose.Types.ObjectId(customer_id),
-        staffId: staff_id ? new mongoose.Types.ObjectId(staff_id) : null,
-        serviceId: new mongoose.Types.ObjectId(service_id),
-        appointmentDate: appointment_date,
-        appointmentTime: appointment_time,
-        notes,
-        price: finalAmount,
-        status: 'pending',
-        pointsRedeemed: pointsToRedeem,
-        discountAmount,
-        originalAmount,
-        finalAmount,
-        discountType,
-        rewardId: reward_id ? new mongoose.Types.ObjectId(reward_id) : null,
-      }], { session });
-
-      await session.commitTransaction();
-      session.endSession();
-
-      if (staff_id) await notify(staff_id, 'New Appointment', `New booking for ${service.name} on ${appointment_date} at ${appointment_time}`, 'new_appointment', apt._id);
-
-      const populated = await fetchAppointment(apt._id);
-      const mapped = mapAppointment(populated);
-
-      sendAppointmentEmail({
-        to: mapped.customer?.email, customerName: mapped.customer?.name,
-        serviceName: mapped.service?.name, status: 'pending',
-        date: apt.appointmentDate, time: apt.appointmentTime,
-        staffName: mapped.staff?.name, type: 'booked',
-      }).catch(err => console.error('[EMAIL ERROR]', err.message));
-
-      res.status(201).json(mapped);
-
-    } catch (error) {
-      await session.abortTransaction();
-      session.endSession();
-
-      // ✅ FIX STB-002: handle duplicate key = double booking attempt
-      if (error.code === 11000) {
-        return res.status(409).json({ error: 'This time slot was just booked. Please choose another slot.' });
-      }
-
-      console.error('[APPOINTMENT BOOKING ERROR]', { body: req.body, user: req.user, error: error.message });
-      const status = error.status || 500;
-      res.status(status).json({ error: status === 500 ? 'Failed to book appointment' : error.message });
     }
-  });
+
+    const originalAmount = service.price;
+    const finalAmount = Math.max(0, originalAmount - discountAmount);
+    const discountType = pointsToRedeem > 0 ? 'loyalty' : null;
+
+    // ✅ FIX STB-002: Appointment.create inside transaction
+    // If a duplicate booking slips through the race window, the unique index
+    // on {staffId, appointmentDate, appointmentTime} throws a duplicate key
+    // error here, which aborts the whole transaction cleanly.
+    const [apt] = await Appointment.create([{
+      customerId: new mongoose.Types.ObjectId(customer_id),
+      staffId: staff_id ? new mongoose.Types.ObjectId(staff_id) : null,
+      serviceId: new mongoose.Types.ObjectId(service_id),
+      appointmentDate: appointment_date,
+      appointmentTime: appointment_time,
+      notes,
+      price: finalAmount,
+      status: 'pending',
+      pointsRedeemed: pointsToRedeem,
+      discountAmount,
+      originalAmount,
+      finalAmount,
+      discountType,
+      rewardId: reward_id ? new mongoose.Types.ObjectId(reward_id) : null,
+    }], { session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    if (staff_id) await notify(staff_id, 'New Appointment', `New booking for ${service.name} on ${appointment_date} at ${appointment_time}`, 'new_appointment', apt._id);
+
+    const populated = await fetchAppointment(apt._id);
+    const mapped = mapAppointment(populated);
+
+    sendAppointmentEmail({
+      to: mapped.customer?.email, customerName: mapped.customer?.name,
+      serviceName: mapped.service?.name, status: 'pending',
+      date: apt.appointmentDate, time: apt.appointmentTime,
+      staffName: mapped.staff?.name, type: 'booked',
+    }).catch(err => console.error('[EMAIL ERROR]', err.message));
+
+    res.status(201).json(mapped);
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    // ✅ FIX STB-002: handle duplicate key = double booking attempt
+    if (error.code === 11000) {
+      return res.status(409).json({ error: 'This time slot was just booked. Please choose another slot.' });
+    }
+
+    console.error('[APPOINTMENT BOOKING ERROR]', { body: req.body, user: req.user, error: error.message });
+    const status = error.status || 500;
+    res.status(status).json({ error: status === 500 ? 'Failed to book appointment' : error.message });
+  }
+});
 
 // PATCH /api/appointments/:id/status
 router.patch('/:id/status', verifyToken, async (req, res) => {
