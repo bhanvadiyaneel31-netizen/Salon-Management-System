@@ -22,7 +22,9 @@ export function ServicesPage({ setCurrentView, setPreselectedServiceId }: Servic
         const data = await api.services.getAll({ bookable: true });
         setServices(data.map((s: any) => ({
           ...s,
-          image: s.image_url ? `${API_ORIGIN}${s.image_url}` : `https://picsum.photos/seed/${s.id}/400/300`
+          image: s.image_url && (s.image_url.startsWith('http') || s.image_url.startsWith('data:'))
+            ? s.image_url  // Already absolute URL or base64
+            : (s.image_url ? `${API_ORIGIN}${s.image_url}` : `https://picsum.photos/seed/${s.id}/400/300`)
         })));
       } catch (error) {
         console.error('Failed to load services:', error);
@@ -56,7 +58,7 @@ export function ServicesPage({ setCurrentView, setPreselectedServiceId }: Servic
             Our Services
           </h1>
           <p className="text-base sm:text-lg lg:text-xl text-gray-600 max-w-3xl mx-auto">
-            Discover our comprehensive range of beauty treatments designed to make you look and feel your absolute best. 
+            Discover our comprehensive range of beauty treatments designed to make you look and feel your absolute best.
             All services are performed by certified professionals using premium products.
           </p>
         </div>
@@ -72,7 +74,7 @@ export function ServicesPage({ setCurrentView, setPreselectedServiceId }: Servic
             categories.map((cat) => {
               const categoryServices = getServicesByCategory(cat.key);
               if (categoryServices.length === 0) return null;
-              
+
               const Icon = cat.icon;
               return (
                 <section key={cat.key}>
@@ -102,7 +104,7 @@ export function ServicesPage({ setCurrentView, setPreselectedServiceId }: Servic
                             </Badge>
                           </div>
                         </div>
-                        
+
                         <CardHeader className="pb-3 px-4 sm:px-6">
                           <CardTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
                             {service.name}
@@ -112,12 +114,12 @@ export function ServicesPage({ setCurrentView, setPreselectedServiceId }: Servic
                             <span className="text-sm sm:text-base font-medium">{service.duration} minutes</span>
                           </div>
                         </CardHeader>
-                        
+
                         <CardContent className="pt-0 px-4 sm:px-6">
                           <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6 leading-relaxed line-clamp-3">
                             {service.description}
                           </p>
-                          
+
                           <Button
                             onClick={() => {
                               setPreselectedServiceId(service.id.toString());
@@ -151,7 +153,7 @@ export function ServicesPage({ setCurrentView, setPreselectedServiceId }: Servic
             Not Sure Which Service to Choose?
           </h2>
           <p className="text-base sm:text-lg lg:text-xl text-purple-100 mb-6 sm:mb-8 max-w-2xl mx-auto">
-            Our expert team is here to help you find the perfect treatment for your needs. 
+            Our expert team is here to help you find the perfect treatment for your needs.
             Book a consultation or give us a call to discuss your beauty goals.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
