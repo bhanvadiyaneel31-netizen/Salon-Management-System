@@ -276,7 +276,9 @@ export function CustomerDashboard({
         ]);
         setServices(servicesData.map((s: any) => ({
           ...s,
-          image: s.image_url ? `${API_ORIGIN}${s.image_url}` : `https://picsum.photos/seed/${(s.name || 'salon').replace(/\s+/g, '')}/400/300`,
+          image: s.image_url && (s.image_url.startsWith('http') || s.image_url.startsWith('data:'))
+            ? s.image_url  // Already absolute URL or base64
+            : (s.image_url ? `${API_ORIGIN}${s.image_url}` : `https://picsum.photos/seed/${(s.name || 'salon').replace(/\s+/g, '')}/400/300`),
           staff: s.assigned_staff?.length > 0
             ? s.assigned_staff
             : staffData.filter((st: any) => st.status === 'active' || st.is_available).map((st: any) => st.name)

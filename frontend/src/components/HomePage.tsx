@@ -24,7 +24,9 @@ export function HomePage({ setCurrentView, setPreselectedServiceId }: HomePagePr
           return {
             ...s,
             icon: cat === 'hair' ? Scissors : cat === 'facial' ? Sparkles : Heart,
-            image: s.image_url ? `${API_ORIGIN}${s.image_url}` : `https://picsum.photos/seed/${s.id}/400/300`
+            image: s.image_url && (s.image_url.startsWith('http') || s.image_url.startsWith('data:'))
+              ? s.image_url  // Already absolute URL or base64
+              : (s.image_url ? `${API_ORIGIN}${s.image_url}` : `https://picsum.photos/seed/${s.id}/400/300`)
           };
         }));
       } catch (error) {
