@@ -241,10 +241,17 @@ router.post('/', verifyToken, async (req, res) => {
     if (reward_id && (points_redeemed || use_all_points))
       throw Object.assign(new Error('Cannot use both a fixed reward and custom points at the same time'), { status: 400 });
 
+    let rewardDiscountPct = null; // ✅ track if reward has its own % discount
+
     if (reward_id) {
       const reward = await LoyaltyReward.findById(reward_id).session(session);
-      if (!reward || !reward.isActive) throw Object.assign(new Error('Invalid or inactive reward selected'), { status: 400 });
+      if (!reward || !reward.isActive)
+        throw Object.assign(new Error('Invalid or inactive reward selected'), { status: 400 });
       pointsToRedeem = reward.pointsRequired;
+      // ✅ if reward has a discount percentage, use it directly
+      if (reward.discountPercentage > 0) {
+        rewardDiscountPct = reward.discountPercentage;
+      }
     } else if (use_all_points) {
       pointsToRedeem = customer.loyaltyPoints || 0;
     } else if (points_redeemed) {
@@ -255,106 +262,77 @@ router.post('/', verifyToken, async (req, res) => {
       if (service.price < (settings?.minBookingAmount || 0))
         throw Object.assign(new Error(`Minimum booking amount for point redemption is $${settings.minBookingAmount}`), { status: 400 });
 
-      const redemptionRate = settings?.redemptionRate || 0.1;
-      discountAmount = pointsToRedeem * redemptionRate;
-      const maxDiscountPercent = settings?.maxDiscountPercent || 30;
-      const maxAllowed = service.price * (maxDiscountPercent / 100);
-
-      if (discountAmount > maxAllowed) {
-        discountAmount = maxAllowed;
-        pointsToRedeem = Math.ceil(discountAmount / redemptionRate);
+      if (rewardDiscountPct !== null) {
+        // ✅ reward has its own % — use it directly (Bronze=10%, Silver=25%, Gold=50%)
+        discountAmount = service.price * (rewardDiscountPct / 100);
+      } else {
+        // fallback: points-based redemption using redemption rate
+        const redemptionRate = settings?.redemptionRate || 0.1;
+        discountAmount = pointsToRedeem * redemptionRate;
+        const maxDiscountPercent = settings?.maxDiscountPercent || 30;
+        const maxAllowed = service.price * (maxDiscountPercent / 100);
+        if (discountAmount > maxAllowed) {
+          discountAmount = maxAllowed;
+          pointsToRedeem = Math.ceil(discountAmount / redemptionRate);
+        }
       }
 
-      // ✅ FIX STB-004: atomic loyalty deduction — only succeeds if balance is sufficient
-      const updatedCustomer = await User.findOneAndUpdate(
-        { _id: customer_id, loyaltyPoints: { $gte: pointsToRedeem } }, // atomic check + deduct
-        { $inc: { loyaltyPoints: -pointsToRedeem } },
-        { new: true, session }
-      );
+      const originalAmount = service.price;
+      const finalAmount = Math.max(0, originalAmount - discountAmount);
+      const discountType = pointsToRedeem > 0 ? 'loyalty' : null;
 
-      // if null → concurrent request already used the points
-      if (!updatedCustomer)
-        throw Object.assign(new Error(`Insufficient loyalty points. Required: ${pointsToRedeem}`), { status: 400 });
-
-      // FIFO deduction of earn history
-      let remaining = pointsToRedeem;
-      const earnHistory = await LoyaltyPointsHistory.find(
-        { userId: customer_id, type: 'earn', pointsRemaining: { $gt: 0 } }
-      ).sort({ createdAt: 1 }).session(session);
-
-      for (const entry of earnHistory) {
-        if (remaining <= 0) break;
-        const deduct = Math.min(entry.pointsRemaining, remaining);
-        await LoyaltyPointsHistory.findByIdAndUpdate(
-          entry._id,
-          { $inc: { pointsRemaining: -deduct } },
-          { session }
-        );
-        remaining -= deduct;
-      }
-
-      await LoyaltyPointsHistory.create([{
-        userId: customer_id, points: pointsToRedeem, pointsRemaining: 0,
-        type: 'redeem', reason: 'Redeemed for appointment booking'
+      // ✅ FIX STB-002: Appointment.create inside transaction
+      // If a duplicate booking slips through the race window, the unique index
+      // on {staffId, appointmentDate, appointmentTime} throws a duplicate key
+      // error here, which aborts the whole transaction cleanly.
+      const [apt] = await Appointment.create([{
+        customerId: new mongoose.Types.ObjectId(customer_id),
+        staffId: staff_id ? new mongoose.Types.ObjectId(staff_id) : null,
+        serviceId: new mongoose.Types.ObjectId(service_id),
+        appointmentDate: appointment_date,
+        appointmentTime: appointment_time,
+        notes,
+        price: finalAmount,
+        status: 'pending',
+        pointsRedeemed: pointsToRedeem,
+        discountAmount,
+        originalAmount,
+        finalAmount,
+        discountType,
+        rewardId: reward_id ? new mongoose.Types.ObjectId(reward_id) : null,
       }], { session });
+
+      await session.commitTransaction();
+      session.endSession();
+
+      if (staff_id) await notify(staff_id, 'New Appointment', `New booking for ${service.name} on ${appointment_date} at ${appointment_time}`, 'new_appointment', apt._id);
+
+      const populated = await fetchAppointment(apt._id);
+      const mapped = mapAppointment(populated);
+
+      sendAppointmentEmail({
+        to: mapped.customer?.email, customerName: mapped.customer?.name,
+        serviceName: mapped.service?.name, status: 'pending',
+        date: apt.appointmentDate, time: apt.appointmentTime,
+        staffName: mapped.staff?.name, type: 'booked',
+      }).catch(err => console.error('[EMAIL ERROR]', err.message));
+
+      res.status(201).json(mapped);
+
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+
+      // ✅ FIX STB-002: handle duplicate key = double booking attempt
+      if (error.code === 11000) {
+        return res.status(409).json({ error: 'This time slot was just booked. Please choose another slot.' });
+      }
+
+      console.error('[APPOINTMENT BOOKING ERROR]', { body: req.body, user: req.user, error: error.message });
+      const status = error.status || 500;
+      res.status(status).json({ error: status === 500 ? 'Failed to book appointment' : error.message });
     }
-
-    const originalAmount = service.price;
-    const finalAmount = Math.max(0, originalAmount - discountAmount);
-    const discountType = pointsToRedeem > 0 ? 'loyalty' : null;
-
-    // ✅ FIX STB-002: Appointment.create inside transaction
-    // If a duplicate booking slips through the race window, the unique index
-    // on {staffId, appointmentDate, appointmentTime} throws a duplicate key
-    // error here, which aborts the whole transaction cleanly.
-    const [apt] = await Appointment.create([{
-      customerId: new mongoose.Types.ObjectId(customer_id),
-      staffId: staff_id ? new mongoose.Types.ObjectId(staff_id) : null,
-      serviceId: new mongoose.Types.ObjectId(service_id),
-      appointmentDate: appointment_date,
-      appointmentTime: appointment_time,
-      notes,
-      price: finalAmount,
-      status: 'pending',
-      pointsRedeemed: pointsToRedeem,
-      discountAmount,
-      originalAmount,
-      finalAmount,
-      discountType,
-      rewardId: reward_id ? new mongoose.Types.ObjectId(reward_id) : null,
-    }], { session });
-
-    await session.commitTransaction();
-    session.endSession();
-
-    if (staff_id) await notify(staff_id, 'New Appointment', `New booking for ${service.name} on ${appointment_date} at ${appointment_time}`, 'new_appointment', apt._id);
-
-    const populated = await fetchAppointment(apt._id);
-    const mapped = mapAppointment(populated);
-
-    sendAppointmentEmail({
-      to: mapped.customer?.email, customerName: mapped.customer?.name,
-      serviceName: mapped.service?.name, status: 'pending',
-      date: apt.appointmentDate, time: apt.appointmentTime,
-      staffName: mapped.staff?.name, type: 'booked',
-    }).catch(err => console.error('[EMAIL ERROR]', err.message));
-
-    res.status(201).json(mapped);
-
-  } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-
-    // ✅ FIX STB-002: handle duplicate key = double booking attempt
-    if (error.code === 11000) {
-      return res.status(409).json({ error: 'This time slot was just booked. Please choose another slot.' });
-    }
-
-    console.error('[APPOINTMENT BOOKING ERROR]', { body: req.body, user: req.user, error: error.message });
-    const status = error.status || 500;
-    res.status(status).json({ error: status === 500 ? 'Failed to book appointment' : error.message });
-  }
-});
+  });
 
 // PATCH /api/appointments/:id/status
 router.patch('/:id/status', verifyToken, async (req, res) => {

@@ -121,7 +121,7 @@ export function AdminDashboard({
 
   const [loyaltyRewards, setLoyaltyRewards] = useState<any[]>([]);
   const [isLoadingRewards, setIsLoadingRewards] = useState(false);
-  const [newReward, setNewReward] = useState({ title: '', description: '', points_required: '' });
+  const [newReward, setNewReward] = useState({ title: '', description: '', points_required: '', discount_percentage: '' });
   const [isAddingReward, setIsAddingReward] = useState(false);
 
   const loadRewards = async () => {
@@ -221,10 +221,10 @@ export function AdminDashboard({
       await api.loyalty.addReward({
         title: newReward.title,
         description: newReward.description,
-        points_required: parseInt(newReward.points_required)
+        points_required: parseInt(newReward.points_required),
+        discount_percentage: parseFloat(newReward.discount_percentage) || 0  // ✅
       });
-      toast.success("Reward added successfully");
-      setNewReward({ title: '', description: '', points_required: '' });
+      setNewReward({ title: '', description: '', points_required: '', discount_percentage: '' });
       await loadRewards();
     } catch (err) {
       console.error('Failed to add reward:', err);
@@ -2620,6 +2620,22 @@ export function AdminDashboard({
                               className="rounded-xl border-yellow-100"
                             />
                           </div>
+                          // ADD this block after the Description input and before the Add Reward button:
+                          <div className="space-y-2">
+                            <Label>Discount Percentage (%)</Label>
+                            <Input
+                              type="number"
+                              placeholder="e.g. 10"
+                              min={0}
+                              max={100}
+                              value={newReward.discount_percentage}
+                              onChange={(e) => setNewReward({ ...newReward, discount_percentage: e.target.value })}
+                              className="rounded-xl border-yellow-100"
+                            />
+                            <p className="text-[10px] text-gray-400">
+                              How much % off on any service when this reward is redeemed
+                            </p>
+                          </div>
                           <Button
                             type="submit"
                             disabled={isAddingReward}
@@ -2637,6 +2653,7 @@ export function AdminDashboard({
                             <TableRow>
                               <TableHead>Reward</TableHead>
                               <TableHead>Points</TableHead>
+                              <TableHead>Discount</TableHead>  {/* ✅ new column */}
                               <TableHead>Status</TableHead>
                               <TableHead className="text-right">Action</TableHead>
                             </TableRow>
@@ -2659,6 +2676,14 @@ export function AdminDashboard({
                                     {reward.points_required} pts
                                   </Badge>
                                 </TableCell>
+
+                                {/* ✅ NEW: Discount % column */}
+                                <TableCell>
+                                  <Badge className="bg-green-100 text-green-700 border-0">
+                                    {reward.discount_percentage > 0 ? `${reward.discount_percentage}% off` : '—'}
+                                  </Badge>
+                                </TableCell>
+
                                 <TableCell>
                                   <Badge variant={reward.is_active ? "default" : "secondary"}>
                                     {reward.is_active ? "Active" : "Hidden"}

@@ -9,7 +9,6 @@ const { verifyToken, requireAdmin } = require('../middleware/authMiddleware');
 const cleanupExpiredPoints = async (userId) => {
   try {
     const now = new Date();
-    // Find expired entries for this user
     const expired = await LoyaltyPointsHistory.find({
       userId, type: 'earn', pointsRemaining: { $gt: 0 }, expiryDate: { $lt: now },
     });
@@ -17,18 +16,15 @@ const cleanupExpiredPoints = async (userId) => {
     if (expired.length === 0) return;
 
     for (const entry of expired) {
-      // Atomically claim the expired points
       const claimedEntry = await LoyaltyPointsHistory.findOneAndUpdate(
         { _id: entry._id, pointsRemaining: { $gt: 0 } },
         { $set: { pointsRemaining: 0 } },
         { new: true }
       );
 
-      // Only process if we successfully claimed the points (prevents race condition)
       if (claimedEntry && entry.pointsRemaining > 0) {
         const amountToDeduct = entry.pointsRemaining;
 
-        // Create expiration record
         await LoyaltyPointsHistory.create({
           userId,
           points: amountToDeduct,
@@ -37,7 +33,6 @@ const cleanupExpiredPoints = async (userId) => {
           reason: `Points expired (from entry #${entry._id})`
         });
 
-        // Decrement user's points and clamp to 0 minimum
         await User.findByIdAndUpdate(userId, { $inc: { loyaltyPoints: -amountToDeduct } });
         await User.findOneAndUpdate({ _id: userId, loyaltyPoints: { $lt: 0 } }, { loyaltyPoints: 0 });
       }
@@ -100,10 +95,23 @@ router.get('/rewards', verifyToken, async (req, res) => {
 
 // ---------- POST /api/loyalty/rewards (Admin) ----------
 router.post('/rewards', verifyToken, requireAdmin, async (req, res) => {
-  const { title, description, points_required } = req.body;
-  if (!title || !points_required) return res.status(400).json({ error: 'Title and points_required are required' });
+  const { title, description, points_required, discount_percentage } = req.body;
+
+  if (!title || !points_required)
+    return res.status(400).json({ error: 'Title and points_required are required' });
+
+  // ✅ validate discount_percentage is a number between 0 and 100
+  const discountPct = parseFloat(discount_percentage) || 0;
+  if (discountPct < 0 || discountPct > 100)
+    return res.status(400).json({ error: 'discount_percentage must be between 0 and 100' });
+
   try {
-    await LoyaltyReward.create({ title, description, pointsRequired: points_required });
+    await LoyaltyReward.create({
+      title,
+      description,
+      pointsRequired: parseInt(points_required),
+      discountPercentage: discountPct, // ✅ save discount percentage
+    });
     res.json({ message: 'Reward added successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to add reward' });
@@ -112,13 +120,21 @@ router.post('/rewards', verifyToken, requireAdmin, async (req, res) => {
 
 // ---------- PATCH /api/loyalty/rewards/:id (Admin) ----------
 router.patch('/rewards/:id', verifyToken, requireAdmin, async (req, res) => {
-  const { title, description, points_required, is_active } = req.body;
+  const { title, description, points_required, discount_percentage, is_active } = req.body;
   try {
     const update = {};
     if (title != null) update.title = title;
     if (description != null) update.description = description;
-    if (points_required != null) update.pointsRequired = points_required;
+    if (points_required != null) update.pointsRequired = parseInt(points_required);
     if (is_active != null) update.isActive = is_active;
+
+    // ✅ allow updating discount percentage
+    if (discount_percentage != null) {
+      const pct = parseFloat(discount_percentage);
+      if (pct < 0 || pct > 100)
+        return res.status(400).json({ error: 'discount_percentage must be between 0 and 100' });
+      update.discountPercentage = pct;
+    }
 
     await LoyaltyReward.findByIdAndUpdate(req.params.id, update);
     res.json({ message: 'Reward updated successfully' });
@@ -148,12 +164,9 @@ router.post('/adjust', verifyToken, requireAdmin, async (req, res) => {
   try {
     let targetUser;
 
-    // Prioritize email lookup as requested
     if (email) {
       targetUser = await User.findOne({ email: email.toLowerCase().trim() });
     } else if (user_id) {
-      // If user_id is provided, check if it's a valid ObjectId string (24 hex chars)
-      // If not, treat it as a potential email to avoid CastError
       const isObjectId = /^[0-9a-fA-F]{24}$/.test(user_id);
       if (isObjectId) {
         targetUser = await User.findById(user_id);
@@ -168,14 +181,12 @@ router.post('/adjust', verifyToken, requireAdmin, async (req, res) => {
 
     const pointValue = type === 'earn' ? Math.abs(points) : -Math.abs(points);
 
-    // Update loyalty points using $inc and get the updated document
     const updatedUser = await User.findOneAndUpdate(
       { _id: targetUser._id },
       { $inc: { loyaltyPoints: pointValue } },
       { new: true }
     );
 
-    // Create history record
     await LoyaltyPointsHistory.create({
       userId: targetUser._id,
       points: Math.abs(points),
