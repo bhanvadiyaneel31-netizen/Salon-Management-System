@@ -16,8 +16,9 @@ import { api } from './services/api';
 import { initializeSampleAppointments } from './services/appointmentStore';
 
 // ✅ FIX STB-018: Error Boundary prevents one crash from killing the entire app
-class ErrorBoundary extends Component { children: ReactNode; },
-{ hasError: boolean; error: Error | null }
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; error: Error | null }
 > {
   constructor(props: any) {
     super(props);
@@ -147,9 +148,9 @@ export default function App() {
           setCurrentView('home');
         });
     }
-  }, []); // ✅ closed correctly here — nothing below is inside this useEffect
+  }, []);
 
-  // ✅ useEffect 2 — dark mode (separate, at correct scope)
+  // ✅ useEffect 2 — dark mode
   useEffect(() => {
     const html = document.documentElement;
     if (isDark) html.classList.add('dark');
@@ -197,7 +198,6 @@ export default function App() {
     }
   };
 
-  // ✅ FIX STB-018: wrapped in ErrorBoundary
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-white dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors duration-300">
