@@ -81,7 +81,12 @@ appointmentSchema.set('toJSON', {
 });
 
 // In Appointment.js, add before module.exports:
-appointmentSchema.pre(/^find/, function (next) {
+appointmentSchema.pre('find', function (next) {
+  this.where({ isDeleted: { $ne: true } });
+  next();
+});
+
+appointmentSchema.pre('findOne', function (next) {
   this.where({ isDeleted: { $ne: true } });
   next();
 });
