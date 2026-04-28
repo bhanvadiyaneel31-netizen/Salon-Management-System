@@ -4,8 +4,8 @@ const appointmentSchema = new mongoose.Schema({
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   staffId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   serviceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Service', required: true },
-  appointmentDate: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ }, // ✅ FIX STB-008: validate date format
-  appointmentTime: { type: String, required: true, match: /^\d{2}:\d{2}$/ },        // ✅ FIX STB-020: validate time format
+  appointmentDate: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
+  appointmentTime: { type: String, required: true, match: /^\d{2}:\d{2}$/ },
   status: { type: String, enum: ['pending', 'confirmed', 'in-progress', 'completed', 'cancelled'], default: 'pending' },
   notes: { type: String },
   price: { type: Number, required: true, min: 0 },
@@ -18,7 +18,7 @@ const appointmentSchema = new mongoose.Schema({
   discountType: { type: String, default: null },
   rewardId: { type: mongoose.Schema.Types.ObjectId, ref: 'LoyaltyReward', default: null },
 
-  // ✅ FIX STB-021: soft delete fields
+  // ✅ soft delete fields
   isDeleted: { type: Boolean, default: false },
   deletedAt: { type: Date, default: null },
   deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
@@ -28,10 +28,9 @@ appointmentSchema.index({ customerId: 1 });
 appointmentSchema.index({ staffId: 1 });
 appointmentSchema.index({ appointmentDate: 1 });
 appointmentSchema.index({ status: 1 });
-appointmentSchema.index({ isDeleted: 1 }); // ✅ FIX STB-021: index for soft delete filter
+appointmentSchema.index({ isDeleted: 1 });
 
-// ✅ FIX STB-002: compound unique index to prevent double booking at DB level
-// partial index only applies to non-cancelled appointments
+// ✅ compound unique index to prevent double booking
 appointmentSchema.index(
   { staffId: 1, appointmentDate: 1, appointmentTime: 1 },
   {
@@ -71,8 +70,6 @@ appointmentSchema.set('toJSON', {
     delete ret.rewardId;
     delete ret.createdAt;
     delete ret.updatedAt;
-
-    // ✅ don't expose soft delete internals to frontend
     delete ret.isDeleted;
     delete ret.deletedAt;
     delete ret.deletedBy;
@@ -80,15 +77,8 @@ appointmentSchema.set('toJSON', {
   }
 });
 
-// In Appointment.js, add before module.exports:
-appointmentSchema.pre('find', function (next) {
-  this.where({ isDeleted: { $ne: true } });
-  next();
-});
-
-appointmentSchema.pre('findOne', function (next) {
-  this.where({ isDeleted: { $ne: true } });
-  next();
-});
+// ✅ NOTE: soft delete filtering is handled explicitly in each route
+// with filter.isDeleted = { $ne: true } — pre-hooks removed due to
+// Mongoose version compatibility issues with populate + pre-find chains
 
 module.exports = mongoose.model('Appointment', appointmentSchema);
