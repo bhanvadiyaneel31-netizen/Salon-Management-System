@@ -77,10 +77,10 @@ router.get('/', verifyToken, async (req, res) => {
 
     console.log(`[API] Fetching appointments for ${user.role} (ID: ${user.user_id}) with filter:`, JSON.stringify(filter));
 
+    filter.isDeleted = { $ne: true };
     const docs = await populateAppointment(
       Appointment.find(filter).sort({ appointmentDate: -1, appointmentTime: -1 })
     );
-
     console.log(`[API] Found ${docs.length} appointments for ${user.role}.`);
     res.json(docs.map(mapAppointment));
   } catch (error) {
@@ -414,7 +414,7 @@ router.post('/:id/review', verifyToken, async (req, res) => {
 
   const ratingNum = Number(rating);
   if (!Number.isFinite(ratingNum) || ratingNum < 1 || ratingNum > 5)
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Failed to submit review' : error.message });
+    return res.status(400).json({ error: 'Rating must be a number between 1 and 5' });
   const ratingInt = Math.round(ratingNum);
 
   try {
@@ -452,7 +452,7 @@ router.post('/:id/review', verifyToken, async (req, res) => {
   } catch (error) {
     console.error('[REVIEW ERROR]', error.message);
     console.error('[REVIEW ERROR FULL]', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to submit review' });
   }
 });
 
@@ -473,8 +473,16 @@ router.patch('/:id', verifyToken, async (req, res) => {
     }
 
     const { appointment_date, appointment_time, staff_id, notes } = req.body;
-    if (appointment_date) apt.appointmentDate = appointment_date;
-    if (appointment_time) apt.appointmentTime = appointment_time;
+    if (appointment_date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(appointment_date))
+        return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+      apt.appointmentDate = appointment_date;
+    }
+    if (appointment_time) {
+      if (!/^\d{2}:\d{2}$/.test(appointment_time))
+        return res.status(400).json({ error: 'Invalid time format. Use HH:MM' });
+      apt.appointmentTime = appointment_time;
+    }
     if (staff_id) apt.staffId = new mongoose.Types.ObjectId(staff_id);
     if (notes) apt.notes = notes;
     await apt.save();

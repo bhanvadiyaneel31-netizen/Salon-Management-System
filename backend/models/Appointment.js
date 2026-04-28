@@ -80,4 +80,10 @@ appointmentSchema.set('toJSON', {
   }
 });
 
+// In Appointment.js, add before module.exports:
+appointmentSchema.pre(/^find/, function (next) {
+  this.where({ isDeleted: { $ne: true } });
+  next();
+});
+
 module.exports = mongoose.model('Appointment', appointmentSchema);

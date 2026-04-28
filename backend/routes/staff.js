@@ -279,11 +279,13 @@ router.patch('/:id', requireAdmin, async (req, res) => {
 
     // Handle User model updates (e.g., role)
     if (role) {
-      const SUPPORTED_ROLES = ['customer', 'staff', 'admin'];
+      const SUPPORTED_ROLES = ['customer', 'staff'];
       if (!SUPPORTED_ROLES.includes(role)) {
         return res.status(400).json({ error: 'Invalid role' });
       }
       await User.findByIdAndUpdate(staffId, { role });
+      // ✅ audit trail — matches users.js
+      console.log(`[AUDIT] Role change: user ${staffId} → '${role}' by admin ${req.user.user_id} at ${new Date().toISOString()}`);
     }
 
     // Handle StaffProfile model updates

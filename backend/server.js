@@ -79,11 +79,12 @@ app.use(compression());
 app.use(morgan('short'));   // ✅ FIX 4 — 'short' instead of 'combined' (avoids logging sensitive query params)
 
 // ✅ FIX 5 — Apply rate limiters correctly
+app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/login', authLimiter);   // strict on login
 app.use('/api/auth/forgot-password', authLimiter);   // strict on password reset
 app.use('/api/', generalLimiter); // general on everything else
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '100kb' }));
 app.use(passport.initialize());
 app.use('/uploads', express.static('uploads'));
 
