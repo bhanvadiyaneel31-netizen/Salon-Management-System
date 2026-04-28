@@ -101,8 +101,11 @@ router.post('/rewards', verifyToken, requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Title and points_required are required' });
 
   // ✅ validate discount_percentage is a number between 0 and 100
-  const discountPct = parseFloat(discount_percentage) || 0;
-  if (discountPct < 0 || discountPct > 100)
+  const discountPct = parseFloat(discount_percentage);
+  if (discount_percentage !== undefined && isNaN(discountPct))
+    return res.status(400).json({ error: 'discount_percentage must be a number' });
+  const finalPct = isNaN(discountPct) ? 0 : discountPct;
+  if (finalPct < 0 || finalPct > 100)
     return res.status(400).json({ error: 'discount_percentage must be between 0 and 100' });
 
   try {
@@ -131,12 +134,14 @@ router.patch('/rewards/:id', verifyToken, requireAdmin, async (req, res) => {
     // ✅ allow updating discount percentage
     if (discount_percentage != null) {
       const pct = parseFloat(discount_percentage);
+      if (isNaN(pct))
+        return res.status(400).json({ error: 'discount_percentage must be a number' });
       if (pct < 0 || pct > 100)
         return res.status(400).json({ error: 'discount_percentage must be between 0 and 100' });
       update.discountPercentage = pct;
     }
 
-    await LoyaltyReward.findByIdAndUpdate(req.params.id, update);
+    await LoyaltyReward.findByIdAndUpdate(req.params.id, update, { runValidators: true });
     res.json({ message: 'Reward updated successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update reward' });

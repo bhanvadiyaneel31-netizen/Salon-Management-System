@@ -158,7 +158,7 @@ router.get('/:id', verifyToken, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid appointment ID' });
     const doc = await fetchAppointment(req.params.id);
-    if (!doc) return res.status(404).json({ error: 'Appointment not found' });
+    if (!doc || doc.isDeleted) return res.status(404).json({ error: 'Appointment not found' });
 
     const custId = doc.customerId?._id.toString();
     const staffId = doc.staffId?._id?.toString();
@@ -340,7 +340,7 @@ router.patch('/:id/status', verifyToken, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid appointment ID' });
     const apt = await Appointment.findById(req.params.id);
-    if (!apt) return res.status(404).json({ error: 'Appointment not found' });
+    if (!apt || apt.isDeleted) return res.status(404).json({ error: 'Appointment not found' });
 
     const custId = apt.customerId.toString();
     const staffId = apt.staffId?.toString();
@@ -419,7 +419,7 @@ router.post('/:id/review', verifyToken, async (req, res) => {
 
   try {
     const apt = await Appointment.findById(req.params.id);
-    if (!apt) return res.status(404).json({ error: 'Appointment not found' });
+    if (!apt || apt.isDeleted) return res.status(404).json({ error: 'Appointment not found' });
     if (apt.customerId.toString() !== req.user.user_id) return res.status(403).json({ error: 'Not authorized' });
     if (apt.status !== 'completed') return res.status(400).json({ error: 'Can only review completed appointments' });
 
@@ -461,7 +461,7 @@ router.patch('/:id', verifyToken, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid appointment ID' });
     const apt = await Appointment.findById(req.params.id);
-    if (!apt) return res.status(404).json({ error: 'Appointment not found' });
+    if (!apt || apt.isDeleted) return res.status(404).json({ error: 'Appointment not found' });
 
     const custId = apt.customerId.toString();
     const staffId = apt.staffId?.toString();
@@ -515,7 +515,7 @@ router.patch('/:id/reschedule', verifyToken, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid appointment ID' });
     const populated = await fetchAppointment(req.params.id);
-    if (!populated) return res.status(404).json({ error: 'Appointment not found' });
+    if (!populated || populated.isDeleted) return res.status(404).json({ error: 'Appointment not found' });
 
     const custId = populated.customerId._id.toString();
     const staffId = populated.staffId?._id?.toString();
@@ -548,7 +548,7 @@ router.patch('/:id/reschedule', verifyToken, async (req, res) => {
         return res.status(400).json({ error: 'Assigned staff is currently unavailable' });
 
       const reqEnd = reqMinutes + duration;
-      const existing = await Appointment.find({ staffId: new mongoose.Types.ObjectId(staffId), appointmentDate: newDate, status: { $ne: 'cancelled' }, _id: { $ne: populated._id } }).populate('serviceId', 'duration');
+      const existing = await Appointment.find({ staffId: ..., appointmentDate: newDate, status: { $ne: 'cancelled' }, isDeleted: { $ne: true }, _id: { $ne: populated._id } })
       for (const b of existing) {
         const [h, m] = b.appointmentTime.substring(0, 5).split(':').map(Number);
         const es = h * 60 + m, ee = es + (b.serviceId?.duration || 30);
