@@ -113,7 +113,7 @@ router.post('/rewards', verifyToken, requireAdmin, async (req, res) => {
       title,
       description,
       pointsRequired: parseInt(points_required),
-      discountPercentage: discountPct, // ✅ save discount percentage
+      discountPercentage: finalPct, // ✅ save discount percentage
     });
     res.json({ message: 'Reward added successfully' });
   } catch (error) {

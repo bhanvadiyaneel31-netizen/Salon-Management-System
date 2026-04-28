@@ -19,10 +19,14 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
   try {
     const today = fmtDate(new Date());
 
-    const todayAppointments = await Appointment.countDocuments({ appointmentDate: today });
+    // ✅ isDeleted filter on all queries
+    const todayAppointments = await Appointment.countDocuments({
+      appointmentDate: today,
+      isDeleted: { $ne: true }
+    });
 
     const revAgg = await Appointment.aggregate([
-      { $match: { appointmentDate: today, status: 'completed' } },
+      { $match: { appointmentDate: today, status: 'completed', isDeleted: { $ne: true } } },
       { $group: { _id: null, total: { $sum: { $ifNull: ['$finalAmount', '$price'] } } } },
     ]);
     const todayRevenue = revAgg[0]?.total || 0;
@@ -34,8 +38,14 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
     const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthPrefix = fmtMonth(lastMonthDate);
 
-    const thisMonth = await Appointment.countDocuments({ appointmentDate: { $regex: `^${thisMonthPrefix}` } });
-    const lastMonth = await Appointment.countDocuments({ appointmentDate: { $regex: `^${lastMonthPrefix}` } });
+    const thisMonth = await Appointment.countDocuments({
+      appointmentDate: { $regex: `^${thisMonthPrefix}` },
+      isDeleted: { $ne: true }
+    });
+    const lastMonth = await Appointment.countDocuments({
+      appointmentDate: { $regex: `^${lastMonthPrefix}` },
+      isDeleted: { $ne: true }
+    });
 
     let growthRate = 0;
     if (lastMonth === 0 && thisMonth > 0) growthRate = 100;
@@ -56,7 +66,11 @@ router.get('/weekly-data', requireAdmin, async (req, res) => {
     const fromDate = fmtDate(sixDaysAgo);
     const toDate = fmtDate(now);
 
-    const raw = await Appointment.find({ appointmentDate: { $gte: fromDate, $lte: toDate } });
+    // ✅ isDeleted filter added
+    const raw = await Appointment.find({
+      appointmentDate: { $gte: fromDate, $lte: toDate },
+      isDeleted: { $ne: true }
+    });
 
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const weeklyFormat = [
@@ -103,14 +117,11 @@ router.get('/service-distribution', requireAdmin, async (req, res) => {
 });
 
 // GET /api/analytics/staff-performance
-// ✅ FIX STB-007: replaced 3 separate DB round-trips with a single $lookup aggregation pipeline
+// ✅ Single $lookup aggregation pipeline — replaces 3 separate DB calls
 router.get('/staff-performance', requireAdmin, async (req, res) => {
   try {
     const results = await User.aggregate([
-      // Step 1: only staff users
       { $match: { role: 'staff' } },
-
-      // Step 2: join their StaffProfile
       {
         $lookup: {
           from: 'staffprofiles',
@@ -119,10 +130,7 @@ router.get('/staff-performance', requireAdmin, async (req, res) => {
           as: 'profile',
         },
       },
-      // preserveNullAndEmpty keeps staff without a profile in results
       { $unwind: { path: '$profile', preserveNullAndEmpty: true } },
-
-      // Step 3: join their Appointments
       {
         $lookup: {
           from: 'appointments',
@@ -131,15 +139,25 @@ router.get('/staff-performance', requireAdmin, async (req, res) => {
           as: 'appointments',
         },
       },
-
-      // Step 4: compute stats inline — no extra round-trip
       {
         $addFields: {
-          total_appointments: { $size: '$appointments' },
+          // ✅ exclude soft-deleted appointments from stats
+          activeAppointments: {
+            $filter: {
+              input: '$appointments',
+              as: 'a',
+              cond: { $ne: ['$$a.isDeleted', true] }
+            }
+          }
+        }
+      },
+      {
+        $addFields: {
+          total_appointments: { $size: '$activeAppointments' },
           completed: {
             $size: {
               $filter: {
-                input: '$appointments',
+                input: '$activeAppointments',
                 as: 'a',
                 cond: { $eq: ['$$a.status', 'completed'] },
               },
@@ -150,7 +168,7 @@ router.get('/staff-performance', requireAdmin, async (req, res) => {
               $map: {
                 input: {
                   $filter: {
-                    input: '$appointments',
+                    input: '$activeAppointments',
                     as: 'a',
                     cond: { $eq: ['$$a.status', 'completed'] },
                   },
@@ -162,8 +180,6 @@ router.get('/staff-performance', requireAdmin, async (req, res) => {
           },
         },
       },
-
-      // Step 5: project only the fields we need — drop raw appointments array
       {
         $project: {
           _id: 1,
@@ -204,7 +220,8 @@ router.get('/service-performance', requireAdmin, async (req, res) => {
     const services = await Service.find();
 
     const agg = await Appointment.aggregate([
-      { $match: { serviceId: { $in: services.map(s => s._id) } } },
+      // ✅ isDeleted filter in aggregate pipeline
+      { $match: { serviceId: { $in: services.map(s => s._id) }, isDeleted: { $ne: true } } },
       {
         $group: {
           _id: '$serviceId',
@@ -249,7 +266,6 @@ router.get('/monthly-revenue', requireAdmin, async (req, res) => {
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const now = new Date();
 
-    // Build scaffold for last 6 months
     const months = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -258,7 +274,12 @@ router.get('/monthly-revenue', requireAdmin, async (req, res) => {
     }
 
     const fromKey = months[0].month_key;
-    const raw = await Appointment.find({ appointmentDate: { $gte: fromKey + '-01' } });
+
+    // ✅ isDeleted filter added
+    const raw = await Appointment.find({
+      appointmentDate: { $gte: fromKey + '-01' },
+      isDeleted: { $ne: true }
+    });
 
     raw.forEach(a => {
       const key = a.appointmentDate.substring(0, 7);
