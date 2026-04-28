@@ -548,7 +548,13 @@ router.patch('/:id/reschedule', verifyToken, async (req, res) => {
         return res.status(400).json({ error: 'Assigned staff is currently unavailable' });
 
       const reqEnd = reqMinutes + duration;
-      const existing = await Appointment.find({ staffId: ..., appointmentDate: newDate, status: { $ne: 'cancelled' }, isDeleted: { $ne: true }, _id: { $ne: populated._id } })
+      const existing = await Appointment.find({
+        staffId: new mongoose.Types.ObjectId(staffId),
+        appointmentDate: newDate,
+        status: { $ne: 'cancelled' },
+        isDeleted: { $ne: true },
+        _id: { $ne: populated._id }
+      }).populate('serviceId', 'duration');
       for (const b of existing) {
         const [h, m] = b.appointmentTime.substring(0, 5).split(':').map(Number);
         const es = h * 60 + m, ee = es + (b.serviceId?.duration || 30);
