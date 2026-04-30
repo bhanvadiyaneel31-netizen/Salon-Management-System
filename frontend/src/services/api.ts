@@ -379,6 +379,12 @@ export const staffAPI = {
     return apiRequest<Staff>(`/staff/${id}`);
   },
 
+  // ✅ NEW: Public endpoint for unauthenticated users (guest booking)
+  // This endpoint doesn't require authentication and returns bookable staff
+  async getBookable(serviceId: string): Promise<Staff[]> {
+    return apiRequest<Staff[]>(`/staff/bookable?service_id=${serviceId}`);
+  },
+
   async getAvailable(date: string, serviceId: string): Promise<Staff[]> {
     return apiRequest<Staff[]>(`/staff/available?date=${date}&service_id=${serviceId}`);
   },
