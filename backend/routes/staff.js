@@ -4,7 +4,51 @@ const bcrypt = require('bcrypt');
 const mongoose = require('mongoose');
 const { User, StaffProfile, Appointment, Service } = require('../db');
 const { requireAdmin, verifyToken } = require('../middleware/authMiddleware');
-const { verify } = require('jsonwebtoken');
+
+// ---------- GET /api/staff/bookable (PUBLIC — for booking flow before login) ----------
+// Returns only booking-safe fields — no PII (no email, no phone)
+router.get('/bookable', async (req, res) => {
+  const { service_id } = req.query;
+  try {
+    const profileQuery = { isAvailable: true };
+
+    if (service_id) {
+      if (!mongoose.Types.ObjectId.isValid(service_id)) {
+        return res.status(400).json({ error: 'Invalid service_id format' });
+      }
+      profileQuery.services = { $in: [new mongoose.Types.ObjectId(service_id)] };
+    }
+
+    const profiles = await StaffProfile.find(profileQuery).sort({ rating: -1 });
+    if (profiles.length === 0) return res.json([]);
+
+    const staffUserIds = profiles.map(p => p.userId);
+    const staffUsers = await User.find({ _id: { $in: staffUserIds }, role: 'staff' });
+    const userMap = {};
+    staffUsers.forEach(u => { userMap[u._id.toString()] = u; });
+
+    const formatted = profiles.map(p => {
+      const u = userMap[p.userId.toString()];
+      if (!u) return null;
+      return {
+        id: u._id.toString(),
+        name: u.name,
+        profile_image: u.profileImage || '',  // ✅ safe to expose
+        category: p.category || '',
+        specialty: p.specialty || '',
+        rating: p.rating || 0,
+        is_available: p.isAvailable,
+        services: p.services.map(id => id.toString()),
+        // ✅ NO email, NO phone — public endpoint
+      };
+    }).filter(Boolean);
+
+    res.json(formatted);
+  } catch (error) {
+    console.error('[STAFF] Failed to fetch bookable staff:', error.message);
+    res.status(500).json({ error: 'Failed to fetch available staff' });
+  }
+});
 
 // ---------- GET /api/staff ----------
 router.get('/', verifyToken, async (req, res) => {
@@ -49,7 +93,7 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
-// ---------- GET /api/staff/available ----------
+// ---------- GET /api/staff/available (authenticated) ----------
 router.get('/available', verifyToken, async (req, res) => {
   const { service_id } = req.query;
 
@@ -58,18 +102,13 @@ router.get('/available', verifyToken, async (req, res) => {
 
     if (service_id) {
       if (!mongoose.Types.ObjectId.isValid(service_id)) {
-        console.warn(`[STAFF] Invalid service_id provided: ${service_id}`);
         return res.status(400).json({ error: 'Invalid service_id format' });
       }
-      // Query staff who have this specific service in their services array
       profileQuery.services = { $in: [new mongoose.Types.ObjectId(service_id)] };
     }
 
     const profiles = await StaffProfile.find(profileQuery).sort({ rating: -1 });
-
-    if (profiles.length === 0) {
-      return res.json([]);
-    }
+    if (profiles.length === 0) return res.json([]);
 
     const staffUserIds = profiles.map(p => p.userId);
     const staffUsers = await User.find({ _id: { $in: staffUserIds }, role: 'staff' });
@@ -82,7 +121,7 @@ router.get('/available', verifyToken, async (req, res) => {
       return {
         id: u._id.toString(),
         name: u.name,
-        email: u.email,
+        // ✅ removed email from this response — PII not needed for booking selection
         category: p.category || '',
         specialty: p.specialty || '',
         rating: p.rating || 0,
@@ -158,7 +197,6 @@ router.patch('/profile', verifyToken, async (req, res) => {
 
   const staffId = req.user.user_id;
 
-  // Rule: Staff cannot update role or primary category
   const restrictedFields = ['role', 'category'];
   for (const field of restrictedFields) {
     if (req.body[field] !== undefined) {
@@ -231,7 +269,6 @@ router.post('/', requireAdmin, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Validate and convert service_ids to ObjectIds
     const validServiceIds = service_ids
       .filter(id => mongoose.Types.ObjectId.isValid(id))
       .map(id => new mongoose.Types.ObjectId(id));
@@ -258,17 +295,16 @@ router.post('/', requireAdmin, async (req, res) => {
       assigned_service_ids: profile.services.map(id => id.toString()),
     });
   } catch (error) {
-    console.error('[STAFF CREATE ERROR]', { email, error: error.message, stack: error.stack });
+    console.error('[STAFF CREATE ERROR]', { email, error: error.message });
     if (error.code === 11000) return res.status(409).json({ error: 'A user with this email already exists' });
     res.status(500).json({ error: 'Failed to create staff member' });
   }
 });
 
-// ---------- PATCH /api/staff/:id (admin updates staff category/status/role) ----------
+// ---------- PATCH /api/staff/:id (admin updates staff) ----------
 router.patch('/:id', requireAdmin, async (req, res) => {
   const staffId = req.params.id;
 
-  // Rule: Admins cannot update personal details
   const restrictedFields = ['name', 'email', 'phone', 'password', 'address', 'profile_image'];
   for (const field of restrictedFields) {
     if (req.body[field] !== undefined)
@@ -281,18 +317,15 @@ router.patch('/:id', requireAdmin, async (req, res) => {
     const user = await User.findOne({ _id: staffId, role: 'staff' });
     if (!user) return res.status(404).json({ error: 'Staff member not found' });
 
-    // Handle User model updates (e.g., role)
     if (role) {
       const SUPPORTED_ROLES = ['customer', 'staff'];
       if (!SUPPORTED_ROLES.includes(role)) {
         return res.status(400).json({ error: 'Invalid role' });
       }
       await User.findByIdAndUpdate(staffId, { role });
-      // ✅ audit trail — matches users.js
       console.log(`[AUDIT] Role change: user ${staffId} → '${role}' by admin ${req.user.user_id} at ${new Date().toISOString()}`);
     }
 
-    // Handle StaffProfile model updates
     const profileUpdates = {};
     if (category) profileUpdates.category = category;
     if (status !== undefined || is_available !== undefined) {
@@ -324,7 +357,7 @@ router.patch('/:id', requireAdmin, async (req, res) => {
       assigned_service_ids: (profile?.services || []).map(id => id.toString()),
     });
   } catch (error) {
-    console.error('[STAFF UPDATE ERROR]', { id: staffId, error: error.message, stack: error.stack });
+    console.error('[STAFF UPDATE ERROR]', { id: staffId, error: error.message });
     res.status(500).json({ error: 'Failed to update staff member' });
   }
 });
@@ -336,7 +369,6 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     const user = await User.findOne({ _id: staffId, role: 'staff' });
     if (!user) return res.status(404).json({ error: 'Staff member not found' });
 
-    // ✅ FIX STB-006: block deletion if future appointments exist
     const today = new Date().toISOString().split('T')[0];
     const futureCount = await Appointment.countDocuments({
       staffId: new mongoose.Types.ObjectId(staffId),
@@ -360,7 +392,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// ---------- PATCH /api/staff/:id/services (admin assigns services to staff) ----------
+// ---------- PATCH /api/staff/:id/services ----------
 router.patch('/:id/services', requireAdmin, async (req, res) => {
   const staffId = req.params.id;
   const { service_ids } = req.body;
@@ -377,17 +409,14 @@ router.patch('/:id/services', requireAdmin, async (req, res) => {
     const user = await User.findOne({ _id: staffId, role: 'staff' });
     if (!user) return res.status(404).json({ error: 'Staff member not found' });
 
-    // Validate all service_ids are valid ObjectIds and exist
     const validIds = service_ids.filter(id => mongoose.Types.ObjectId.isValid(id));
     const objectIds = validIds.map(id => new mongoose.Types.ObjectId(id));
 
-    // Verify services exist
     const foundServices = await Service.find({ _id: { $in: objectIds } });
     if (foundServices.length !== objectIds.length) {
       return res.status(400).json({ error: 'One or more service IDs are invalid or do not exist' });
     }
 
-    // Update the StaffProfile services array
     const updatedProfile = await StaffProfile.findOneAndUpdate(
       { userId: staffId },
       { $set: { services: objectIds } },
@@ -397,8 +426,6 @@ router.patch('/:id/services', requireAdmin, async (req, res) => {
     if (!updatedProfile) {
       return res.status(404).json({ error: 'Staff profile not found' });
     }
-
-    console.log(`[STAFF] Updated services for staff ${staffId}:`, objectIds);
 
     res.json({
       id: user._id.toString(),
@@ -426,9 +453,5 @@ router.get('/:id/rating', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch rating' });
   }
 });
-
-// ---------- POST /api/staff/migrate-services (admin one-time fix for existing staff) ----------
-// Run once to fix any existing staff who were created before service_ids were saved.
-// After running, this endpoint can be removed.
 
 module.exports = router;
