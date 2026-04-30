@@ -96,14 +96,16 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
           return;
         }
 
-        const data = await api.staff.getAvailable(
-          '',
-          selectedService
-        );
+        // ✅ FIX: Use api.staff.getBookable() for public endpoint
+        // This works for unauthenticated users (before login)
+        // The backend endpoint /api/staff/bookable doesn't require authentication
+        const data = await api.staff.getBookable(selectedService);
 
         setStaffList(data);
       } catch (error) {
+        console.error('Failed to load staff:', error);
         toast.error('Failed to load staff');
+        setStaffList([]);
       } finally {
         setLoadingStaff(false);
       }
@@ -188,261 +190,189 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
   useEffect(() => {
     const fetchLoyaltyInfo = async () => {
       try {
-        const [settings, profile, rewards] = await Promise.all([
-          api.loyalty.getSettings(),
-          api.auth.getProfile(),
-          api.loyalty.getRewards()
-        ]);
+        const settings = await api.loyalty.getSettings();
         setLoyaltySettings(settings);
-        setUserPoints(profile.loyalty_points || 0);
+
+        const rewards = await api.loyalty.getRewards();
         setLoyaltyRewards(rewards);
-      } catch (err) {
-        console.error('Failed to load loyalty info:', err);
+
+        const points = await api.loyalty.getUserPoints();
+        setUserPoints(points.available_points || 0);
+      } catch (error) {
+        console.log("Not logged in or loyalty system unavailable");
       }
     };
     fetchLoyaltyInfo();
   }, []);
 
-  // Calculate Loyalty Discount
-  useEffect(() => {
-    if (!usePoints || !loyaltySettings || !selectedServiceData) {
-      setDiscountAmount(0);
-      setPointsToRedeem(0);
-      return;
-    }
-
-    const price = selectedServiceData.price;
-    if (price < loyaltySettings.min_booking_amount) {
-      toast.error(`Minimum $${loyaltySettings.min_booking_amount} required to use points`);
-      setUsePoints(false);
-      setSelectedReward(null);
-      return;
-    }
-
-    // Max discount allowed by settings
-    const maxDiscountAllowed = (price * loyaltySettings.max_discount_percent) / 100;
-
-    // Points to use: either the fixed reward points or all available points
-    const pointsToUse = selectedReward ? selectedReward.points_required : userPoints;
-
-    // Value of those points
-    const potentialDiscount = pointsToUse * loyaltySettings.redemption_rate;
-
-    // Actual discount is limited by the max allowed
-    const actualDiscount = Math.min(maxDiscountAllowed, potentialDiscount);
-
-    // Points actually required for the given discount (recalculates downwards if capped)
-    const requiredPoints = Math.ceil(actualDiscount / loyaltySettings.redemption_rate);
-
-    setDiscountAmount(actualDiscount);
-    setPointsToRedeem(requiredPoints);
-  }, [usePoints, loyaltySettings, selectedServiceData, userPoints, selectedReward]);
-
-  const handleNext = async () => {
-    if (currentStep < 4) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      const currentUser = api.auth.getCurrentUser();
-      if (!currentUser) {
-        toast.error('Please log in to book an appointment');
-        setCurrentView('login');
-        return;
-      }
-
-      // Final validation of time slot buffer for same-day bookings
-      const isToday = format(selectedDate!, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-      if (isToday && selectedTime) {
-        const [h, m] = selectedTime.split(':').map(Number);
-        const slotMins = h * 60 + m;
-        const now = new Date();
-        const nowMins = now.getHours() * 60 + now.getMinutes();
-        if (slotMins <= nowMins + 15) {
-          toast.error('The selected time slot is no longer available. Please choose a later time.');
-          setSelectedTime('');
-          setCurrentStep(3); // Go back to slot selection
-          return;
-        }
-      }
-
-      const selectedServiceData = services.find(s => s.id.toString() === selectedService);
-      if (!selectedServiceData || !selectedDate) {
-        toast.error('Please complete all booking steps');
-        return;
-      }
-      setIsSubmitting(true);
-      try {
-        await api.appointments.create({
-          service_id: selectedServiceData.id,
-          staff_id: selectedStaff || null,
-          appointment_date: format(selectedDate, 'yyyy-MM-dd'),
-          appointment_time: selectedTime,
-          notes: '',
-          points_redeemed: (usePoints && !selectedReward) ? pointsToRedeem : 0,
-          discount_amount: (usePoints && !selectedReward) ? discountAmount : 0,
-          reward_id: (usePoints && selectedReward) ? selectedReward.id : null
-        } as any);
-        toast.success('Booking confirmed! Your appointment has been scheduled.');
-        setCurrentView('customer-dashboard');
-      } catch (error: any) {
-        toast.error(error.message || 'Failed to create appointment. Please try again.');
-      } finally {
-        setIsSubmitting(false);
-      }
-    }
-  };
-
-  const handleBack = () => {
-    if (currentStep > 1) {
-      if (currentStep === 2 && initialServiceId) {
-        onResetSelection?.();
-      }
-      setCurrentStep(currentStep - 1);
-    } else {
-      onResetSelection?.();
-      setCurrentView('home');
-    }
-  };
-
   const canProceed = () => {
     switch (currentStep) {
-      case 1: return selectedService !== '';
-      case 2: return selectedStaff !== '';
-      case 3: return !!(selectedDate && selectedTime !== '');
+      case 1: return !!selectedService;
+      case 2: return !!selectedStaff;
+      case 3: return !!selectedDate && !!selectedTime;
       case 4: return true;
       default: return false;
     }
   };
 
-  // Update Loyalty Redemption UI in Step 4
+  const handleNext = async () => {
+    if (currentStep === 4) {
+      await submitBooking();
+    } else {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const handleBack = () => {
+    if (currentStep === 1) {
+      setCurrentView('home');
+      if (onResetSelection) onResetSelection();
+    } else {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const submitBooking = async () => {
+    if (!canProceed()) {
+      toast.error('Please complete all booking steps');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const appointmentData = {
+        serviceId: selectedService,
+        staffId: selectedStaff,
+        appointmentDate: format(selectedDate!, 'yyyy-MM-dd'),
+        appointmentTime: selectedTime,
+        loyaltyPointsRedeemed: usePoints ? pointsToRedeem : 0,
+      };
+
+      const response = await api.appointments.create(appointmentData);
+
+      if (response?.id) {
+        toast.success('Booking confirmed! Your appointment has been scheduled.');
+        setCurrentView('home');
+        if (onResetSelection) onResetSelection();
+      } else {
+        toast.error('Failed to create appointment');
+      }
+    } catch (error: any) {
+      console.error('Booking submission error:', error);
+      const message = error?.response?.data?.message || error?.message || 'Failed to submit booking';
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const renderLoyaltyRedemption = () => {
-    if (!userPoints || !loyaltySettings) return null;
+    if (!loyaltySettings || !userPoints) return null;
 
-    const canRedeemCashback = selectedServiceData?.price >= loyaltySettings.min_booking_amount;
-    const availableRewards = loyaltyRewards.filter(r => userPoints >= r.points_required);
-
-    if (!canRedeemCashback && availableRewards.length === 0) return null;
+    const serviceCost = selectedServiceData?.price || 0;
+    const maxRedeemablePoints = Math.floor(serviceCost * 100); // Assuming 1 point = 1 cent
 
     return (
-      <div className="bg-white border border-purple-100 rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="bg-amber-100 p-2 rounded-xl">
-            <Coins className="w-5 h-5 text-amber-600" />
+      <Card className="bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-200">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center">
+            <Award className="w-5 h-5 mr-2 text-amber-600" />
+            Redeem Loyalty Points
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between bg-white rounded-lg p-3">
+            <span className="text-sm font-medium text-gray-700">Available Points:</span>
+            <span className="text-lg font-bold text-amber-600">{userPoints.toLocaleString()}</span>
           </div>
-          <div>
-            <p className="font-bold text-gray-900">Loyalty Rewards</p>
-            <p className="text-sm text-gray-500">You have {userPoints} points available</p>
-          </div>
-        </div>
 
-        <div className="space-y-4">
-          {/* Option 1: Direct Discount (Cashback) */}
-          {canRedeemCashback && (
-            <div
-              onClick={() => {
-                if (usePoints && !selectedReward) setUsePoints(false);
-                else {
-                  setUsePoints(true);
-                  setSelectedReward(null);
-                }
-              }}
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${usePoints && !selectedReward ? 'border-purple-500 bg-purple-50' : 'border-gray-100 hover:border-purple-200'
-                }`}
-            >
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-bold text-sm">Use Points for Discount</p>
-                  <p className="text-xs text-gray-500">Redeem {pointsToRedeem} pts for ${discountAmount.toFixed(0)} off</p>
-                </div>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${usePoints && !selectedReward ? 'border-purple-500 bg-purple-500' : 'border-gray-300'}`}>
-                  {usePoints && !selectedReward && <Check className="w-3 h-3 text-white" />}
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={usePoints}
+              onCheckedChange={setUsePoints}
+              disabled={userPoints === 0}
+            />
+            <Label className="text-sm cursor-pointer">Use points for this booking</Label>
+          </div>
+
+          {usePoints && userPoints > 0 && (
+            <div className="bg-white rounded-lg p-3 space-y-3">
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">
+                  Select reward to redeem:
+                </label>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {loyaltyRewards
+                    .filter(r => r.points_required <= userPoints)
+                    .map(reward => (
+                      <div
+                        key={reward.id}
+                        onClick={() => {
+                          setSelectedReward(reward);
+                          setPointsToRedeem(reward.points_required);
+                          setDiscountAmount(reward.discount_amount || 0);
+                        }}
+                        className={`p-2 rounded border cursor-pointer transition ${selectedReward?.id === reward.id
+                          ? 'border-amber-500 bg-amber-50'
+                          : 'border-gray-200 hover:border-amber-300'
+                          }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium text-sm">{reward.name}</p>
+                            <p className="text-xs text-gray-600">{reward.description}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-bold text-amber-600">{reward.points_required} pts</p>
+                            <p className="text-xs text-green-600">-${reward.discount_amount?.toFixed(2)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                 </div>
               </div>
+
+              {selectedReward && (
+                <div className="bg-green-50 border border-green-200 rounded p-3">
+                  <p className="text-sm font-medium text-green-800">
+                    You'll save ${discountAmount.toFixed(2)} with this reward!
+                  </p>
+                </div>
+              )}
             </div>
           )}
-
-          {/* Option 2: Specific Rewards */}
-          {availableRewards.map((reward) => (
-            <div
-              key={reward.id}
-              onClick={() => {
-                setUsePoints(true);
-                setSelectedReward(reward);
-              }}
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedReward?.id === reward.id ? 'border-amber-500 bg-amber-50' : 'border-gray-100 hover:border-amber-200'
-                }`}
-            >
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <Award className="w-5 h-5 text-amber-500" />
-                  <div>
-                    <p className="font-bold text-sm">{reward.title}</p>
-                    <p className="text-xs text-gray-500">{reward.points_required} pts • {reward.description}</p>
-                  </div>
-                </div>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedReward?.id === reward.id ? 'border-amber-500 bg-amber-500' : 'border-gray-300'}`}>
-                  {selectedReward?.id === reward.id && <Check className="w-3 h-3 text-white" />}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {usePoints && (
-          <div className="mt-6 pt-4 border-t border-purple-50 animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Points to be deducted:</span>
-              <span className="font-bold text-amber-600">
-                -{pointsToRedeem} pts
-              </span>
-            </div>
-            {selectedReward ? (
-              <p className="text-xs text-green-600 font-medium mt-2">
-                ✨ Reward Applied: {selectedReward.title}
-              </p>
-            ) : (
-              <div className="flex justify-between text-sm mt-1">
-                <span className="text-gray-600">Cashback Discount:</span>
-                <span className="font-bold text-green-600">-${discountAmount.toFixed(2)}</span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+        </CardContent>
+      </Card>
     );
   };
 
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-white py-6 sm:py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="text-center mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-3 sm:mb-4">
-            Book Your Appointment
-          </h1>
-          <p className="text-base sm:text-lg text-gray-600">Follow these simple steps to schedule your visit</p>
-        </div>
-
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 py-4 sm:py-8">
+      <div className="max-w-4xl mx-auto px-2 sm:px-4 lg:px-0">
         {/* Progress Steps */}
-        <div className="flex justify-center mb-8 sm:mb-12">
-          <div className="flex items-center space-x-2 sm:space-x-4 overflow-x-auto pb-4 max-w-full">
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
             {steps.map((step, index) => {
-              const Icon = step.icon;
-              const isActive = currentStep === step.number;
-              const isCompleted = currentStep > step.number;
+              const isActive = step.number <= currentStep;
+              const StepIcon = step.icon;
+
               return (
-                <div key={step.number} className="flex items-center flex-shrink-0">
-                  <div className={`flex items-center space-x-2 sm:space-x-3 ${index < steps.length - 1 ? 'pr-2 sm:pr-4' : ''}`}>
-                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 ${isCompleted ? 'bg-green-500 text-white' : isActive ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'bg-gray-200 text-gray-500'
-                      }`}>
-                      {isCompleted ? <Check className="w-4 h-4 sm:w-5 sm:h-5" /> : <Icon className="w-4 h-4 sm:w-5 sm:h-5" />}
-                    </div>
-                    <div className="hidden sm:block">
-                      <p className={`text-sm font-medium ${isActive ? 'text-purple-600' : 'text-gray-600'}`}>{step.title}</p>
-                    </div>
+                <div key={step.number} className="flex-1 flex flex-col items-center">
+                  <div
+                    className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center mb-2 transition-all ${isActive
+                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+                      : 'bg-gray-200 text-gray-600'
+                      }`}
+                  >
+                    <StepIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
+                  <p className={`text-xs sm:text-sm font-medium text-center ${isActive ? 'text-gray-900' : 'text-gray-500'
+                    }`}>
+                    {step.title}
+                  </p>
                   {index < steps.length - 1 && (
-                    <div className={`w-6 sm:w-8 h-0.5 mx-1 sm:mx-2 ${currentStep > step.number ? 'bg-green-500' : 'bg-gray-200'}`} />
+                    <div className={`absolute right-0 top-5 sm:top-6 w-12 sm:w-16 h-1 ${isActive ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gray-200'
+                      }`} />
                   )}
                 </div>
               );
@@ -450,10 +380,10 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
           </div>
         </div>
 
-        {/* Step Content */}
-        <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl mb-6 sm:mb-8">
-          <CardHeader className="text-center pb-4 sm:pb-6">
-            <CardTitle className="text-xl sm:text-2xl font-bold text-gray-900">
+        {/* Step Content Card */}
+        <Card className="bg-white shadow-xl border-0 rounded-2xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 sm:py-6">
+            <CardTitle className="text-lg sm:text-2xl">
               {steps[currentStep - 1].title}
             </CardTitle>
           </CardHeader>
