@@ -2,7 +2,7 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Calendar } from "./ui/calendar";
 import { Badge } from "./ui/badge";
-import { ArrowLeft, ArrowRight, Check, Clock, User, Scissors, Loader2, Star, Coins, Award } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Clock, User, Scissors, Loader2, Star, Coins, Award, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { api } from "../services/api";
@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
 import { Separator } from "./ui/separator";
+import { Input } from "./ui/input";
+import { Mail, Lock, Phone } from "lucide-react";
 
 interface BookingPageProps {
   setCurrentView: (view: string) => void;
@@ -24,6 +26,8 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [selectedStaff, setSelectedStaff] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalView, setAuthModalView] = useState<'login' | 'register'>('login');
 
   // Real data from API
   const [services, setServices] = useState<any[]>([]);
@@ -217,6 +221,12 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
 
   const handleNext = async () => {
     if (currentStep === 4) {
+      // Check if user is logged in before confirming booking
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        setShowAuthModal(true);
+        return;
+      }
       await submitBooking();
     } else {
       setCurrentStep(currentStep + 1);
@@ -546,7 +556,7 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
         </Card>
 
         {/* Navigation Buttons */}
-        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0 mt-6 pt-4 border-t border-gray-100">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
           <Button
             variant="outline"
             onClick={handleBack}
@@ -568,7 +578,139 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
             )}
           </Button>
         </div>
+        {/* Auth Modal — shown when guest tries to confirm booking */}
+        {showAuthModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
+
+              {/* Modal Header */}
+              <div className="bg-gradient-to-r from-purple-500 to-pink-500 p-6 text-white relative">
+                <button
+                  onClick={() => setShowAuthModal(false)}
+                  className="absolute top-4 right-4 text-white/80 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <h2 className="text-xl font-bold">Almost there!</h2>
+                <p className="text-white/80 text-sm mt-1">Sign in or create an account to confirm your booking</p>
+              </div>
+
+              {/* Login / Register Tabs */}
+              <div className="flex border-b border-gray-100">
+                <button
+                  onClick={() => setAuthModalView('login')}
+                  className={`flex-1 py-3 text-sm font-semibold transition-colors ${authModalView === 'login' ? 'text-purple-600 border-b-2 border-purple-500' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => setAuthModalView('register')}
+                  className={`flex-1 py-3 text-sm font-semibold transition-colors ${authModalView === 'register' ? 'text-purple-600 border-b-2 border-purple-500' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Create Account
+                </button>
+              </div>
+
+              {/* Modal Form */}
+              <div className="p-6 space-y-4">
+                <ModalAuthForm
+                  view={authModalView}
+                  onSuccess={async () => {
+                    setShowAuthModal(false);
+                    await submitBooking();
+                  }}
+                />
+
+                {/* Google Login */}
+                <div className="relative my-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-200" />
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="px-2 bg-white text-gray-400">Or continue with</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    const mode = authModalView === 'login' ? 'login' : 'signup';
+                    window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/auth/google?mode=${mode}`;
+                  }}
+                  className="w-full border-2 border-gray-100 hover:border-purple-200 hover:bg-purple-50 rounded-xl py-3 flex items-center justify-center gap-3 transition-all"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                  </svg>
+                  <span className="font-medium text-gray-700 text-sm">Continue with Google</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
+  );
+}
+// Inline auth form used inside the booking modal
+function ModalAuthForm({ view, onSuccess }: { view: 'login' | 'register'; onSuccess: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', phone: '' });
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [e.target.id]: e.target.value });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (view === 'login') {
+        const response = await api.auth.login({ email: formData.email, password: formData.password });
+        localStorage.setItem('auth_token', response.token);
+        localStorage.setItem('user', JSON.stringify(response.user));
+        toast.success('Signed in! Confirming your booking...');
+      } else {
+        const response = await api.auth.register({ name: formData.name, email: formData.email, password: formData.password, phone: formData.phone, role: 'customer' });
+        localStorage.setItem('auth_token', response.token);
+        localStorage.setItem('user', JSON.stringify(response.user));
+        toast.success('Account created! Confirming your booking...');
+      }
+      onSuccess();
+    } catch (error: any) {
+      toast.error(error?.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {view === 'register' && (
+        <div className="relative">
+          <User className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+          <Input id="name" type="text" placeholder="Full Name" className="pl-10 rounded-xl border-purple-200" value={formData.name} onChange={handleChange} required />
+        </div>
+      )}
+      <div className="relative">
+        <Mail className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+        <Input id="email" type="email" placeholder="Email Address" className="pl-10 rounded-xl border-purple-200" value={formData.email} onChange={handleChange} required />
+      </div>
+      {view === 'register' && (
+        <div className="relative">
+          <Phone className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+          <Input id="phone" type="tel" placeholder="Phone Number" className="pl-10 rounded-xl border-purple-200" value={formData.phone} onChange={handleChange} required />
+        </div>
+      )}
+      <div className="relative">
+        <Lock className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+        <Input id="password" type="password" placeholder="Password" className="pl-10 rounded-xl border-purple-200" value={formData.password} onChange={handleChange} required />
+      </div>
+      <Button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl py-5 disabled:opacity-50">
+        {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{view === 'login' ? 'Signing In...' : 'Creating Account...'}</> : view === 'login' ? 'Sign In & Confirm Booking' : 'Create Account & Confirm Booking'}
+      </Button>
+    </form>
   );
 }
