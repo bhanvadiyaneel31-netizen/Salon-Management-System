@@ -51,6 +51,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { toast } from "sonner";
 import { format, addDays, startOfDay, isAfter, isBefore, formatDistanceToNow } from 'date-fns';
 import { api, appointmentsAPI, servicesAPI, staffAPI, API_ORIGIN } from "../services/api";
+import { ProfileSettingsPanel } from './ProfileSettingsPanel';
 import { safeFormatDate } from "./ui/utils";
 
 interface CustomerDashboardProps {
@@ -92,59 +93,15 @@ export function CustomerDashboard({
     }
   });
 
-  const profileImageInputRef = useRef<HTMLInputElement>(null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-
-  const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select a valid image file');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be smaller than 5MB');
-      return;
-    }
-
-    setIsUploadingImage(true);
-    try {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        setProfileForm(prev => ({ ...prev, profile_image: base64 }));
-        setIsUploadingImage(false);
-        toast.success('Profile picture selected — click Update Profile to save');
-      };
-      reader.onerror = () => {
-        toast.error('Failed to read image file');
-        setIsUploadingImage(false);
-      };
-      reader.readAsDataURL(file);
-    } catch {
-      toast.error('Failed to process image');
-      setIsUploadingImage(false);
-    }
-  };
-
-  const handleRemoveProfileImage = async () => {
-    if (!profileForm.profile_image && !profile.profile_image) return;
-    if (!window.confirm('Remove your profile picture?')) return;
-    setIsUploadingImage(true);
-    try {
-      await api.auth.updateProfile({ profile_image: '' });
-      setProfileForm(prev => ({ ...prev, profile_image: '' }));
-      setProfile(prev => ({ ...prev, profile_image: '' }));
-      // Sync to localStorage so header avatar updates immediately
-      const stored = api.auth.getCurrentUser();
-      if (stored) localStorage.setItem('user', JSON.stringify({ ...stored, profile_image: '' }));
-      toast.success('Profile picture removed');
-    } catch {
-      toast.error('Failed to remove profile picture');
-    } finally {
-      setIsUploadingImage(false);
-    }
+  const handleProfileSave = (updatedUser: any) => {
+    setProfile(prev => ({
+      ...prev,
+      name: updatedUser.name || prev.name,
+      email: updatedUser.email || prev.email,
+      phone: updatedUser.phone || prev.phone,
+      address: updatedUser.address || prev.address,
+      profile_image: updatedUser.profile_image ?? prev.profile_image,
+    }));
   };
 
   // Reschedule state
@@ -855,107 +812,19 @@ export function CustomerDashboard({
   );
 
   const renderProfile = () => (
-    <div className="space-y-6">
-      <div>
-        <p className="text-gray-500">Manage your account and preferences</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold">Personal Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Full Name</Label>
-                <Input value={profileForm.name} onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))} className="rounded-xl border-purple-200" />
-              </div>
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input value={profileForm.email} disabled className="rounded-xl bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed" />
-              </div>
-              <div className="space-y-2">
-                <Label>Phone</Label>
-                <Input value={profileForm.phone} onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))} className="rounded-xl border-purple-200" />
-              </div>
-              <div className="space-y-2">
-                <Label>Address</Label>
-                <Input value={profileForm.address} onChange={(e) => setProfileForm(prev => ({ ...prev, address: e.target.value }))} className="rounded-xl border-purple-200" />
-              </div>
-            </div>
-            <Button
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl h-11 shadow-md border-0"
-              onClick={updateProfile}
-              disabled={isUpdating}
-            >
-              {isUpdating ? 'Saving Changes...' : 'Update Profile'}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg h-fit">
-          <CardContent className="p-6 text-center">
-            <div className="relative w-24 h-24 mx-auto mb-4">
-              <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center border-4 border-white shadow-lg overflow-hidden">
-                {profileForm.profile_image || profile.profile_image ? (
-                  <img
-                    src={profileForm.profile_image || profile.profile_image}
-                    alt={profile.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <User className="w-12 h-12 text-white" />
-                )}
-              </div>
-              <input
-                ref={profileImageInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleProfileImageChange}
-              />
-              <button
-                className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-purple-100 text-purple-600 hover:text-purple-700 hover:scale-110 transition-all disabled:opacity-50"
-                onClick={() => profileImageInputRef.current?.click()}
-                disabled={isUploadingImage}
-                title="Change profile picture"
-              >
-                {isUploadingImage ? (
-                  <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Edit className="w-4 h-4" />
-                )}
-              </button>
-            </div>
-            <p className="text-[10px] text-gray-400 mb-1">Click the icon to change photo</p>
-            {(profileForm.profile_image || profile.profile_image) && (
-              <button
-                onClick={handleRemoveProfileImage}
-                disabled={isUploadingImage}
-                className="text-[10px] text-red-400 hover:text-red-600 flex items-center gap-1 mx-auto mb-2 disabled:opacity-40 transition-colors"
-                title="Remove profile picture"
-              >
-                <Trash2 className="w-3 h-3" />
-                Remove photo
-              </button>
-            )}
-            <h3 className="font-bold text-gray-900 text-lg">{profile.name}</h3>
-            <p className="text-sm text-gray-500">Member since {safeFormatDate(profile.joinDate, 'MMM yyyy')}</p>
-
-            <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xl font-bold text-purple-600">{profile.loyaltyPoints}</p>
-                <p className="text-[10px] text-gray-400 uppercase tracking-widest">Points</p>
-              </div>
-              <div>
-                <p className="text-xl font-bold text-purple-600">{profile.totalAppointments}</p>
-                <p className="text-[10px] text-gray-400 uppercase tracking-widest">Visits</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+    <div className="space-y-4">
+      <p className="text-gray-500 text-sm">Manage your account and preferences</p>
+      <ProfileSettingsPanel
+        userData={{
+          ...api.auth.getCurrentUser(),
+          profile_image: profile.profile_image,
+        }}
+        onSave={handleProfileSave}
+        previewStats={[
+          { label: 'Points', value: profile.loyaltyPoints },
+          { label: 'Visits', value: profile.totalAppointments },
+        ]}
+      />
     </div>
   );
 

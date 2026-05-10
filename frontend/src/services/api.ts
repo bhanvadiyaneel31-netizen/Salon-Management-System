@@ -232,8 +232,11 @@ export const authAPI = {
     return !!localStorage.getItem('auth_token');
   },
 
-  async updateProfile(profileData: Partial<User>): Promise<User> {
-    return usersAPI.update(null, profileData);
+  async updateProfile(profileData: Partial<User> & { password?: string; currentPassword?: string }): Promise<User> {
+    return apiRequest<User>('/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify(profileData),
+    });
   },
 
   async getProfile(): Promise<User & { total_appointments: number }> {

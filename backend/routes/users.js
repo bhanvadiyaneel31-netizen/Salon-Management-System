@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose'); // ✅ added for ObjectId validation
+const bcrypt = require('bcrypt');
+const mongoose = require('mongoose');
 const { User, StaffProfile, Appointment } = require('../db');
 const { verifyToken } = require('../middleware/authMiddleware');
 
@@ -27,6 +28,65 @@ router.get('/me', verifyToken, async (req, res) => {
   } catch (error) {
     console.error('GET /users/me error:', error);
     res.status(500).json({ error: 'Failed to fetch user profile' });
+  }
+});
+
+// PATCH /api/users/me  — customer self-update (used by ProfileSettingsPanel)
+router.patch('/me', verifyToken, async (req, res) => {
+  // Staff must use PATCH /api/staff/profile instead
+  if (req.user.role === 'admin') {
+    return res.status(403).json({ error: 'Admin accounts cannot be edited via this endpoint' });
+  }
+
+  const userId = req.user.user_id;
+  const { name, email, phone, address, profile_image, password, currentPassword } = req.body;
+
+  try {
+    const updates = {};
+
+    if (name !== undefined) updates.name = name.trim();
+    if (phone !== undefined) updates.phone = phone.trim() || null;
+    if (address !== undefined) updates.address = address.trim() || null;
+    if (profile_image !== undefined) updates.profileImage = profile_image || null;
+
+    if (email !== undefined) {
+      const trimmed = email.trim();
+      const existing = await User.findOne({ email: trimmed, _id: { $ne: userId } });
+      if (existing) return res.status(409).json({ error: 'Email is already in use by another account' });
+      updates.email = trimmed;
+    }
+
+    if (password) {
+      if (!currentPassword) {
+        return res.status(400).json({ error: 'Current password is required to set a new password' });
+      }
+      const rawUser = await User.findById(userId).select('+passwordHash').lean();
+      if (!rawUser) return res.status(404).json({ error: 'User not found' });
+      const isMatch = await bcrypt.compare(currentPassword, rawUser.passwordHash);
+      if (!isMatch) return res.status(401).json({ error: 'Incorrect current password' });
+
+      const salt = await bcrypt.genSalt(10);
+      updates.passwordHash = await bcrypt.hash(password, salt);
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await User.findByIdAndUpdate(userId, updates);
+    }
+
+    const updatedUser = await User.findById(userId);
+    res.json({
+      id: updatedUser._id.toString(),
+      name: updatedUser.name,
+      email: updatedUser.email,
+      phone: updatedUser.phone || '',
+      address: updatedUser.address || '',
+      role: updatedUser.role,
+      profile_image: updatedUser.profileImage || '',
+    });
+  } catch (error) {
+    console.error('[PATCH /users/me error]', error.message);
+    if (error.code === 11000) return res.status(409).json({ error: 'Email already in use' });
+    res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 

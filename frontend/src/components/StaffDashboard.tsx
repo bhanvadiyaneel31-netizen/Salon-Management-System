@@ -18,8 +18,6 @@ import {
   Edit,
   Menu,
   Star,
-  Camera,
-  Trash2,
   MapPin,
   Phone,
   Mail,
@@ -62,6 +60,7 @@ import {
   SheetFooter
 } from "./ui/sheet";
 import { api, staffAPI, appointmentsAPI } from '../services/api';
+import { ProfileSettingsPanel } from './ProfileSettingsPanel';
 import { format, isToday, isFuture, isAfter, parseISO, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -130,75 +129,10 @@ export function StaffDashboard({
   const [unreadCount, setUnreadCount] = useState(0);
   const [scheduleFilter, setScheduleFilter] = useState<'today' | 'upcoming' | 'completed'>('today');
   const [userData, setUserData] = useState<any>(api.auth.getCurrentUser());
-  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [staffRating, setStaffRating] = useState({ average: 0, count: 0 });
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-
-  const [profileForm, setProfileForm] = useState({
-    name: userData?.name || '',
-    email: userData?.email || '',
-    phone: userData?.phone || '',
-    address: userData?.address || '',
-    profile_image: userData?.profile_image || '',
-    password: '',
-    currentPassword: ''
-  });
-
-  const profileImageInputRef = useRef<HTMLInputElement>(null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-
-  const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select a valid image file');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be smaller than 5MB');
-      return;
-    }
-
-    setIsUploadingImage(true);
-    try {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        setProfileForm(prev => ({ ...prev, profile_image: base64 }));
-        setIsUploadingImage(false);
-        toast.success('Profile picture selected — click Save to apply');
-      };
-      reader.onerror = () => {
-        toast.error('Failed to read image file');
-        setIsUploadingImage(false);
-      };
-      reader.readAsDataURL(file);
-    } catch {
-      toast.error('Failed to process image');
-      setIsUploadingImage(false);
-    }
-  };
-
-  const handleRemoveProfileImage = async () => {
-    if (!profileForm.profile_image) return;
-    if (!window.confirm('Remove your profile picture?')) return;
-    setIsUploadingImage(true);
-    try {
-      await staffAPI.updateProfile({ profile_image: '' });
-      const updatedUser = { ...userData, profile_image: '' };
-      setUserData(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      setProfileForm(prev => ({ ...prev, profile_image: '' }));
-      toast.success('Profile picture removed');
-    } catch {
-      toast.error('Failed to remove profile picture');
-    } finally {
-      setIsUploadingImage(false);
-    }
-  };
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -372,62 +306,9 @@ export function StaffDashboard({
     }
   };
 
-  const updateProfile = async () => {
-    setIsUpdatingProfile(true);
-    try {
-      const updateData: any = {
-        name: profileForm.name,
-        email: profileForm.email,
-        phone: profileForm.phone,
-        address: profileForm.address,
-        profile_image: profileForm.profile_image
-      };
-
-      if (profileForm.password) {
-        if (!profileForm.currentPassword) {
-          toast.error('Current password is required to set a new password');
-          setIsUpdatingProfile(false);
-          return;
-        }
-        updateData.password = profileForm.password;
-        updateData.currentPassword = profileForm.currentPassword;
-      }
-
-      const result = await staffAPI.updateProfile(updateData);
-
-      // Sync the returned server data to local state & localStorage
-      const updatedUser = {
-        ...userData,
-        name: result.name || profileForm.name,
-        email: result.email || profileForm.email,
-        phone: result.phone || profileForm.phone,
-        address: result.address || profileForm.address,
-        profile_image: result.profile_image || profileForm.profile_image,
-        category: result.category || userData?.category
-      };
-      setUserData(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-
-      // Update form with server-confirmed data
-      setProfileForm(prev => ({
-        ...prev,
-        name: updatedUser.name,
-        email: updatedUser.email,
-        phone: updatedUser.phone || '',
-        address: updatedUser.address || '',
-        profile_image: updatedUser.profile_image || '',
-        password: '', // Clear password field after successful update
-        currentPassword: ''
-      }));
-
-      toast.success('Profile updated successfully');
-      await loadDashboardData(); // Re-fetch all metrics to ensure UI sync
-    } catch (err: any) {
-      console.error('Failed to update profile:', err);
-      toast.error(err.message || 'Failed to update profile');
-    } finally {
-      setIsUpdatingProfile(false);
-    }
+  const handleProfileSave = (updatedUser: any) => {
+    setUserData(updatedUser);
+    loadDashboardData();
   };
 
   const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
@@ -773,154 +654,25 @@ export function StaffDashboard({
     </div>
   );
 
-  const renderSettings = () => (
-    <div className="space-y-6">
-      <div>
-        <p className="text-gray-500">Manage your personal information and preferences</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold">Personal Information</CardTitle>
-            <p className="text-xs text-gray-500 mt-1">All changes are saved to the database and reflected in real-time across dashboards.</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Full Name</Label>
-                <Input
-                  value={profileForm.name}
-                  onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="rounded-xl border-purple-200"
-                  placeholder="Enter your full name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Email Address</Label>
-                <Input
-                  type="email"
-                  value={profileForm.email}
-                  onChange={(e) => setProfileForm(prev => ({ ...prev, email: e.target.value }))}
-                  className="rounded-xl border-purple-200"
-                  placeholder="Enter your email address"
-                />
-                <p className="text-[10px] text-gray-400 italic px-1">Changing your email will update your login credentials across all devices.</p>
-              </div>
-              <div className="space-y-2">
-                <Label>Phone Number</Label>
-                <Input
-                  value={profileForm.phone}
-                  onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))}
-                  className="rounded-xl border-purple-200"
-                  placeholder="Enter your phone number"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>New Password</Label>
-                <Input
-                  type="password"
-                  placeholder="Leave blank to keep current"
-                  value={profileForm.password}
-                  onChange={(e) => setProfileForm(prev => ({ ...prev, password: e.target.value }))}
-                  className="rounded-xl border-purple-200"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Current Password</Label>
-                <Input
-                  type="password"
-                  placeholder="Required for password changes"
-                  value={profileForm.currentPassword}
-                  onChange={(e) => setProfileForm(prev => ({ ...prev, currentPassword: e.target.value }))}
-                  className="rounded-xl border-purple-200"
-                />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label className="flex items-center gap-2">
-                  Primary Service Category
-                  <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">Admin Controlled</span>
-                </Label>
-                <Input
-                  value={userData?.category || 'Not Assigned'}
-                  disabled
-                  className="rounded-xl bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed"
-                />
-                <p className="text-[10px] text-amber-600 italic px-1">Your service category is set by administration and determines which services you handle.</p>
-              </div>
-            </div>
-            <Button
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl h-11"
-              onClick={updateProfile}
-              disabled={isUpdatingProfile}
-            >
-              {isUpdatingProfile ? 'Saving Changes...' : 'Save Profile Settings'}
-            </Button>
-          </CardContent>
+  const renderSettings = () => {
+    if (userData?.role === 'admin') {
+      return (
+        <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg p-8 text-center">
+          <p className="text-gray-500">Admin users do not have profile settings here. Use the admin management panel instead.</p>
         </Card>
-
-        <Card className="border-0 bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg h-fit">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold">Profile Preview</CardTitle>
-          </CardHeader>
-          <CardContent className="text-center pb-8">
-            <div className="relative w-24 h-24 mx-auto mb-4">
-              <div className="w-full h-full rounded-full bg-gradient-to-r from-purple-100 to-pink-100 flex items-center justify-center border-4 border-white shadow-md overflow-hidden">
-                {profileForm.profile_image ? (
-                  <img src={profileForm.profile_image} alt={profileForm.name} className="w-full h-full object-cover" />
-                ) : (
-                  <User className="w-10 h-10 text-purple-300" />
-                )}
-              </div>
-              <input
-                ref={profileImageInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleProfileImageChange}
-              />
-              <button
-                className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-purple-50 text-purple-600 hover:text-purple-700 hover:scale-110 transition-all disabled:opacity-50"
-                onClick={() => profileImageInputRef.current?.click()}
-                disabled={isUploadingImage}
-                title="Change profile picture"
-              >
-                {isUploadingImage ? (
-                  <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Camera className="w-4 h-4" />
-                )}
-              </button>
-            </div>
-            {profileForm.profile_image && (
-              <button
-                onClick={handleRemoveProfileImage}
-                disabled={isUploadingImage}
-                className="text-[10px] text-red-400 hover:text-red-600 flex items-center gap-1 mx-auto mt-1 mb-2 disabled:opacity-40 transition-colors"
-                title="Remove profile picture"
-              >
-                <Trash2 className="w-3 h-3" />
-                Remove photo
-              </button>
-            )}
-            <h3 className="font-bold text-gray-900">{profileForm.name}</h3>
-            <p className="text-xs text-gray-500 uppercase tracking-widest mt-1">{userData?.role}</p>
-
-            <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-lg font-bold text-purple-600">{staffRating.average}⭐</p>
-                <p className="text-[10px] text-gray-400 uppercase">Rating</p>
-              </div>
-              <div>
-                <p className="text-lg font-bold text-purple-600">{staffRating.count}</p>
-                <p className="text-[10px] text-gray-400 uppercase">Reviews</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
+      );
+    }
+    return (
+      <ProfileSettingsPanel
+        userData={userData}
+        onSave={handleProfileSave}
+        previewStats={[
+          { label: 'Rating', value: `${staffRating.average}⭐` },
+          { label: 'Reviews', value: staffRating.count }
+        ]}
+      />
+    );
+  };
 
   const renderReviews = () => (
     <div className="space-y-6">
