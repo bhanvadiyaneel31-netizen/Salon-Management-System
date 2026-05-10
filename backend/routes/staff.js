@@ -222,7 +222,7 @@ router.patch('/profile', verifyToken, async (req, res) => {
 
     if (password) {
       if (!currentPassword) return res.status(400).json({ error: 'Current password is required to set a new password' });
-      const rawUser = await User.findById(staffId).lean().select('+passwordHash');
+      const rawUser = await User.findById(staffId).select('+passwordHash').lean();
       if (!rawUser) return res.status(404).json({ error: 'User not found' });
       const isMatch = await bcrypt.compare(currentPassword, rawUser.passwordHash);
       if (!isMatch) return res.status(401).json({ error: 'Incorrect current password' });
