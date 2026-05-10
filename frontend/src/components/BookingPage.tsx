@@ -17,9 +17,17 @@ interface BookingPageProps {
   setCurrentView: (view: string) => void;
   initialServiceId?: string | null;
   onResetSelection?: () => void;
+  resumeState?: {
+    selectedService: string;
+    selectedStaff: string;
+    selectedDate: string;
+    selectedTime: string;
+    step: number;
+  } | null;
+  onResumeConsumed?: () => void;
 }
 
-export function BookingPage({ setCurrentView, initialServiceId, onResetSelection }: BookingPageProps) {
+export function BookingPage({ setCurrentView, initialServiceId, onResetSelection, resumeState, onResumeConsumed }: BookingPageProps) {
   const [currentStep, setCurrentStep] = useState(initialServiceId ? 2 : 1);
   const [selectedService, setSelectedService] = useState<string>(initialServiceId || '');
   const [selectedDate, setSelectedDate] = useState<Date>();
@@ -28,6 +36,18 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalView, setAuthModalView] = useState<'login' | 'register'>('login');
+
+  // Restore booking state after Google OAuth redirect
+  useEffect(() => {
+    if (resumeState) {
+      setSelectedService(resumeState.selectedService || '');
+      setSelectedStaff(resumeState.selectedStaff || '');
+      if (resumeState.selectedDate) setSelectedDate(new Date(resumeState.selectedDate));
+      setSelectedTime(resumeState.selectedTime || '');
+      setCurrentStep(resumeState.step || 4);
+      if (onResumeConsumed) onResumeConsumed();
+    }
+  }, [resumeState]);
 
   // Real data from API
   const [services, setServices] = useState<any[]>([]);
@@ -651,6 +671,14 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
                 </div>
                 <button
                   onClick={() => {
+                    // Save booking state so we can restore it after Google login
+                    sessionStorage.setItem('booking_resume', JSON.stringify({
+                      selectedService,
+                      selectedStaff,
+                      selectedDate: selectedDate?.toISOString(),
+                      selectedTime,
+                      step: 4,
+                    }));
                     const mode = authModalView === 'login' ? 'login' : 'signup';
                     window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/auth/google?mode=${mode}`;
                   }}

@@ -63,6 +63,7 @@ export default function App() {
   const [activeSection, setActiveSection] = useState('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [preselectedServiceId, setPreselectedServiceId] = useState<string | null>(null);
+  const [bookingResumeState, setBookingResumeState] = useState<any>(null);
   const [resetToken, setResetToken] = useState<string | null>(null);
   const [isDark, setIsDark] = useState<boolean>(() => {
     const saved = localStorage.getItem('salon_dark_mode');
@@ -93,7 +94,15 @@ export default function App() {
           const user = await api.auth.getMe();
           localStorage.setItem('user', JSON.stringify(user));
           setUserRole(user.role);
-          if (user.role === 'customer') setCurrentView('customer-dashboard');
+
+          // Check if user was in the middle of booking before Google login
+          const savedBooking = sessionStorage.getItem('booking_resume');
+          if (savedBooking && user.role === 'customer') {
+            const parsed = JSON.parse(savedBooking);
+            sessionStorage.removeItem('booking_resume');
+            setBookingResumeState(parsed);
+            setCurrentView('booking');
+          } else if (user.role === 'customer') setCurrentView('customer-dashboard');
           else if (user.role === 'admin') setCurrentView('admin-dashboard');
           else if (user.role === 'staff') setCurrentView('staff-dashboard');
         })
@@ -178,7 +187,13 @@ export default function App() {
       case 'register':
         return <AuthPages view="register" setCurrentView={setCurrentView} setUserRole={setUserRole} />;
       case 'booking':
-        return <BookingPage setCurrentView={setCurrentView} initialServiceId={preselectedServiceId} onResetSelection={() => setPreselectedServiceId(null)} />;
+        return <BookingPage
+          setCurrentView={setCurrentView}
+          initialServiceId={preselectedServiceId}
+          onResetSelection={() => setPreselectedServiceId(null)}
+          resumeState={bookingResumeState}
+          onResumeConsumed={() => setBookingResumeState(null)}
+        />;
       case 'customer-dashboard':
         return <CustomerDashboard activeSection={activeSection} setActiveSection={setActiveSection} setCurrentView={setCurrentView} setUserRole={setUserRole} setPreselectedServiceId={setPreselectedServiceId} isDark={isDark} toggleDark={toggleDark} />;
       case 'admin-dashboard':
