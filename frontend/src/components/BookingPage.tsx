@@ -294,13 +294,14 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
     setIsSubmitting(true);
     try {
       const appointmentData = {
-        serviceId: selectedService,
-        staffId: selectedStaff,
-        appointmentDate: format(selectedDate!, 'yyyy-MM-dd'),
-        appointmentTime: selectedTime,
+        service_id: selectedService,
+        staff_id: selectedStaff,
+        date: format(selectedDate!, 'yyyy-MM-dd'),
+        time: selectedTime,
         loyaltyPointsRedeemed: usePoints ? pointsToRedeem : 0,
       };
 
+      console.log('[DEBUG] Submitting appointment with data:', appointmentData);
       const response = await api.appointments.create(appointmentData);
 
       if (response?.id) {
