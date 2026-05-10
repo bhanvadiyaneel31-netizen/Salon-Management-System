@@ -296,8 +296,8 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
       const appointmentData = {
         service_id: selectedService,
         staff_id: selectedStaff,
-        date: format(selectedDate!, 'yyyy-MM-dd'),
-        time: selectedTime,
+        appointment_date: format(selectedDate!, 'yyyy-MM-dd'),
+        appointment_time: selectedTime,
         loyaltyPointsRedeemed: usePoints ? pointsToRedeem : 0,
       };
 
