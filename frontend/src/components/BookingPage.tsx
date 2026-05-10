@@ -190,24 +190,33 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
 
   const [loyaltyRewards, setLoyaltyRewards] = useState<any[]>([]);
 
-  // Load Loyalty Info
+  // Reusable loyalty loader — called on mount AND after login
+  const fetchLoyaltyInfo = async () => {
+    try {
+      const settings = await api.loyalty.getSettings();
+      setLoyaltySettings(settings);
+
+      const rewards = await api.loyalty.getRewards();
+      setLoyaltyRewards(rewards);
+
+      const points = await api.loyalty.getUserPoints();
+      setUserPoints(points.available_points || 0);
+    } catch (error) {
+      console.log("Not logged in or loyalty system unavailable");
+    }
+  };
+
+  // Load on mount (works if already logged in)
   useEffect(() => {
-    const fetchLoyaltyInfo = async () => {
-      try {
-        const settings = await api.loyalty.getSettings();
-        setLoyaltySettings(settings);
-
-        const rewards = await api.loyalty.getRewards();
-        setLoyaltyRewards(rewards);
-
-        const points = await api.loyalty.getUserPoints();
-        setUserPoints(points.available_points || 0);
-      } catch (error) {
-        console.log("Not logged in or loyalty system unavailable");
-      }
-    };
     fetchLoyaltyInfo();
   }, []);
+
+  // Reload loyalty info whenever user reaches step 4
+  useEffect(() => {
+    if (currentStep === 4) {
+      fetchLoyaltyInfo();
+    }
+  }, [currentStep]);
 
   const canProceed = () => {
     switch (currentStep) {
@@ -624,11 +633,10 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
                   view={authModalView}
                   onSuccess={async () => {
                     setShowAuthModal(false);
-                    if (currentStep === 3) {
-                      setCurrentStep(4);
-                    } else {
-                      await submitBooking();
-                    }
+                    // Reload loyalty info now that user is logged in
+                    await fetchLoyaltyInfo();
+                    // Always go to step 4 after login
+                    setCurrentStep(4);
                   }}
                 />
 
