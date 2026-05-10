@@ -4,6 +4,9 @@ const bcrypt = require('bcrypt');
 const mongoose = require('mongoose');
 const { User, StaffProfile, Appointment } = require('../db');
 const { verifyToken } = require('../middleware/authMiddleware');
+const multer = require('multer');
+const sharp = require('sharp');
+const rateLimit = require('express-rate-limit');
 
 // GET /api/users/me
 router.get('/me', verifyToken, async (req, res) => {
@@ -41,13 +44,16 @@ router.patch('/me', verifyToken, async (req, res) => {
   const userId = req.user.user_id;
   const { name, email, phone, address, profile_image, password, currentPassword } = req.body;
 
+  if (profile_image !== undefined) {
+    return res.status(403).json({ error: 'Use POST /api/users/upload-avatar for images' });
+  }
+
   try {
     const updates = {};
 
     if (name !== undefined) updates.name = name.trim();
     if (phone !== undefined) updates.phone = phone.trim() || null;
     if (address !== undefined) updates.address = address.trim() || null;
-    if (profile_image !== undefined) updates.profileImage = profile_image || null;
 
     if (email !== undefined) {
       const trimmed = email.trim();
@@ -87,6 +93,78 @@ router.patch('/me', verifyToken, async (req, res) => {
     console.error('[PATCH /users/me error]', error.message);
     if (error.code === 11000) return res.status(409).json({ error: 'Email already in use' });
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Configure multer (memory storage)
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('INVALID_TYPE'), false);
+    }
+  }
+});
+
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  message: { error: 'Too many upload attempts' }
+});
+
+// POST /api/users/upload-avatar
+router.post('/upload-avatar', verifyToken, uploadLimiter, (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File exceeds 5MB limit' });
+      return res.status(400).json({ error: err.message });
+    } else if (err) {
+      if (err.message === 'INVALID_TYPE') return res.status(400).json({ error: 'Only JPEG, PNG, WebP allowed' });
+      return res.status(500).json({ error: 'Upload failed' });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+    // Validate dimensions with sharp and implicitly check magic bytes
+    let metadata;
+    try {
+      metadata = await sharp(req.file.buffer).metadata();
+    } catch (sharpError) {
+      return res.status(400).json({ error: 'Invalid image file' });
+    }
+
+    if (!metadata.width || !metadata.height) {
+      return res.status(400).json({ error: 'Invalid image file' });
+    }
+
+    if (metadata.width < 100 || metadata.height < 100 || metadata.width > 2000 || metadata.height > 2000) {
+      return res.status(400).json({ error: 'Image must be 100x100 to 2000x2000' });
+    }
+
+    // Convert to base64
+    const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+
+    // Update DB
+    await User.findByIdAndUpdate(req.user.user_id, { profileImage: base64Image });
+
+    console.log(`[AUDIT] User ${req.user.user_id} uploaded a new profile image (${metadata.format}, ${req.file.size} bytes)`);
+
+    res.json({
+      success: true,
+      profile_image: base64Image,
+      message: 'Image uploaded successfully'
+    });
+  } catch (error) {
+    console.error('Image upload error:', error);
+    res.status(500).json({ error: 'Failed to process image' });
   }
 });
 

@@ -15,9 +15,10 @@ import {
   EyeOff,
   Save,
   ShieldCheck,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { api, staffAPI } from '../services/api';
+import { api, staffAPI, API_BASE_URL } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,8 @@ export function ProfileSettingsPanel({ userData, onSave, previewStats }: Profile
 
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [errors, setErrors] = useState<Partial<FormState>>({});
@@ -116,35 +119,145 @@ export function ProfileSettingsPanel({ userData, onSave, previewStats }: Profile
 
   // ── Image handling ────────────────────────────────────────────────────────────
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const validateImageFile = (file: File): { valid: boolean; error?: string } => {
+    // Check MIME type
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      return { valid: false, error: 'Only JPEG, PNG, and WebP images are allowed' };
+    }
+
+    // Check file size
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      return { valid: false, error: `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds 5MB limit` };
+    }
+
+    // Check file name (sanitize)
+    if (!/^[\w\-. ]+$/.test(file.name)) {
+      return { valid: false, error: 'Invalid filename. Use only letters, numbers, spaces, hyphens, underscores' };
+    }
+
+    return { valid: true };
+  };
+
+  const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, maxRetries = 3) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowed.includes(file.type)) {
-      toast.error('Only JPEG, PNG, or WebP images are allowed');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be smaller than 5 MB');
+    // 1. Client-side validation
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      toast.error(validation.error);
       return;
     }
 
     setIsUploadingImage(true);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setForm(prev => ({ ...prev, profile_image: reader.result as string }));
-      setIsUploadingImage(false);
-      toast.success('Photo selected — click Save to apply');
-    };
-    reader.onerror = () => {
-      toast.error('Failed to read image file');
-      setIsUploadingImage(false);
-    };
-    reader.readAsDataURL(file);
+    setUploadError('');
+    setUploadProgress(0);
 
-    // reset so same file can be re-selected
-    e.target.value = '';
+    let retryCount = 0;
+    const attemptUpload = async (): Promise<boolean> => {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Create XMLHttpRequest for progress tracking
+        const xhr = new XMLHttpRequest();
+
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = Math.round((event.loaded / event.total) * 100);
+            setUploadProgress(percentComplete);
+          }
+        });
+
+        // Return promise-based interface
+        return new Promise((resolve, reject) => {
+          xhr.onload = () => {
+            if (xhr.status === 200) {
+              const response = JSON.parse(xhr.responseText);
+              if (response.success) {
+                resolve(true);
+              } else {
+                reject(new Error(response.error || 'Upload failed'));
+              }
+            } else if (xhr.status === 413) {
+              reject(new Error('File is too large'));
+            } else if (xhr.status === 429) {
+              reject(new Error('Too many uploads. Please wait before trying again'));
+            } else if (xhr.status >= 400 && xhr.status < 500) {
+              reject(new Error(JSON.parse(xhr.responseText).error || 'Invalid file'));
+            } else {
+              reject(new Error('Server error. Please try again'));
+            }
+          };
+
+          xhr.onerror = () => {
+            reject(new Error('Network error. Please check your connection'));
+          };
+
+          xhr.timeout = 30000; // 30 second timeout
+          xhr.ontimeout = () => {
+            reject(new Error('Upload timed out. Please try again'));
+          };
+
+          const token = localStorage.getItem('auth_token');
+          xhr.open('POST', `${API_BASE_URL}/users/upload-avatar`);
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          xhr.send(formData);
+        });
+      } catch (error) {
+        // Retry logic
+        if (retryCount < maxRetries && error instanceof Error && 
+            (error.message.includes('Network error') || error.message.includes('timeout'))) {
+          retryCount++;
+          console.warn(`Upload failed, retrying (${retryCount}/${maxRetries})...`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Exponential backoff
+          return attemptUpload();
+        }
+        throw error;
+      }
+    };
+
+    try {
+      const success = await attemptUpload();
+      
+      if (success) {
+        // Get the file as base64 for preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const base64 = e.target?.result as string;
+          setForm(prev => ({
+            ...prev,
+            profile_image: base64
+          }));
+          toast.success('Image uploaded successfully.');
+          setUploadProgress(0);
+          
+          // Also update user data in local storage
+          const stored = localStorage.getItem('user');
+          if (stored) {
+            const user = JSON.parse(stored);
+            localStorage.setItem('user', JSON.stringify({ ...user, profile_image: base64 }));
+            onSave({ ...userData, profile_image: base64 });
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to upload image';
+      setUploadError(errorMsg);
+      toast.error(errorMsg);
+      console.error('Image upload error:', error);
+      setUploadProgress(0);
+    } finally {
+      setIsUploadingImage(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   };
 
   const handleRemoveImage = async () => {
@@ -180,7 +293,6 @@ export function ProfileSettingsPanel({ userData, onSave, previewStats }: Profile
         email: form.email.trim(),
         phone: form.phone.trim(),
         address: form.address.trim(),
-        profile_image: form.profile_image,
       };
       if (form.password) {
         payload.password = form.password;
@@ -442,7 +554,7 @@ export function ProfileSettingsPanel({ userData, onSave, previewStats }: Profile
 
             {/* Avatar */}
             <div className="relative w-24 h-24 mx-auto mb-4">
-              <div className="w-full h-full rounded-full bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center border-4 border-white shadow-md overflow-hidden">
+              <div className="w-full h-full rounded-full bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center border-4 border-white shadow-md overflow-hidden relative">
                 {form.profile_image ? (
                   <img
                     src={form.profile_image}
@@ -452,6 +564,11 @@ export function ProfileSettingsPanel({ userData, onSave, previewStats }: Profile
                 ) : (
                   <User className="w-10 h-10 text-purple-300" />
                 )}
+                {isUploadingImage && uploadProgress > 0 && (
+                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                    <span className="text-xs text-white font-medium">{uploadProgress}%</span>
+                  </div>
+                )}
               </div>
 
               {/* Hidden file input */}
@@ -460,7 +577,7 @@ export function ProfileSettingsPanel({ userData, onSave, previewStats }: Profile
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 className="hidden"
-                onChange={handleImageChange}
+                onChange={handleProfileImageUpload}
                 aria-label="Upload profile picture"
               />
 
@@ -473,11 +590,15 @@ export function ProfileSettingsPanel({ userData, onSave, previewStats }: Profile
                 aria-label="Change profile picture"
               >
                 {isUploadingImage
-                  ? <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                  ? <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
                   : <Camera className="w-4 h-4" />
                 }
               </button>
             </div>
+
+            {uploadError && (
+              <p className="text-[10px] text-red-500 max-w-[200px] mx-auto leading-tight">{uploadError}</p>
+            )}
 
             {/* Remove photo */}
             {form.profile_image && (
