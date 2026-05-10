@@ -100,7 +100,8 @@ export default function App() {
           if (savedBooking && user.role === 'customer') {
             const parsed = JSON.parse(savedBooking);
             sessionStorage.removeItem('booking_resume');
-            setBookingResumeState(parsed);
+            // Pass token so BookingPage can set it before fetching loyalty info
+            setBookingResumeState({ ...parsed, token });
             setCurrentView('booking');
           } else if (user.role === 'customer') setCurrentView('customer-dashboard');
           else if (user.role === 'admin') setCurrentView('admin-dashboard');

@@ -23,6 +23,7 @@ interface BookingPageProps {
     selectedDate: string;
     selectedTime: string;
     step: number;
+    token?: string;
   } | null;
   onResumeConsumed?: () => void;
 }
@@ -40,13 +41,17 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
   // Restore booking state after Google OAuth redirect
   useEffect(() => {
     if (resumeState) {
+      // Set token FIRST so fetchLoyaltyInfo has auth when it runs
+      if (resumeState.token) {
+        localStorage.setItem('auth_token', resumeState.token);
+      }
       setSelectedService(resumeState.selectedService || '');
       setSelectedStaff(resumeState.selectedStaff || '');
       if (resumeState.selectedDate) setSelectedDate(new Date(resumeState.selectedDate));
       setSelectedTime(resumeState.selectedTime || '');
       setCurrentStep(resumeState.step || 4);
       if (onResumeConsumed) onResumeConsumed();
-      // Reload loyalty info after Google login restored the session
+      // Now fetch loyalty info — token is guaranteed to be in localStorage
       fetchLoyaltyInfo();
     }
   }, [resumeState]);
