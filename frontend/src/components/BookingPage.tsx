@@ -46,6 +46,8 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
       setSelectedTime(resumeState.selectedTime || '');
       setCurrentStep(resumeState.step || 4);
       if (onResumeConsumed) onResumeConsumed();
+      // Reload loyalty info after Google login restored the session
+      fetchLoyaltyInfo();
     }
   }, [resumeState]);
 
@@ -313,7 +315,9 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
   };
 
   const renderLoyaltyRedemption = () => {
-    if (!loyaltySettings || !userPoints) return null;
+    // Only show if loyalty is configured AND user has points to redeem
+    const hasRedeemableRewards = loyaltyRewards.some(r => r.points_required <= userPoints);
+    if (!loyaltySettings || userPoints <= 0 || !hasRedeemableRewards) return null;
 
     const serviceCost = selectedServiceData?.price || 0;
     const maxRedeemablePoints = Math.floor(serviceCost * 100); // Assuming 1 point = 1 cent
