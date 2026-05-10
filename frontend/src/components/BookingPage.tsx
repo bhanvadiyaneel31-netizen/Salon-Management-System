@@ -546,7 +546,7 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
         </Card>
 
         {/* Navigation Buttons */}
-        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0 mt-6 pt-4 border-t border-gray-100">
           <Button
             variant="outline"
             onClick={handleBack}
