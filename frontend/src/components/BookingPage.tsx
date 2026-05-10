@@ -220,9 +220,16 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
   };
 
   const handleNext = async () => {
-    if (currentStep === 4) {
-      // Check if user is logged in before confirming booking
-      const token = localStorage.getItem('auth_token');
+    const token = localStorage.getItem('auth_token');
+
+    if (currentStep === 3) {
+      // Require login before entering Confirm Booking step
+      if (!token) {
+        setShowAuthModal(true);
+        return;
+      }
+      setCurrentStep(4);
+    } else if (currentStep === 4) {
       if (!token) {
         setShowAuthModal(true);
         return;
@@ -556,7 +563,7 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
         </Card>
 
         {/* Navigation Buttons */}
-        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0 mt-6 pt-5 border-t border-gray-100">
           <Button
             variant="outline"
             onClick={handleBack}
@@ -617,7 +624,11 @@ export function BookingPage({ setCurrentView, initialServiceId, onResetSelection
                   view={authModalView}
                   onSuccess={async () => {
                     setShowAuthModal(false);
-                    await submitBooking();
+                    if (currentStep === 3) {
+                      setCurrentStep(4);
+                    } else {
+                      await submitBooking();
+                    }
                   }}
                 />
 
