@@ -94,8 +94,8 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
-// GET /api/appointments/slots
-router.get('/slots', verifyToken, async (req, res) => {
+// GET /api/appointments/slots  (public — no auth required; used by guest booking flow)
+router.get('/slots', async (req, res) => {
   const { date, staff_id, service_id, exclude_appointment_id } = req.query;
   if (!date || !staff_id || !service_id)
     return res.status(400).json({ error: 'Valid date, staff_id, and service_id are required' });
