@@ -31,9 +31,10 @@ import { analyticsAPI, appointmentsAPI } from '../../../services/api';
 
 interface OverviewPanelProps {
   staffMembers: any[];
+  setActiveSection: (section: string) => void;
 }
 
-export function OverviewPanel({ staffMembers }: OverviewPanelProps) {
+export function OverviewPanel({ staffMembers, setActiveSection }: OverviewPanelProps) {
   const [dashboardStats, setDashboardStats] = useState({ todayAppointments: 0, todayRevenue: 0, activeStaff: 0, growthRate: 0 });
   const [dailyAppointments, setDailyAppointments] = useState([
     { day: 'Mon', appointments: 0, revenue: 0 },

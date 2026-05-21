@@ -151,7 +151,7 @@ export function AdminDashboard({
 
         <div className="space-y-6 lg:space-y-8">
           {activeSection === 'dashboard' && (
-            <OverviewPanel staffMembers={staffMembers} />
+            <OverviewPanel staffMembers={staffMembers} setActiveSection={setActiveSection} />
           )}
 
           {activeSection === 'staff' && (
@@ -159,6 +159,7 @@ export function AdminDashboard({
               staffMembers={staffMembers}
               services={services}
               onStaffChange={loadStaff}
+              setActiveSection={setActiveSection}
             />
           )}
 

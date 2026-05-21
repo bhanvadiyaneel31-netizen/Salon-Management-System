@@ -33,9 +33,10 @@ interface StaffPanelProps {
   staffMembers: any[];
   services: any[];
   onStaffChange: () => void;
+  setActiveSection: (section: string) => void;
 }
 
-export function StaffPanel({ staffMembers, services, onStaffChange }: StaffPanelProps) {
+export function StaffPanel({ staffMembers, services, onStaffChange, setActiveSection }: StaffPanelProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -871,7 +872,13 @@ export function StaffPanel({ staffMembers, services, onStaffChange }: StaffPanel
                   <Edit className="w-4 h-4 mr-2" />
                   Edit Profile
                 </Button>
-                <Button className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl py-2.5 shadow-sm">
+                <Button
+                  className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl py-2.5 shadow-sm"
+                  onClick={() => {
+                    setIsDetailsOpen(false);
+                    setActiveSection('appointments');
+                  }}
+                >
                   <Calendar className="w-4 h-4 mr-2" />
                   View Schedule
                 </Button>
