@@ -305,8 +305,7 @@ export function OverviewPanel({ staffMembers }: OverviewPanelProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-pink-100">Growth Rate</p>
-                <p className="text-3xl font-bold">+{dashboardStats.growthRate}%</p>
-              </div>
+                <p className="text-3xl font-bold">{dashboardStats.growthRate >= 0 ? '+' : ''}{dashboardStats.growthRate}%</p>              </div>
               <TrendingUp className="w-10 h-10 text-pink-200" />
             </div>
           </CardContent>
